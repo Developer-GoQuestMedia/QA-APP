@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useDialogues } from '@/hooks/useDialogues'
-import DialogueView from '@/components/DialogueView'
+import DialogueView from '../../../../components/DialogueView'
 
 export default function TranscriberProjectPage({
   params,

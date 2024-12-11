@@ -8,9 +8,17 @@ if (!process.env.MONGODB_DB) {
   throw new Error('Invalid/Missing environment variable: "MONGODB_DB"')
 }
 
-const uri = process.env.MONGODB_URI
+// Ensure the URI has the correct protocol
+const uri = process.env.MONGODB_URI.startsWith('mongodb://') || process.env.MONGODB_URI.startsWith('mongodb+srv://')
+  ? process.env.MONGODB_URI
+  : `mongodb+srv://${process.env.MONGODB_URI}`
+
 const dbName = process.env.MONGODB_DB
-const options = {}
+const options = {
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+}
 
 let client: MongoClient
 let clientPromise: Promise<MongoClient>

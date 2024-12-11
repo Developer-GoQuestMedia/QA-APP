@@ -197,8 +197,9 @@ export async function PATCH(
     if (existingDialogue.projectId) {
       try {
         projectId = new ObjectId(existingDialogue.projectId)
-      } catch (error) {
-        console.error('Invalid existing projectId format:', existingDialogue.projectId)
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error('Invalid existing projectId format:', existingDialogue.projectId, errorMessage)
         return NextResponse.json({ error: 'Invalid project ID format in dialogue' }, { status: 400 })
       }
     } else {
@@ -214,8 +215,9 @@ export async function PATCH(
       if (otherDialogue?.projectId) {
         try {
           projectId = new ObjectId(otherDialogue.projectId)
-        } catch (error) {
-          console.error('Invalid project ID from other dialogue:', otherDialogue.projectId)
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+          console.error('Invalid project ID from other dialogue:', otherDialogue.projectId, errorMessage)
           return NextResponse.json({ error: 'Invalid project ID format in related dialogue' }, { status: 400 })
         }
       } else {
@@ -295,13 +297,17 @@ export async function PATCH(
     }
 
     return NextResponse.json(serializedDialogue)
-  } catch (error: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    const errorStack = err instanceof Error ? err.stack : undefined
+    
     console.error('Error updating dialogue:', {
-      error: error.message,
-      stack: error.stack
+      error: errorMessage,
+      stack: errorStack
     })
+    
     return NextResponse.json(
-      { error: 'Failed to update dialogue: ' + error.message },
+      { error: `Failed to update dialogue: ${errorMessage}` },
       { status: 500 }
     )
   }

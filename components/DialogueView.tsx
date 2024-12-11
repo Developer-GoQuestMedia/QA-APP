@@ -29,12 +29,6 @@ interface SwipeHandlers {
   onSwipeRight: () => void;
 }
 
-interface DialogueCardProps {
-  dialogue: Dialogue;
-  handlers: SwipeHandlers;
-  isActive: boolean;
-}
-
 // Create a type for the animation values
 interface AnimationConfig {
   x: MotionValue<number>;
@@ -45,48 +39,12 @@ interface AnimationConfig {
 // Create proper types for your event handlers
 type SwipeEventHandler = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
 
-function DialogueCard({ dialogue, handlers, isActive }: DialogueCardProps) {
-  const x = useMotionValue(0);
-  const rotateZ = useTransform(x, [-200, 200], [-45, 45]);
-  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0, 1, 1, 1, 0]);
-  
-  const animationConfig: AnimationConfig = {
-    x,
-    rotateZ,
-    opacity
-  };
-
-  const handleDragEnd: SwipeEventHandler = (_, info) => {
-    if (info.offset.x > 100) {
-      handlers.onSwipeRight();
-    } else if (info.offset.x < -100) {
-      handlers.onSwipeLeft();
-    }
-  };
-
-  return (
-    <motion.div
-      style={animationConfig}
-      drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      onDragEnd={handleDragEnd}
-      className={`absolute w-full ${isActive ? 'pointer-events-auto' : 'pointer-events-none'}`}
-    >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h3 className="text-lg font-semibold mb-2">{dialogue.character}</h3>
-        <div className="space-y-2">
-          <p className="text-gray-700 dark:text-gray-300">{dialogue.dialogue.original}</p>
-          <p className="text-gray-600 dark:text-gray-400">{dialogue.dialogue.translated}</p>
-          <p className="text-gray-500 dark:text-gray-500">{dialogue.dialogue.adapted}</p>
-        </div>
-        <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-          <p>Time: {dialogue.timeStart} - {dialogue.timeEnd}</p>
-          <p>Status: {dialogue.status}</p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+// Update QueryData type to be more specific
+type QueryData = {
+  data: Dialogue[];
+  status: string;
+  timestamp: number;
+};
 
 export default function DialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
@@ -101,12 +59,6 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
   const queryClient = useQueryClient();
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
-
-  // Add proper type for queryClient.setQueryData
-  type QueryData = {
-    data: Dialogue[];
-    [key: string]: any;
-  };
 
   // Check for unsaved changes
   const hasChanges = () => {
@@ -229,15 +181,6 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
     [-200, -150, 0, 150, 200],
     [0.8, 0.9, 1, 0.9, 0.8]
   )
-  const swipeProgress = useTransform(
-    x,
-    [-200, 0, 200],
-    [
-      'Swipe right for previous',
-      'Swipe to navigate',
-      'Swipe left for next'
-    ]
-  )
   const animControls = useAnimation()
 
   useEffect(() => {
@@ -260,17 +203,6 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
       }
     }
   };
-
-  // Move useTransform outside of conditional
-  const swipeText = useTransform(
-    x,
-    [-200, 0, 200],
-    [
-      'Swipe right for previous',
-      'Swipe to navigate',
-      'Swipe left for next'
-    ]
-  );
 
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
@@ -348,13 +280,6 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
           </div>
         </div>
       </motion.div>
-
-      {/* Add swipe hint for first-time users */}
-      <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">
-        <motion.p>
-          {swipeText}
-        </motion.p>
-      </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (

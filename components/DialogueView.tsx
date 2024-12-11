@@ -24,21 +24,6 @@ interface DialogueViewProps {
   projectId: string
 }
 
-interface SwipeHandlers {
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
-}
-
-// Create a type for the animation values
-interface AnimationConfig {
-  x: MotionValue<number>;
-  rotateZ: MotionValue<number>;
-  opacity: MotionValue<number>;
-}
-
-// Create proper types for your event handlers
-type SwipeEventHandler = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
-
 // Update QueryData type to be more specific
 type QueryData = {
   data: Dialogue[];

@@ -1,45 +1,40 @@
-import { MongoClient, Db } from 'mongodb'
+import { MongoClient } from 'mongodb'
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017'
-const MONGODB_DB = process.env.MONGODB_DB || 'test'
-
-interface GlobalMongo {
-    conn: { client: MongoClient; db: Db } | null;
-    promise: Promise<{ client: MongoClient; db: Db }> | null;
+if (!process.env.MONGODB_URI) {
+  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"')
 }
 
-declare global {
-    var mongodb: GlobalMongo;
+const uri = process.env.MONGODB_URI
+const options = {}
+
+let client: MongoClient
+let clientPromise: Promise<MongoClient>
+
+if (process.env.NODE_ENV === 'development') {
+  // In development mode, use a global variable so that the value
+  // is preserved across module reloads caused by HMR (Hot Module Replacement).
+  let globalWithMongo = global as typeof globalThis & {
+    _mongoClientPromise?: Promise<MongoClient>
+  }
+
+  if (!globalWithMongo._mongoClientPromise) {
+    client = new MongoClient(uri, options)
+    globalWithMongo._mongoClientPromise = client.connect()
+  }
+  clientPromise = globalWithMongo._mongoClientPromise
+} else {
+  // In production mode, it's best to not use a global variable.
+  client = new MongoClient(uri, options)
+  clientPromise = client.connect()
 }
 
-// Initialize the global mongodb object if it doesn't exist
-if (!global.mongodb) {
-    global.mongodb = { conn: null, promise: null };
-}
-
-const cached = global.mongodb;
+// Export a module-scoped MongoClient promise. By doing this in a
+// separate module, the client can be shared across functions.
+export default clientPromise
 
 export async function connectToDatabase() {
-    if (cached.conn) {
-        return cached.conn;
-    }
-
-    if (!cached.promise) {
-        const client = new MongoClient(MONGODB_URI);
-        cached.promise = client.connect()
-            .then((client) => ({
-                client,
-                db: client.db(MONGODB_DB)
-            }));
-    }
-    cached.conn = await cached.promise;
-    return cached.conn;
-}
-
-export function getDb(): Db {
-    if (!cached?.conn?.db) {
-        throw new Error('Database not initialized');
-    }
-    return cached.conn.db;
+  const client = await clientPromise
+  const db = client.db('test')
+  return { db, client }
 }
 

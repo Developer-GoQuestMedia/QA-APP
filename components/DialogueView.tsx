@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useTransform, useAnimation } from 'framer-motion'
+import { motion, useMotionValue, useTransform, useAnimation, type MotionValue, type PanInfo } from 'framer-motion'
 
 interface Dialogue {
   _id: string
@@ -22,6 +22,70 @@ interface Dialogue {
 interface DialogueViewProps {
   dialogues: Dialogue[]
   projectId: string
+}
+
+interface SwipeHandlers {
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
+}
+
+interface DialogueCardProps {
+  dialogue: Dialogue;
+  handlers: SwipeHandlers;
+  isActive: boolean;
+}
+
+// Create a type for the animation values
+interface AnimationConfig {
+  x: MotionValue<number>;
+  rotateZ: MotionValue<number>;
+  opacity: MotionValue<number>;
+}
+
+// Create proper types for your event handlers
+type SwipeEventHandler = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
+
+function DialogueCard({ dialogue, handlers, isActive }: DialogueCardProps) {
+  const x = useMotionValue(0);
+  const rotateZ = useTransform(x, [-200, 200], [-45, 45]);
+  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0, 1, 1, 1, 0]);
+  
+  const animationConfig: AnimationConfig = {
+    x,
+    rotateZ,
+    opacity
+  };
+
+  const handleDragEnd: SwipeEventHandler = (_, info) => {
+    if (info.offset.x > 100) {
+      handlers.onSwipeRight();
+    } else if (info.offset.x < -100) {
+      handlers.onSwipeLeft();
+    }
+  };
+
+  return (
+    <motion.div
+      style={animationConfig}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      onDragEnd={handleDragEnd}
+      className={`absolute w-full ${isActive ? 'pointer-events-auto' : 'pointer-events-none'}`}
+    >
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold mb-2">{dialogue.character}</h3>
+        <div className="space-y-2">
+          <p className="text-gray-700 dark:text-gray-300">{dialogue.dialogue.original}</p>
+          <p className="text-gray-600 dark:text-gray-400">{dialogue.dialogue.translated}</p>
+          <p className="text-gray-500 dark:text-gray-500">{dialogue.dialogue.adapted}</p>
+        </div>
+        <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          <p>Time: {dialogue.timeStart} - {dialogue.timeEnd}</p>
+          <p>Status: {dialogue.status}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 export default function DialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {

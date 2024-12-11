@@ -1,102 +1,71 @@
-interface StyleLog {
-  component: string;
-  styles: Record<string, any>;
-  event?: string;
-  additionalInfo?: Record<string, any>;
+import { CSSProperties } from 'react';
+
+type StyleValue = string | number | CSSProperties;
+type StyleMap = Record<string, StyleValue>;
+
+interface LoggerOptions {
+  prefix?: string;
+  suffix?: string;
+  separator?: string;
 }
 
 class StyleLogger {
-  private static instance: StyleLogger;
-  private logs: StyleLog[] = [];
+  private styles: StyleMap;
+  private options: LoggerOptions;
 
-  private constructor() {}
-
-  static getInstance(): StyleLogger {
-    if (!StyleLogger.instance) {
-      StyleLogger.instance = new StyleLogger();
-    }
-    return StyleLogger.instance;
-  }
-
-  log({ component, styles, event = 'render', additionalInfo = {} }: StyleLog) {
-    const log = {
-      timestamp: new Date().toISOString(),
-      component,
-      event,
-      styles,
-      ...additionalInfo
+  constructor(options: LoggerOptions = {}) {
+    this.styles = {};
+    this.options = {
+      prefix: options.prefix || '',
+      suffix: options.suffix || '',
+      separator: options.separator || ' ',
     };
-    
-    this.logs.push(log);
-    console.log(`Style Log - ${component} (${event}):`, log);
   }
 
-  getStyleHistory(component?: string) {
-    return component 
-      ? this.logs.filter(log => log.component === component)
-      : this.logs;
+  log(key: string, value: StyleValue): void {
+    this.styles[key] = value;
   }
 
-  clearLogs() {
-    this.logs = [];
+  logMultiple(styles: StyleMap): void {
+    Object.entries(styles).forEach(([key, value]) => {
+      this.log(key, value);
+    });
+  }
+
+  getStyleString(): string {
+    return Object.entries(this.styles)
+      .map(([key, value]) => {
+        if (typeof value === 'object') {
+          return Object.entries(value as CSSProperties)
+            .map(([prop, val]) => `${key}-${prop}: ${val}`)
+            .join(this.options.separator);
+        }
+        return `${key}: ${value}`;
+      })
+      .join(this.options.separator);
+  }
+
+  getFormattedStyle(customOptions?: Partial<LoggerOptions>): string {
+    const options = { ...this.options, ...customOptions };
+    const styleString = this.getStyleString();
+    return `${options.prefix}${styleString}${options.suffix}`;
+  }
+
+  clear(): void {
+    this.styles = {};
+  }
+
+  getStyles(): StyleMap {
+    return { ...this.styles };
+  }
+
+  setOptions(options: Partial<LoggerOptions>): void {
+    this.options = { ...this.options, ...options };
+  }
+
+  getOptions(): LoggerOptions {
+    return { ...this.options };
   }
 }
 
-export const styleLogger = StyleLogger.getInstance();
-
-// Utility functions for common style logging scenarios
-export const logComponentRender = (component: string, styles: Record<string, any>) => {
-  styleLogger.log({
-    component,
-    styles,
-    event: 'render'
-  });
-};
-
-export const logStyleInteraction = (
-  component: string, 
-  styles: Record<string, any>,
-  interactionType: string,
-  details?: Record<string, any>
-) => {
-  styleLogger.log({
-    component,
-    styles,
-    event: `interaction:${interactionType}`,
-    additionalInfo: details
-  });
-};
-
-export const logThemeChange = (
-  component: string,
-  oldStyles: Record<string, any>,
-  newStyles: Record<string, any>
-) => {
-  styleLogger.log({
-    component,
-    styles: newStyles,
-    event: 'theme-change',
-    additionalInfo: {
-      previousStyles: oldStyles,
-      changes: Object.keys(newStyles).filter(key => oldStyles[key] !== newStyles[key])
-    }
-  });
-};
-
-export const logStyleError = (
-  component: string,
-  styles: Record<string, any>,
-  error: Error
-) => {
-  styleLogger.log({
-    component,
-    styles,
-    event: 'error',
-    additionalInfo: {
-      error: {
-        message: error.message,
-        stack: error.stack
-      }
-    }
-  });
-}; 
+export default StyleLogger; 

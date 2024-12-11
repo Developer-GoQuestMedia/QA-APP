@@ -27,16 +27,18 @@ export async function POST(req: Request) {
       )
     }
 
-    // Update last login
+    // Update last login and sessions log
+    const sessionLog = {
+      loginTime: new Date(),
+      userAgent: req.headers.get('user-agent') || 'unknown'
+    }
+
     await db.collection('users').updateOne(
       { _id: user._id },
       { 
-        $set: { lastLogin: new Date() },
-        $push: { 
-          sessionsLog: {
-            loginTime: new Date(),
-            userAgent: req.headers.get('user-agent') || 'unknown'
-          }
+        $set: { 
+          lastLogin: new Date(),
+          sessionsLog: [sessionLog, ...(user.sessionsLog || [])]
         }
       }
     )

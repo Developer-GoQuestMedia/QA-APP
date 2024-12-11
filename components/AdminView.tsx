@@ -1,15 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { Project } from '@/types/project'
 
 interface AdminViewProps {
-  initialProjects: Project[];
+  projects: Project[];
 }
 
-export default function AdminView({ initialProjects }: AdminViewProps) {
-  const [projects] = useState<Project[]>(initialProjects);
-
+export default function AdminView({ projects }: AdminViewProps) {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Project Management</h1>

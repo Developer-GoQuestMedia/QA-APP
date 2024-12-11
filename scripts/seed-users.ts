@@ -22,7 +22,7 @@ async function seedUsers() {
   console.log('Starting user seeding...')
   console.log('Using database:', MONGODB_DB)
   
-  const client = new MongoClient(MONGODB_URI)
+  const client = new MongoClient(MONGODB_URI as string)
 
   try {
     await client.connect()

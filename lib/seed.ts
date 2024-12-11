@@ -12,6 +12,7 @@ const seed = async () => {
   const users = [
     {
       username: 'transcriber1',
+      email: 'transcriber1@email.com',
       password: await bcrypt.hash('trans123', 10),
       role: 'transcriber',
       lastLogin: null,
@@ -21,6 +22,7 @@ const seed = async () => {
     },
     {
       username: 'translator1',
+      email: 'translator1@email.com',
       password: await bcrypt.hash('tran123', 10),
       role: 'translator',
       lastLogin: null,
@@ -30,6 +32,7 @@ const seed = async () => {
     },
     {
       username: 'voiceover1',
+      email: 'voiceover1@email.com',
       password: await bcrypt.hash('voice123', 10),
       role: 'voice-over',
       lastLogin: null,
@@ -39,6 +42,7 @@ const seed = async () => {
     },
     {
       username: 'director1',
+      email: 'director1@email.com',
       password: await bcrypt.hash('dir123', 10),
       role: 'director',
       lastLogin: null,
@@ -48,6 +52,7 @@ const seed = async () => {
     },
     {
       username: 'admin1',
+      email: 'admin1@email.com',
       password: await bcrypt.hash('admin123', 10),
       role: 'admin',
       lastLogin: null,

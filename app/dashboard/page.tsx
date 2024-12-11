@@ -9,10 +9,34 @@ import VoiceOverView from '@/components/VoiceOverView'
 import DirectorView from '@/components/DirectorView'
 import AdminView from '@/components/AdminView'
 
+interface CustomSession {
+  user: {
+    username: string;
+    role: string;
+    email?: string;
+    name?: string;
+  }
+}
+
+interface Project {
+  _id: string;
+  title: string;
+  description: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  status: string;
+  assignedTo: Array<{
+    username: string;
+    role: string;
+  }>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export default function Dashboard() {
-  const { data: session, status } = useSession()
+  const { data: session, status } = useSession() as { data: CustomSession | null, status: string }
   const router = useRouter()
-  const [projects, setProjects] = useState([])
+  const [projects, setProjects] = useState<Project[]>([])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -22,9 +46,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const res = await fetch('/api/projects')
-      const data = await res.json()
-      setProjects(data)
+      try {
+        const res = await fetch('/api/projects')
+        if (!res.ok) {
+          console.error('Failed to fetch projects:', await res.text())
+          return
+        }
+        const data = await res.json()
+        console.log('Fetched projects:', data)
+        setProjects(data)
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
     }
     fetchProjects()
   }, [])

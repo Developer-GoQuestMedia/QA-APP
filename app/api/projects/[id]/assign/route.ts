@@ -9,18 +9,29 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const projectId = params.id
 
     // Update project
-    await db.collection('projects').updateOne(
+    const result = await db.collection('projects').findOneAndUpdate(
       { _id: new ObjectId(projectId) },
-      { $push: { assignedTo: { username, role } } }
+      { 
+        $push: { assignedTo: { username, role } },
+        $set: { updatedAt: new Date() }
+      },
+      { returnDocument: 'after' }
     )
 
-    // Update user (assuming you have a users collection)
+    if (!result) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    // Update user
     await db.collection('users').updateOne(
       { username },
-      { $push: { assignedProjects: { projectId: new ObjectId(projectId), role } } }
+      { 
+        $push: { assignedProjects: { projectId: new ObjectId(projectId), role } },
+        $set: { updatedAt: new Date() }
+      }
     )
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, project: result })
   } catch (error) {
     console.error('Failed to assign project:', error)
     return NextResponse.json({ error: 'Failed to assign project' }, { status: 500 })

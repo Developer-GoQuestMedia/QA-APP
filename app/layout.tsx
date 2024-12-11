@@ -1,12 +1,13 @@
-import './globals.css'
+import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import Providers from './providers'
+import './globals.css'
+import { Providers } from './providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'QA App',
-  description: 'Video dubbing QA application',
+  description: 'Quality Assurance Application',
 }
 
 export default function RootLayout({

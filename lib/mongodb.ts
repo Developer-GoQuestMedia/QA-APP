@@ -1,7 +1,7 @@
 import { MongoClient, Db } from 'mongodb'
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017'
-const MONGODB_DB = process.env.MONGODB_DB || 'test_db'
+const MONGODB_DB = process.env.MONGODB_DB || 'test'
 
 interface GlobalMongo {
     conn: { client: MongoClient; db: Db } | null;

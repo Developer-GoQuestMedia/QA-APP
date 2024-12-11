@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useTransform, useAnimation, type MotionValue, type PanInfo } from 'framer-motion'
+import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 
 interface Dialogue {
   _id: string

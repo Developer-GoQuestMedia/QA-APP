@@ -2,14 +2,13 @@
 
 import { useState } from 'react'
 import { Project } from '@/types/project'
-import Button from './Button'
 
 interface AdminViewProps {
   initialProjects: Project[];
 }
 
 export default function AdminView({ initialProjects }: AdminViewProps) {
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projects] = useState<Project[]>(initialProjects);
 
   return (
     <div className="space-y-6">

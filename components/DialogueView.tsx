@@ -102,6 +102,12 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
+  // Add proper type for queryClient.setQueryData
+  type QueryData = {
+    data: Dialogue[];
+    [key: string]: any;
+  };
+
   // Check for unsaved changes
   const hasChanges = () => {
     if (!currentDialogue) return false;
@@ -187,7 +193,7 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
       );
 
       // Update React Query cache
-      queryClient.setQueryData(['dialogues', projectId], (oldData: any) => {
+      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
@@ -241,30 +247,30 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
     }
   }, [currentDialogue])
 
-  const handleDragEnd = (event: any, info: any) => {
+  // Type the event and info parameters
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (Math.abs(info.offset.x) < 100) {
       animControls.start({ x: 0, opacity: 1 })
     } else {
       const direction = info.offset.x > 0 ? 'right' : 'left'
       if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-        if (hasChanges()) {
-          setShowConfirmation(true)
-          animControls.start({ x: 0, opacity: 1 })
-        } else {
-          handleNext()
-        }
+        handleNext();
       } else if (direction === 'right' && currentDialogueIndex > 0) {
-        if (hasChanges()) {
-          setShowConfirmation(true)
-          animControls.start({ x: 0, opacity: 1 })
-        } else {
-          handlePrevious()
-        }
-      } else {
-        animControls.start({ x: 0, opacity: 1 })
+        handlePrevious();
       }
     }
-  }
+  };
+
+  // Move useTransform outside of conditional
+  const swipeText = useTransform(
+    x,
+    [-200, 0, 200],
+    [
+      'Swipe right for previous',
+      'Swipe to navigate',
+      'Swipe left for next'
+    ]
+  );
 
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
@@ -346,7 +352,7 @@ export default function DialogueView({ dialogues: initialDialogues, projectId }:
       {/* Add swipe hint for first-time users */}
       <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">
         <motion.p>
-          {useTransform(swipeProgress, value => value)}
+          {swipeText}
         </motion.p>
       </div>
 

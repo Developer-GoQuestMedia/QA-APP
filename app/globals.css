@@ -25,6 +25,7 @@
   --radius: 0.5rem;
 }
 
+/* Dark theme colors */
 .dark {
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
@@ -47,6 +48,12 @@
   --ring: 224.3 76.3% 48%;
 }
 
+/* Ensure proper text visibility in dark mode */
+.dark body {
+  @apply bg-background text-foreground;
+}
+
+/* Base styles */
 body {
   @apply bg-background text-foreground;
 }
@@ -81,5 +88,22 @@ button {
 
 .bg-white {
   @apply bg-background text-foreground;
+}
+
+/* Dark mode specific overrides */
+.dark .bg-white {
+  @apply bg-background text-foreground;
+}
+
+.dark .border {
+  @apply border-border;
+}
+
+.dark .shadow-lg {
+  @apply shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)];
+}
+
+.dark input, .dark select, .dark textarea {
+  @apply border-input bg-background text-foreground;
 }
 

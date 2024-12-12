@@ -161,155 +161,56 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      console.error('Unauthorized access attempt to update dialogue')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    if (!ObjectId.isValid(params.id)) {
-      console.error('Invalid dialogue ID format:', params.id)
-      return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
+    const { db } = await connectToDatabase();
+    const data = await request.json();
+    const dialogueId = params.id;
+
+    // Verify dialogue exists and user has access
+    const dialogue = await db.collection('dialogues').findOne({
+      _id: new ObjectId(dialogueId)
+    });
+
+    if (!dialogue) {
+      return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 });
     }
 
-    const updates = await request.json()
-    const { db } = await connectToDatabase()
-
-    const dialoguesCollection = db.collection('dialogues')
-    const existingDialogue = await dialoguesCollection.findOne({
-      _id: new ObjectId(params.id)
-    })
-
-    if (!existingDialogue) {
-      console.error('Dialogue not found:', params.id)
-      return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 })
-    }
-
-    // Extract the numeric index value
-    const indexValue = existingDialogue.index?.$numberInt 
-      ? parseInt(existingDialogue.index.$numberInt) 
-      : typeof existingDialogue.index === 'string' 
-        ? parseInt(existingDialogue.index) 
-        : existingDialogue.index
-
-    // If projectId exists in the document, use it directly
-    let projectId;
-    if (existingDialogue.projectId) {
-      try {
-        projectId = new ObjectId(existingDialogue.projectId)
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-        console.error('Invalid existing projectId format:', existingDialogue.projectId, errorMessage)
-        return NextResponse.json({ error: 'Invalid project ID format in dialogue' }, { status: 400 })
+    // Update the dialogue
+    const result = await db.collection('dialogues').updateOne(
+      { _id: new ObjectId(dialogueId) },
+      { 
+        $set: {
+          ...data,
+          updatedAt: new Date(),
+          updatedBy: session.user.email
+        } 
       }
-    } else {
-      // Look for other dialogues with the same index
-      const otherDialogue = await dialoguesCollection.findOne(
-        { 
-          index: indexValue,
-          projectId: { $exists: true, $ne: null }
-        },
-        { sort: { _id: 1 } }
-      )
+    );
 
-      if (otherDialogue?.projectId) {
-        try {
-          projectId = new ObjectId(otherDialogue.projectId)
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-          console.error('Invalid project ID from other dialogue:', otherDialogue.projectId, errorMessage)
-          return NextResponse.json({ error: 'Invalid project ID format in related dialogue' }, { status: 400 })
-        }
-      } else {
-        // If still no project found, look for the first project assigned to the user
-        const projectsCollection = db.collection('projects')
-        const userProject = await projectsCollection.findOne({
-          'assignedTo': {
-            $elemMatch: {
-              username: session.user.username,
-              role: 'transcriber'
-            }
-          }
-        })
-
-        if (!userProject) {
-          console.error('No projects found for user:', session.user.username)
-          return NextResponse.json({ error: 'No projects found for user' }, { status: 400 })
-        }
-
-        projectId = userProject._id
-      }
+    if (result.modifiedCount === 0) {
+      return NextResponse.json(
+        { error: 'Failed to update dialogue' },
+        { status: 400 }
+      );
     }
 
-    // Check project access
-    const project = await db.collection('projects').findOne({
-      _id: projectId,
-      'assignedTo': {
-        $elemMatch: {
-          username: session.user.username,
-          role: 'transcriber'
-        }
-      }
-    })
+    // Return the updated dialogue
+    const updatedDialogue = await db.collection('dialogues').findOne({
+      _id: new ObjectId(dialogueId)
+    });
 
-    if (!project) {
-      console.error('Project access denied:', {
-        username: session.user.username,
-        projectId: projectId.toString(),
-        dialogueId: params.id
-      })
-      return NextResponse.json({ error: 'Not authorized for this project' }, { status: 403 })
-    }
-
-    // Prepare update data
-    const updateData = {
-      dialogue: {
-        original: updates.dialogue.original.trim(),
-        translated: (updates.dialogue.translated || '').trim(),
-        adapted: (updates.dialogue.adapted || '').trim(),
-      },
-      character: (updates.character || '').trim(),
-      status: updates.status || existingDialogue.status,
-      timeStart: updates.timeStart || existingDialogue.timeStart,
-      timeEnd: updates.timeEnd || existingDialogue.timeEnd,
-      index: indexValue,
-      projectId: projectId,
-      updatedAt: new Date(),
-      updatedBy: session.user.username
-    }
-
-    const result = await dialoguesCollection.findOneAndUpdate(
-      { _id: new ObjectId(params.id) },
-      { $set: updateData },
-      { returnDocument: 'after' }
-    )
-
-    if (!result) {
-      console.error('Failed to update dialogue:', params.id)
-      return NextResponse.json({ error: 'Failed to update dialogue' }, { status: 500 })
-    }
-
-    // Transform ObjectIds to strings for response
-    const serializedDialogue = {
-      ...result,
-      _id: result._id.toString(),
-      projectId: result.projectId.toString()
-    }
-
-    return NextResponse.json(serializedDialogue)
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-    const errorStack = err instanceof Error ? err.stack : undefined
-    
-    console.error('Error updating dialogue:', {
-      error: errorMessage,
-      stack: errorStack
-    })
-    
+    return NextResponse.json(updatedDialogue);
+  } catch (error) {
+    console.error('Error updating dialogue:', error);
     return NextResponse.json(
-      { error: `Failed to update dialogue: ${errorMessage}` },
+      { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
 }
 

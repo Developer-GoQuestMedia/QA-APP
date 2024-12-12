@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import { createWorker, createWavBlob, type AudioData } from '@/utils/audio'
 
 interface Dialogue {
   _id: string
@@ -56,6 +57,16 @@ const getNumberValue = (mongoNumber: any): number => {
   return Number(mongoNumber);
 };
 
+const autoResizeTextArea = (element: HTMLTextAreaElement) => {
+  element.style.height = 'auto';
+  element.style.height = `${element.scrollHeight}px`;
+};
+
+const checkMediaSupport = () => {
+  // We'll use our custom WAV recording regardless of browser support
+  return 'audio/wav';
+};
+
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
@@ -77,6 +88,9 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const voiceOverSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const dragX = useMotionValue(0);
   const dragControls = useAnimation();
+  const [recordedChunks, setRecordedChunks] = useState<AudioData[]>([]);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -118,35 +132,76 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   // Voice recording functions
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks: BlobPart[] = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+          channelCount: 2
+        } 
+      });
+      
+      audioContextRef.current = new AudioContext({
+        sampleRate: 44100,
+        latencyHint: 'interactive'
+      });
+      const sourceNode = audioContextRef.current.createMediaStreamSource(stream);
+      sourceNodeRef.current = sourceNode;
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
+      const workletNode = await createWorker(audioContextRef.current);
+      workletNodeRef.current = workletNode;
+
+      workletNode.port.onmessage = (event) => {
+        setRecordedChunks(chunks => [...chunks, event.data]);
       };
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        setAudioBlob(blob);
-      };
+      sourceNode.connect(workletNode);
+      workletNode.connect(audioContextRef.current.destination);
 
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
       setIsRecording(true);
+      setRecordedChunks([]);
+      
+      console.log('Recording started in WAV format');
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      setError('Failed to access microphone');
+      setError(error instanceof Error ? error.message : 'Failed to access microphone');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    if (audioContextRef.current && sourceNodeRef.current && workletNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      workletNodeRef.current.disconnect();
+      sourceNodeRef.current.mediaStream.getTracks().forEach(track => track.stop());
+      
+      // Combine all recorded chunks into a single audio buffer
+      const combinedAudioData = recordedChunks.reduce((acc: Float32Array[], chunk) => {
+        chunk.audioData.forEach((channel, i) => {
+          // Create new array with proper size
+          const newArray = new Float32Array(
+            acc[i] ? acc[i].length + channel.length : channel.length
+          );
+          
+          // Copy existing data if any
+          if (acc[i]) {
+            newArray.set(acc[i], 0);
+          }
+          
+          // Add new data
+          newArray.set(channel, acc[i] ? acc[i].length : 0);
+          
+          // Update accumulator
+          acc[i] = newArray;
+        });
+        return acc;
+      }, [] as Float32Array[]);
+
+      // Convert to WAV and set as audioBlob
+      const wavBlob = createWavBlob(combinedAudioData, audioContextRef.current.sampleRate);
+      setAudioBlob(wavBlob);
+
       setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setRecordedChunks([]);
     }
   };
 
@@ -164,6 +219,8 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         const formData = new FormData();
         formData.append('audio', audioBlob);
         formData.append('dialogueId', currentDialogue._id);
+        formData.append('dialogueIndex', currentDialogue.index.toString());
+        formData.append('projectId', projectId);
         
         const uploadResponse = await fetch('/api/upload-voice-over', {
           method: 'POST',

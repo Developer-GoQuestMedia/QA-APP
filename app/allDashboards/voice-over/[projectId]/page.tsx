@@ -4,9 +4,9 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useDialogues } from '@/hooks/useDialogues'
-import TranscriberDialogueView from '../../../../components/TranscriberDialogueView'
+import VoiceOverDialogueView from '../../../../components/VoiceOverDialogueView'
 
-export default function TranscriberProjectPage({
+export default function VoiceOverProjectPage({
   params,
 }: {
   params: { projectId: string }
@@ -18,7 +18,7 @@ export default function TranscriberProjectPage({
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
-    } else if (session?.user?.role !== 'transcriber') {
+    } else if (session?.user?.role !== 'voice-over') {
       router.push('/login')
     }
   }, [status, session, router])
@@ -43,13 +43,13 @@ export default function TranscriberProjectPage({
       <div className="w-full max-w-7xl mx-auto py-4 sm:py-6">
         <div className="flex justify-between items-center mb-4 sm:mb-6 px-4">
           <button
-            onClick={() => router.push('/allDashboards/transcriber')}
+            onClick={() => router.push('/allDashboards/voice-over')}
             className="text-primary hover:text-primary/80 transition-colors text-sm sm:text-base"
           >
             ← Back to Projects
           </button>
         </div>
-        <TranscriberDialogueView dialogues={dialogues || []} projectId={params.projectId} />
+        <VoiceOverDialogueView dialogues={dialogues || []} projectId={params.projectId} />
       </div>
     </div>
   )

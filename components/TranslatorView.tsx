@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 interface Project {
   _id: string
@@ -16,26 +17,10 @@ interface Project {
   }>
 }
 
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  status: string
-}
-
-const TranslatorView = ({ projects }: { projects: Project[] }) => {
+export default function TranslatorView({ projects }: { projects: Project[] }) {
   const { data: session } = useSession()
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [dialogues, setDialogues] = useState<Dialogue[]>([])
-  const [currentDialogue, setCurrentDialogue] = useState<Dialogue | null>(null)
-  const [translatedText, setTranslatedText] = useState('')
+  const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   // Filter projects assigned to current user as translator
   const assignedProjects = projects.filter(project => 
@@ -45,191 +30,66 @@ const TranslatorView = ({ projects }: { projects: Project[] }) => {
     )
   )
 
-  useEffect(() => {
-    if (assignedProjects.length > 0 && !selectedProject) {
-      setSelectedProject(assignedProjects[0])
-    }
-  }, [assignedProjects, selectedProject])
-
-  useEffect(() => {
-    if (selectedProject) {
-      fetchDialogues(selectedProject._id)
-    }
-  }, [selectedProject])
-
-  useEffect(() => {
-    if (currentDialogue) {
-      setTranslatedText(currentDialogue.dialogue.translated || '')
-    }
-  }, [currentDialogue])
-
-  const fetchDialogues = async (projectId: string) => {
+  const handleLogout = async () => {
     try {
-      const res = await fetch(`/api/dialogues?projectId=${projectId}`)
-      const response = await res.json()
-      if (response.success) {
-        setDialogues(response.data)
-        if (response.data.length > 0) setCurrentDialogue(response.data[0])
-      } else {
-        console.error('Failed to fetch dialogues:', response.error)
+      setIsLoggingOut(true)
+      // Clear any client-side session data
+      if (typeof window !== 'undefined') {
+        window.localStorage.clear()
       }
-    } catch (error) {
-      console.error('Error fetching dialogues:', error)
-    }
-  }
-
-  const handleSave = async () => {
-    if (!currentDialogue) return
-
-    try {
-      const response = await fetch('/api/dialogues', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          dialogueId: currentDialogue._id,
-          updates: {
-            'dialogue.translated': translatedText,
-            status: 'translated'
-          }
-        })
+      // Use direct redirect
+      await signOut({ 
+        redirect: true,
+        callbackUrl: '/login'
       })
-
-      if (response.ok) {
-        const updatedDialogues = dialogues.map(d => {
-          if (d._id === currentDialogue._id) {
-            return {
-              ...d,
-              dialogue: { ...d.dialogue, translated: translatedText },
-              status: 'translated'
-            }
-          }
-          return d
-        })
-        setDialogues(updatedDialogues)
-      }
     } catch (error) {
-      console.error('Error saving translation:', error)
+      console.error('Error during signOut:', error)
+      // Fallback redirect if signOut fails
+      router.replace('/login')
+    } finally {
+      setIsLoggingOut(false)
     }
-  }
-
-  const handleNext = () => {
-    if (!currentDialogue || !dialogues.length) return
-    const currentIndex = dialogues.findIndex(d => d._id === currentDialogue._id)
-    if (currentIndex < dialogues.length - 1) {
-      setCurrentDialogue(dialogues[currentIndex + 1])
-    }
-  }
-
-  const handlePrevious = () => {
-    if (!currentDialogue || !dialogues.length) return
-    const currentIndex = dialogues.findIndex(d => d._id === currentDialogue._id)
-    if (currentIndex > 0) {
-      setCurrentDialogue(dialogues[currentIndex - 1])
-    }
-  }
-
-  if (assignedProjects.length === 0) {
-    return <div className="text-center p-4">No projects assigned to you as a translator.</div>
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      {/* Project Selector */}
-      <div className="mb-6">
-        <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-2">
-          Select Project
-        </label>
-        <select
-          id="project"
-          value={selectedProject?._id || ''}
-          onChange={(e) => {
-            const project = assignedProjects.find(p => p._id === e.target.value)
-            setSelectedProject(project || null)
-          }}
-          className="w-full border border-gray-300 rounded-md shadow-sm p-2"
-        >
-          {assignedProjects.map((project) => (
-            <option key={project._id} value={project._id}>
-              {project.title}
-            </option>
-          ))}
-        </select>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex justify-between items-center mb-6 w-full">
+          <h1 className="text-2xl font-bold text-foreground">Your Projects</h1>
+          <button 
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className={`z-50 px-4 py-2 rounded transition-colors ${
+              isLoggingOut 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-red-500 hover:bg-red-600'
+            } text-white`}
+          >
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </button>
+        </div>
 
-        {selectedProject && (
-          <div className="mt-4 bg-gray-50 rounded-md p-4">
-            <h3 className="font-medium text-gray-900">{selectedProject.title}</h3>
-            <p className="text-gray-600 mt-1">{selectedProject.description}</p>
-            <div className="mt-2 text-sm text-gray-500">
-              <p>Source Language: {selectedProject.sourceLanguage}</p>
-              <p>Target Language: {selectedProject.targetLanguage}</p>
-              <p>Status: {selectedProject.status}</p>
-            </div>
+        {assignedProjects.length === 0 ? (
+          <div className="text-center p-4">No projects assigned to you as a translator.</div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {assignedProjects.map((project) => (
+              <div
+                key={project._id}
+                onClick={() => router.push(`/allDashboards/translator/${project._id}`)}
+                className="bg-card rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
+              >
+                <h2 className="text-xl font-semibold mb-2">{project.title}</h2>
+                <p className="text-muted-foreground mb-4">{project.description}</p>
+                <div className="text-sm text-muted-foreground">
+                  <p>Source Language: {project.sourceLanguage}</p>
+                  <p>Status: {project.status}</p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-
-      {/* Translation Interface */}
-      {currentDialogue ? (
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="space-y-4">
-            {/* Original Text */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Original Text ({selectedProject?.sourceLanguage})
-              </label>
-              <div className="mt-1 p-3 bg-gray-50 rounded-md">
-                {currentDialogue.dialogue.original}
-              </div>
-            </div>
-
-            {/* Translation Input */}
-            <div>
-              <label htmlFor="translation" className="block text-sm font-medium text-gray-700">
-                Translation ({selectedProject?.targetLanguage})
-              </label>
-              <textarea
-                id="translation"
-                value={translatedText}
-                onChange={(e) => setTranslatedText(e.target.value)}
-                rows={4}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-              />
-            </div>
-
-            {/* Save Button */}
-            <button
-              onClick={handleSave}
-              className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-            >
-              Save Translation
-            </button>
-
-            {/* Navigation Buttons */}
-            <div className="flex justify-between mt-4">
-              <button
-                onClick={handlePrevious}
-                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
-                disabled={dialogues.indexOf(currentDialogue) === 0}
-              >
-                Previous
-              </button>
-              <button
-                onClick={handleNext}
-                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
-                disabled={dialogues.indexOf(currentDialogue) === dialogues.length - 1}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="text-center p-4">No dialogues available for this project.</div>
-      )}
     </div>
   )
-}
-
-export default TranslatorView 
+} 

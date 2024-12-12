@@ -35,18 +35,23 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [error, setError] = useState<string>('');
   const [pendingTranslatedText, setPendingTranslatedText] = useState('');
+  const [pendingAdaptedText, setPendingAdaptedText] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const queryClient = useQueryClient();
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const translationTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const adaptedTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
   // Check for unsaved changes
   const hasChanges = () => {
     if (!currentDialogue) return false;
-    return pendingTranslatedText !== currentDialogue.dialogue.translated;
+    return pendingTranslatedText !== currentDialogue.dialogue.translated || 
+           pendingAdaptedText !== currentDialogue.dialogue.adapted;
   };
 
   // Navigation handlers
@@ -73,6 +78,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
     setShowConfirmation(false);
     if (currentDialogue) {
       setPendingTranslatedText(currentDialogue.dialogue.translated || '');
+      setPendingAdaptedText(currentDialogue.dialogue.adapted || '');
     }
   };
 
@@ -87,7 +93,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         dialogue: {
           original: currentDialogue.dialogue.original,
           translated: pendingTranslatedText,
-          adapted: currentDialogue.dialogue.adapted || '',
+          adapted: pendingAdaptedText,
         },
         character: currentDialogue.character,
         status: 'translated',
@@ -152,6 +158,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
   useEffect(() => {
     if (currentDialogue) {
       setPendingTranslatedText(currentDialogue.dialogue.translated || '')
+      setPendingAdaptedText(currentDialogue.dialogue.adapted || '')
     }
   }, [currentDialogue])
 
@@ -210,48 +217,110 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
     }
   }, []);
 
+  // Add video loading event handlers
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      const handleLoadStart = () => setIsVideoLoading(true);
+      const handleCanPlay = () => setIsVideoLoading(false);
+      const handleWaiting = () => setIsVideoLoading(true);
+      const handlePlaying = () => setIsVideoLoading(false);
+      
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('waiting', handleWaiting);
+      video.addEventListener('playing', handlePlaying);
+      
+      return () => {
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('waiting', handleWaiting);
+        video.removeEventListener('playing', handlePlaying);
+      };
+    }
+  }, []);
+
+  // Function to adjust textarea height
+  const adjustTextareaHeight = (textarea: HTMLTextAreaElement | null) => {
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  // Adjust heights when text changes
+  useEffect(() => {
+    adjustTextareaHeight(translationTextareaRef.current);
+  }, [pendingTranslatedText]);
+
+  useEffect(() => {
+    adjustTextareaHeight(adaptedTextareaRef.current);
+  }, [pendingAdaptedText]);
+
+  // Adjust heights when dialogue changes
+  useEffect(() => {
+    if (currentDialogue) {
+      setPendingTranslatedText(currentDialogue.dialogue.translated || '');
+      setPendingAdaptedText(currentDialogue.dialogue.adapted || '');
+      // Add small delay to ensure state is updated before adjusting height
+      setTimeout(() => {
+        adjustTextareaHeight(translationTextareaRef.current);
+        adjustTextareaHeight(adaptedTextareaRef.current);
+      }, 0);
+    }
+  }, [currentDialogue]);
+
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
-      {/* Video Player Card */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-        <video
-          ref={videoRef}
-          src={currentDialogue.videoUrl}
-          controls
-          className="w-full"
-        />
-        
-        {/* Video Controls */}
-        <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2">
+    <div className="w-full h-screen flex flex-col bg-gray-900 overflow-hidden">
+      <div className="w-full h-full flex flex-col overflow-hidden">
+        {/* Video Player Card */}
+        <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700">
+          <div className="relative h-[25vh] min-h-[180px] max-h-[280px]">
+            <video
+              ref={videoRef}
+              src={currentDialogue.videoUrl}
+              className="w-full h-full object-contain bg-black"
+            />
+            {isVideoLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                  <span className="text-sm text-white">Loading video...</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Video Controls */}
+          <div className="p-1.5 flex items-center justify-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={rewindFiveSeconds}
-                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                className="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
               >
                 -5s
               </button>
               <button
                 onClick={togglePlayPause}
-                className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                className="px-3 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
               >
                 {isPlaying ? 'Pause' : 'Play'}
               </button>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              <span className="text-sm text-gray-600 dark:text-gray-300">Speed:</span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              <span className="text-xs text-gray-300">Speed:</span>
               {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
                 <button
                   key={rate}
                   onClick={() => changePlaybackRate(rate)}
-                  className={`px-2 py-1 rounded text-sm ${
+                  className={`px-1.5 py-0.5 rounded text-xs ${
                     playbackRate === rate
                       ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
                   {rate}x
@@ -260,90 +329,105 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Dialogue Information Card */}
-      <motion.div
-        className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700"
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.2}
-        animate={animControls}
-        style={{ x, rotate, opacity, scale }}
-        onDragEnd={handleDragEnd}
-        whileTap={{ cursor: 'grabbing' }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 300, 
-          damping: 30,
-          opacity: { duration: 0.2 },
-          scale: { duration: 0.2 }
-        }}
-      >
-        <div className="p-5 space-y-4">
-          {/* Time Display */}
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">Start:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {currentDialogue.timeStart || '00:00.000'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">End:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {currentDialogue.timeEnd || '00:00.000'}
-              </p>
-            </div>
+        {/* Time Info */}
+        <div className="flex-shrink-0 flex items-center gap-2 p-1.5 bg-gray-800 border-b border-gray-700 text-xs">
+          <div className="flex items-center gap-1">
+            <span className="text-gray-300">Start:</span>
+            <span className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">
+              {currentDialogue.timeStart || '00:00.000'}
+            </span>
           </div>
-
-          {/* Original Text (Read-only) */}
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-              Original Text
-            </label>
-            <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-              {currentDialogue.dialogue.original}
-            </div>
+          <div className="flex items-center gap-1">
+            <span className="text-gray-300">End:</span>
+            <span className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">
+              {currentDialogue.timeEnd || '00:00.000'}
+            </span>
           </div>
+        </div>
 
-          {/* Translation Input */}
-          <div>
-            <label htmlFor="translatedText" className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-              Translation
-            </label>
-            <textarea
-              id="translatedText"
-              value={pendingTranslatedText}
-              onChange={(e) => setPendingTranslatedText(e.target.value)}
-              rows={3}
-              className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            />
-          </div>
-
-          {/* Character Display (Read-only) */}
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-              Character
-            </label>
-            <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-              {currentDialogue.character}
-            </div>
-          </div>
-
-          {/* Navigation and Info */}
-          <div className="flex items-center justify-center pt-4 mt-4 border-t border-gray-200 dark:border-gray-600">
-            <div className="text-center">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
+        {/* Scrollable Content */}
+        <div className="flex-grow overflow-y-auto min-h-0">
+          <motion.div
+            className="h-full"
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            animate={animControls}
+            style={{ x, rotate, opacity, scale }}
+            onDragEnd={handleDragEnd}
+            whileTap={{ cursor: 'grabbing' }}
+            transition={{ 
+              type: "spring", 
+              stiffness: 300, 
+              damping: 30,
+              opacity: { duration: 0.2 },
+              scale: { duration: 0.2 }
+            }}
+          >
+            <div className="p-2 space-y-2">
+              {/* Character Display */}
+              <div>
+                <label className="block text-xs font-medium mb-1 text-gray-300">
+                  Character
+                </label>
+                <div className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600">
+                  {currentDialogue.character}
+                </div>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {currentDialogue.timeStart} - {currentDialogue.timeEnd}
+
+              {/* Original Text */}
+              <div>
+                <label className="block text-xs font-medium mb-1 text-gray-300">
+                  Original Text
+                </label>
+                <div className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600">
+                  {currentDialogue.dialogue.original}
+                </div>
               </div>
+
+              {/* Translation Input */}
+              <div>
+                <label htmlFor="translatedText" className="block text-xs font-medium mb-1 text-gray-300">
+                  Translation
+                </label>
+                <textarea
+                  ref={translationTextareaRef}
+                  id="translatedText"
+                  value={pendingTranslatedText}
+                  onChange={(e) => setPendingTranslatedText(e.target.value)}
+                  className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-h-[40px] overflow-hidden resize-none"
+                  style={{ height: 'auto' }}
+                />
+              </div>
+
+              {/* Adapted Text Input */}
+              <div>
+                <label htmlFor="adaptedText" className="block text-xs font-medium mb-1 text-gray-300">
+                  Adapted
+                </label>
+                <textarea
+                  ref={adaptedTextareaRef}
+                  id="adaptedText"
+                  value={pendingAdaptedText}
+                  onChange={(e) => setPendingAdaptedText(e.target.value)}
+                  className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-h-[40px] overflow-hidden resize-none"
+                  style={{ height: 'auto' }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700">
+          <div className="flex items-center justify-center h-[3vh] min-h-[24px] max-h-[32px]">
+            <div className="text-xs text-gray-300">
+              Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (

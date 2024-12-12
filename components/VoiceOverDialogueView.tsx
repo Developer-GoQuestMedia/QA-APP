@@ -14,9 +14,27 @@ interface Dialogue {
     translated: string
     adapted: string
   }
+  emotions: {
+    primary: {
+      emotion: string
+      intensity: number
+    }
+    secondary: {
+      emotion: string
+      intensity: number
+    }
+  }
+  direction: string
+  lipMovements: number
+  sceneContext: string
+  technicalNotes: string
+  culturalNotes: string
   status: string
+  recordingStatus: string
   voiceOverUrl?: string
-  voiceOverNotes?: string
+  projectId: string
+  updatedAt: string
+  updatedBy: string
 }
 
 interface DialogueViewProps {
@@ -30,13 +48,20 @@ type QueryData = {
   timestamp: number;
 };
 
+const getNumberValue = (mongoNumber: any): number => {
+  if (typeof mongoNumber === 'object' && mongoNumber !== null) {
+    if ('$numberInt' in mongoNumber) return Number(mongoNumber.$numberInt);
+    if ('$numberDouble' in mongoNumber) return Number(mongoNumber.$numberDouble);
+  }
+  return Number(mongoNumber);
+};
+
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [error, setError] = useState<string>('');
-  const [voiceOverNotes, setVoiceOverNotes] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -45,6 +70,13 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const queryClient = useQueryClient();
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
+  const [isImposedAudio, setIsImposedAudio] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const voiceOverSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const dragX = useMotionValue(0);
+  const dragControls = useAnimation();
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -52,7 +84,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const hasChanges = () => {
     if (!currentDialogue) return false;
     return (
-      voiceOverNotes !== (currentDialogue.voiceOverNotes || '') ||
       audioBlob !== null
     );
   };
@@ -80,7 +111,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const handleDiscardChanges = () => {
     setShowConfirmation(false);
     if (currentDialogue) {
-      setVoiceOverNotes(currentDialogue.voiceOverNotes || '');
       setAudioBlob(null);
     }
   };
@@ -156,7 +186,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         timeEnd: currentDialogue.timeEnd,
         index: currentDialogue.index,
         voiceOverUrl,
-        voiceOverNotes,
       };
       
       const response = await fetch(`/api/dialogues/${currentDialogue._id}`, {
@@ -215,22 +244,39 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
   useEffect(() => {
     if (currentDialogue) {
-      setVoiceOverNotes(currentDialogue.voiceOverNotes || '')
-      setAudioBlob(null)
+      setAudioBlob(null);
     }
   }, [currentDialogue])
 
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (Math.abs(info.offset.x) < 100) {
-      animControls.start({ x: 0, opacity: 1 })
-    } else {
-      const direction = info.offset.x > 0 ? 'right' : 'left'
-      if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-        handleNext();
-      } else if (direction === 'right' && currentDialogueIndex > 0) {
-        handlePrevious();
+  const handleDragEnd = async (event: any, info: PanInfo) => {
+    const threshold = 100; // minimum distance for swipe
+    const velocity = info.velocity.x;
+    const offset = info.offset.x;
+
+    if (Math.abs(velocity) >= 500 || Math.abs(offset) >= threshold) {
+      if (velocity > 0 || offset > threshold) {
+        // Swipe right - go to previous
+        if (currentDialogueIndex > 0) {
+          if (hasChanges()) {
+            setShowConfirmation(true);
+          } else {
+            setCurrentDialogueIndex(prev => prev - 1);
+          }
+        }
+      } else {
+        // Swipe left - go to next
+        if (currentDialogueIndex < dialoguesList.length - 1) {
+          if (hasChanges()) {
+            setShowConfirmation(true);
+          } else {
+            setCurrentDialogueIndex(prev => prev + 1);
+          }
+        }
       }
     }
+    
+    // Reset position
+    await dragControls.start({ x: 0 });
   };
 
   // Add video control functions
@@ -258,189 +304,285 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   };
 
+  // Function to handle audio imposition
+  const toggleAudioImposition = async () => {
+    if (!videoRef.current) return;
+
+    if (isImposedAudio) {
+      // Remove imposed audio
+      if (audioSourceRef.current) {
+        audioSourceRef.current.disconnect();
+        audioSourceRef.current = null;
+      }
+      if (voiceOverSourceRef.current) {
+        voiceOverSourceRef.current.stop();
+        voiceOverSourceRef.current = null;
+      }
+      setIsImposedAudio(false);
+      return;
+    }
+
+    try {
+      // Initialize audio context if needed
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+
+      // Connect video audio to context
+      if (!audioSourceRef.current) {
+        audioSourceRef.current = audioContextRef.current.createMediaElementSource(videoRef.current);
+        audioSourceRef.current.connect(audioContextRef.current.destination);
+      }
+
+      // Load and play voice-over audio
+      let audioData: ArrayBuffer;
+      if (audioBlob) {
+        audioData = await audioBlob.arrayBuffer();
+      } else if (currentDialogue.voiceOverUrl) {
+        const response = await fetch(currentDialogue.voiceOverUrl);
+        audioData = await response.arrayBuffer();
+      } else {
+        return;
+      }
+
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+      if (voiceOverSourceRef.current) {
+        voiceOverSourceRef.current.stop();
+      }
+      
+      voiceOverSourceRef.current = audioContextRef.current.createBufferSource();
+      voiceOverSourceRef.current.buffer = audioBuffer;
+      voiceOverSourceRef.current.connect(audioContextRef.current.destination);
+      voiceOverSourceRef.current.start(0, videoRef.current.currentTime);
+      
+      setIsImposedAudio(true);
+    } catch (error) {
+      console.error('Error imposing audio:', error);
+      setError('Failed to impose audio');
+    }
+  };
+
   // Add useEffect for video event listeners
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
-      
+      const handleLoadStart = () => setIsVideoLoading(true);
+      const handleLoadEnd = () => setIsVideoLoading(false);
+
       video.addEventListener('play', handlePlay);
       video.addEventListener('pause', handlePause);
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleLoadEnd);
+      video.addEventListener('error', handleLoadEnd);
       
       return () => {
         video.removeEventListener('play', handlePlay);
         video.removeEventListener('pause', handlePause);
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleLoadEnd);
+        video.removeEventListener('error', handleLoadEnd);
       };
     }
+  }, [currentDialogue?.videoUrl]);
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup audio context and sources on unmount
+      voiceOverSourceRef.current?.stop();
+      audioContextRef.current?.close();
+    };
   }, []);
+
+  // Handle video seeking
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleSeek = () => {
+      if (isImposedAudio && voiceOverSourceRef.current) {
+        // Restart voice-over from new position
+        voiceOverSourceRef.current.stop();
+        const newSource = audioContextRef.current!.createBufferSource();
+        newSource.buffer = voiceOverSourceRef.current.buffer;
+        newSource.connect(audioContextRef.current!.destination);
+        newSource.start(0, video.currentTime);
+        voiceOverSourceRef.current = newSource;
+      }
+    };
+
+    video.addEventListener('seeked', handleSeek);
+    return () => video.removeEventListener('seeked', handleSeek);
+  }, [isImposedAudio]);
 
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
-      {/* Video Player Card */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-        <video
-          ref={videoRef}
-          src={currentDialogue.videoUrl}
-          controls
-          className="w-full"
-        />
-        
-        {/* Video Controls */}
-        <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={rewindFiveSeconds}
-                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-              >
-                -5s
-              </button>
-              <button
-                onClick={togglePlayPause}
-                className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-              >
-                {isPlaying ? 'Pause' : 'Play'}
-              </button>
+    <div className="w-full h-screen flex flex-col bg-gray-900">
+      {/* Header Section */}
+      <div className="flex-shrink-0">
+        {/* Character Info */}
+        <div className="p-2 bg-gray-800">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-gray-400">Character:</span>
+            <span className="text-white">{currentDialogue.character}</span>
+          </div>
+        </div>
+
+        {/* Video Player */}
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={currentDialogue.videoUrl}
+            className="w-full aspect-video max-h-[200px] object-contain bg-black"
+          />
+          {isVideoLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              <span className="text-sm text-gray-600 dark:text-gray-300">Speed:</span>
-              {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
-                <button
-                  key={rate}
-                  onClick={() => changePlaybackRate(rate)}
-                  className={`px-2 py-1 rounded text-sm ${
-                    playbackRate === rate
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {rate}x
-                </button>
-              ))}
+          )}
+        </div>
+
+        {/* Video Controls */}
+        <div className="p-2 bg-gray-800 flex flex-col items-center gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={togglePlayPause}
+              className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+            >
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button
+              onClick={toggleAudioImposition}
+              disabled={!audioBlob && !currentDialogue.voiceOverUrl}
+              className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isImposedAudio ? 'Remove Voice-over' : 'Add Voice-over'}
+            </button>
+          </div>
+          
+          {/* Time Info */}
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">Start:</span>
+              <span className="text-white">{currentDialogue.timeStart}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">End:</span>
+              <span className="text-white">{currentDialogue.timeEnd}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Dialogue Information Card */}
-      <motion.div
-        className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700"
+      {/* Main Content */}
+      <motion.div 
+        className="flex-grow overflow-y-auto"
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.2}
-        animate={animControls}
-        style={{ x, rotate, opacity, scale }}
         onDragEnd={handleDragEnd}
-        whileTap={{ cursor: 'grabbing' }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 300, 
-          damping: 30,
-          opacity: { duration: 0.2 },
-          scale: { duration: 0.2 }
-        }}
+        animate={dragControls}
+        style={{ x: dragX }}
       >
-        <div className="p-5 space-y-4">
-          {/* Time Display */}
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">Start:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {currentDialogue.timeStart || '00:00.000'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">End:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {currentDialogue.timeEnd || '00:00.000'}
-              </p>
-            </div>
-          </div>
-
-          {/* Original and Translated Text (Read-only) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                Original Text
-              </label>
-              <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                {currentDialogue.dialogue.original}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                Translated Text
-              </label>
-              <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                {currentDialogue.dialogue.translated}
-              </div>
-            </div>
-          </div>
-
-          {/* Voice Recording Controls */}
-          <div className="flex items-center justify-center space-x-4">
-            <button
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`px-4 py-2 rounded-full ${
-                isRecording
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-blue-500 hover:bg-blue-600'
-              } text-white transition-colors`}
-            >
-              {isRecording ? 'Stop Recording' : 'Start Recording'}
-            </button>
-            {audioBlob && (
-              <audio controls src={URL.createObjectURL(audioBlob)} className="w-64" />
-            )}
-            {currentDialogue.voiceOverUrl && !audioBlob && (
-              <audio controls src={currentDialogue.voiceOverUrl} className="w-64" />
-            )}
-          </div>
-
-          {/* Voice-over Notes */}
+        {/* Text Content */}
+        <div className="space-y-4">
           <div>
-            <label htmlFor="voiceOverNotes" className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-              Voice-over Notes
-            </label>
-            <textarea
-              id="voiceOverNotes"
-              value={voiceOverNotes}
-              onChange={(e) => setVoiceOverNotes(e.target.value)}
-              rows={3}
-              className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              placeholder="Add notes about pronunciation, tone, or delivery..."
-            />
+            <span className="text-gray-400">Original Text:</span>
+            <p className="text-white">{currentDialogue.dialogue.original}</p>
           </div>
 
-          {/* Navigation and Info */}
-          <div className="flex items-center justify-center pt-4 mt-4 border-t border-gray-200 dark:border-gray-600">
-            <div className="text-center">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {currentDialogue.timeStart} - {currentDialogue.timeEnd}
-              </div>
-            </div>
+          <div>
+            <span className="text-gray-400">Translated Text:</span>
+            <p className="text-white">{currentDialogue.dialogue.translated}</p>
           </div>
+
+          <div>
+            <span className="text-gray-400">Adapted Text:</span>
+            <p className="text-white">{currentDialogue.dialogue.adapted}</p>
+          </div>
+        </div>
+
+        {/* Emotions */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <span className="text-gray-400">Primary Emotion:</span>
+            <p className="text-white">
+              {currentDialogue.emotions.primary.emotion} (Intensity: {getNumberValue(currentDialogue.emotions.primary.intensity)})
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-400">Secondary Emotion:</span>
+            <p className="text-white">
+              {currentDialogue.emotions.secondary.emotion} (Intensity: {getNumberValue(currentDialogue.emotions.secondary.intensity)})
+            </p>
+          </div>
+        </div>
+
+        {/* Additional Information */}
+        <div className="space-y-4">
+          <div>
+            <span className="text-gray-400">Direction:</span>
+            <p className="text-white">{currentDialogue.direction}</p>
+          </div>
+
+          <div>
+            <span className="text-gray-400">Scene Context:</span>
+            <p className="text-white">{currentDialogue.sceneContext}</p>
+          </div>
+
+          <div>
+            <span className="text-gray-400">Technical Notes:</span>
+            <p className="text-white">{currentDialogue.technicalNotes}</p>
+          </div>
+
+          <div>
+            <span className="text-gray-400">Cultural Notes:</span>
+            <p className="text-white">{currentDialogue.culturalNotes}</p>
+          </div>
+
+          <div>
+            <span className="text-gray-400">Lip Movements:</span>
+            <p className="text-white">{getNumberValue(currentDialogue.lipMovements)}</p>
+          </div>
+        </div>
+
+        {/* Voice Recording Controls */}
+        <div className="flex justify-center py-2">
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`px-6 py-2 rounded-full ${
+              isRecording
+                ? 'bg-red-500 hover:bg-red-600'
+                : 'bg-blue-500 hover:bg-blue-600'
+            } text-white transition-colors`}
+          >
+            {isRecording ? 'Stop Recording' : 'Start Recording'}
+          </button>
         </div>
       </motion.div>
 
-      {/* Confirmation Modal */}
+      {/* Footer */}
+      <div className="flex-shrink-0 p-2 bg-gray-800 border-t border-gray-700">
+        <div className="text-center text-sm text-gray-300">
+          Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
+        </div>
+      </div>
+
+      {/* Modals and Notifications */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
-            <p className="mb-4">You have unsaved changes. What would you like to do?</p>
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4 text-white">Unsaved Changes</h3>
+            <p className="mb-4 text-gray-300">You have unsaved changes. What would you like to do?</p>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={handleDiscardChanges}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                className="px-4 py-2 text-gray-400 hover:text-white"
               >
                 Discard Changes
               </button>
@@ -481,5 +623,5 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         </div>
       )}
     </div>
-  )
+  );
 } 

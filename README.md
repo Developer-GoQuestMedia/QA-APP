@@ -149,3 +149,463 @@ The application is configured for deployment on Vercel with:
 - Optimized builds
 - Efficient data fetching
 - Proper caching strategies
+
+## API and Function Documentation
+
+### Custom Hooks
+
+#### `useDialogues(projectId: string)`
+A custom hook for fetching and managing dialogue data.
+- **Parameters**: 
+  - `projectId`: The ID of the project to fetch dialogues for
+- **Returns**: Query object containing:
+  - `data`: Array of dialogue objects
+  - `isLoading`: Loading state
+  - `error`: Error state if any
+- **Features**:
+  - Automatic caching (5 minutes)
+  - Data retention (30 minutes)
+  - Automatic revalidation
+  - Type-safe dialogue interface
+
+#### `useProjects()`
+A custom hook for managing project data.
+- **Returns**: Query object for project data
+- **Features**:
+  - Real-time project updates
+  - Cached project data
+  - Project status tracking
+
+### API Routes
+
+#### Dialogue Management
+```typescript
+POST /api/dialogues
+// Create new dialogue
+{
+  projectId: string
+  index: number
+  timeStart: string
+  timeEnd: string
+  character: string
+  dialogue: {
+    original: string
+    translated: string
+    adapted: string
+  }
+}
+
+PATCH /api/dialogues/:id
+// Update dialogue status and content
+{
+  status: string
+  dialogue: {
+    original?: string
+    translated?: string
+    adapted?: string
+  }
+  voiceOverUrl?: string
+}
+
+GET /api/dialogues?projectId=:projectId
+// Fetch dialogues for a project
+```
+
+#### Media Handling
+```typescript
+POST /api/upload-voice-over
+// Upload voice-over recording
+FormData:
+  - audio: Blob
+  - dialogueId: string
+  - dialogueIndex: string
+  - projectId: string
+
+GET /api/media/:projectId/:filename
+// Fetch media files
+```
+
+#### User Management
+```typescript
+POST /api/auth/login
+// User authentication
+{
+  email: string
+  password: string
+}
+
+GET /api/users/me
+// Get current user profile
+
+PATCH /api/users/:id
+// Update user role or status
+{
+  role?: string
+  status?: string
+}
+```
+
+### Utility Functions
+
+#### Audio Processing
+```typescript
+// utils/audio.ts
+interface AudioConfig {
+  sampleRate: number
+  channels: number
+  format: string
+}
+
+processAudio(blob: Blob, config: AudioConfig): Promise<Blob>
+// Process audio recordings with specified configuration
+
+mergeAudioTracks(tracks: Blob[]): Promise<Blob>
+// Merge multiple audio tracks into single file
+```
+
+#### Project Status Management
+```typescript
+interface ProjectStatus {
+  transcribed: number
+  translated: number
+  voiceOver: number
+  approved: number
+  total: number
+}
+
+calculateProjectProgress(dialogues: Dialogue[]): ProjectStatus
+// Calculate project completion statistics
+```
+
+### Type Definitions
+
+#### Dialogue Interface
+```typescript
+interface Dialogue {
+  _id: string
+  index: number
+  timeStart: string
+  timeEnd: string
+  character: string
+  videoUrl: string
+  dialogue: {
+    original: string
+    translated: string
+    adapted: string
+  }
+  status: string
+  voiceOverUrl?: string
+  voiceOverNotes?: string
+  directorNotes?: string
+}
+```
+
+#### Project Interface
+```typescript
+interface Project {
+  _id: string
+  name: string
+  description: string
+  status: string
+  createdAt: Date
+  updatedAt: Date
+  dialogues: Dialogue[]
+  assignedUsers: {
+    transcriber?: string
+    translator?: string
+    voiceOver?: string
+    director?: string
+  }
+}
+```
+
+## API Endpoints Documentation
+
+### Authentication Endpoints
+
+#### `POST /api/auth/login`
+Authenticates a user and creates a session.
+- **Request Body**:
+  ```typescript
+  {
+    email: string     // User's email address
+    password: string  // User's password
+  }
+  ```
+- **Response**:
+  ```typescript
+  {
+    token: string     // JWT authentication token
+    user: {
+      id: string
+      email: string
+      role: string
+      name: string
+    }
+  }
+  ```
+- **Status Codes**:
+  - `200`: Success
+  - `401`: Invalid credentials
+  - `400`: Missing required fields
+  - `500`: Server error
+
+#### `POST /api/auth/logout`
+Ends the current user session.
+- **Response**: `200` on success
+- **Headers Required**: `Authorization: Bearer <token>`
+
+### User Management Endpoints
+
+#### `GET /api/users/me`
+Retrieves the current user's profile.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **Response**:
+  ```typescript
+  {
+    id: string
+    email: string
+    name: string
+    role: string
+    createdAt: string
+    updatedAt: string
+    projects: string[]  // Array of project IDs
+  }
+  ```
+- **Status Codes**:
+  - `200`: Success
+  - `401`: Unauthorized
+  - `404`: User not found
+
+#### `PATCH /api/users/:id`
+Updates a user's information.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **URL Parameters**: `id` - User ID
+- **Request Body**:
+  ```typescript
+  {
+    name?: string
+    role?: string
+    status?: string
+    email?: string
+  }
+  ```
+- **Response**: Updated user object
+- **Status Codes**:
+  - `200`: Success
+  - `401`: Unauthorized
+  - `403`: Forbidden (insufficient permissions)
+  - `404`: User not found
+
+### Project Management Endpoints
+
+#### `GET /api/projects`
+Retrieves all projects accessible to the current user.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **Query Parameters**:
+  - `status?: string` - Filter by project status
+  - `role?: string` - Filter by user role
+  - `page?: number` - Page number for pagination
+  - `limit?: number` - Items per page
+- **Response**:
+  ```typescript
+  {
+    data: Project[]
+    total: number
+    page: number
+    limit: number
+  }
+  ```
+
+#### `POST /api/projects`
+Creates a new project.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **Request Body**:
+  ```typescript
+  {
+    name: string
+    description: string
+    assignedUsers?: {
+      transcriber?: string
+      translator?: string
+      voiceOver?: string
+      director?: string
+    }
+  }
+  ```
+- **Response**: Created project object
+- **Status Codes**:
+  - `201`: Created
+  - `400`: Invalid request body
+  - `401`: Unauthorized
+  - `403`: Forbidden
+
+### Dialogue Management Endpoints
+
+#### `GET /api/dialogues`
+Retrieves dialogues for a project.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **Query Parameters**:
+  - `projectId: string` (required)
+  - `status?: string`
+  - `page?: number`
+  - `limit?: number`
+- **Response**:
+  ```typescript
+  {
+    data: Dialogue[]
+    total: number
+    page: number
+    limit: number
+  }
+  ```
+
+#### `POST /api/dialogues`
+Creates a new dialogue entry.
+- **Headers Required**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```typescript
+  {
+    projectId: string
+    index: number
+    timeStart: string
+    timeEnd: string
+    character: string
+    dialogue: {
+      original: string
+      translated?: string
+      adapted?: string
+    }
+  }
+  ```
+- **Response**: Created dialogue object
+- **Status Codes**:
+  - `201`: Created
+  - `400`: Invalid request body
+  - `401`: Unauthorized
+  - `403`: Forbidden
+
+#### `PATCH /api/dialogues/:id`
+Updates a dialogue entry.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **URL Parameters**: `id` - Dialogue ID
+- **Request Body**:
+  ```typescript
+  {
+    status?: string
+    dialogue?: {
+      original?: string
+      translated?: string
+      adapted?: string
+    }
+    character?: string
+    timeStart?: string
+    timeEnd?: string
+    voiceOverUrl?: string
+    voiceOverNotes?: string
+    directorNotes?: string
+  }
+  ```
+- **Response**: Updated dialogue object
+- **Status Codes**:
+  - `200`: Success
+  - `400`: Invalid request body
+  - `401`: Unauthorized
+  - `403`: Forbidden
+  - `404`: Dialogue not found
+
+### Media Handling Endpoints
+
+#### `POST /api/upload-voice-over`
+Uploads a voice-over recording.
+- **Headers Required**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: multipart/form-data`
+- **Request Body**:
+  ```typescript
+  FormData:
+    - audio: Blob       // Audio file
+    - dialogueId: string
+    - dialogueIndex: string
+    - projectId: string
+  ```
+- **Response**:
+  ```typescript
+  {
+    url: string        // URL of uploaded audio
+    duration: number   // Duration in seconds
+  }
+  ```
+- **Status Codes**:
+  - `201`: Created
+  - `400`: Invalid file or missing fields
+  - `401`: Unauthorized
+  - `413`: File too large
+  - `415`: Unsupported file type
+
+#### `GET /api/media/:projectId/:filename`
+Retrieves a media file.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **URL Parameters**:
+  - `projectId`: Project ID
+  - `filename`: File name
+- **Response**: Media file stream
+- **Status Codes**:
+  - `200`: Success
+  - `401`: Unauthorized
+  - `403`: Forbidden
+  - `404`: File not found
+
+### Progress Tracking Endpoints
+
+#### `GET /api/projects/:id/progress`
+Retrieves project progress statistics.
+- **Headers Required**: `Authorization: Bearer <token>`
+- **URL Parameters**: `id` - Project ID
+- **Response**:
+  ```typescript
+  {
+    transcribed: number    // Percentage complete
+    translated: number
+    voiceOver: number
+    approved: number
+    total: number         // Total dialogues
+    lastUpdated: string   // ISO date string
+  }
+  ```
+- **Status Codes**:
+  - `200`: Success
+  - `401`: Unauthorized
+  - `404`: Project not found
+
+
+
+## point need to be added
+
+-Having confucianism in the project reated to the common UI
+-Having a common UI for the dashboard and QA application
+-Feature for voice-over recording
+-Feature for video playback
+-Feature for video upload for admim
+-Feature for video trimming using python script
+-Feature for video cropping using python script
+-Feature for video merging using python script
+-UI for regocrding voice-over start Time
+-waveform for voice-over
+-any other feature that is needed in the project
+-UI for transcriber
+-UI for translator
+-UI for director
+-UI for admin
+-UI for QA
+-UI for voice-over artist
+-UI for transcriber
+-UI for translator
+-UI for director
+-UI for admin
+-UI for QA
+-UI for voice-over artist
+-Do we need to have a common UI for the project?
+-Do we need to have a artist registration for the admin?    

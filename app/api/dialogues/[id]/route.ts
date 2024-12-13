@@ -21,26 +21,34 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
     }
 
-    // Get collection from query parameters
-    const { searchParams } = new URL(request.url)
-    const collection = searchParams.get('collection')
-
     console.log('Connecting to database...')
     const { db } = await connectToDatabase()
 
-    // First try to find the dialogue in the specified collection
-    let dialogue = null
-    if (collection) {
-      dialogue = await db.collection(collection).findOne({
-        _id: new ObjectId(params.id)
-      })
+    // First try to find the dialogue in any collection by checking project's dialogue_collection
+    let dialogue = null;
+    let dialogueCollection = 'dialogues'; // default collection
+
+    // Try to find the dialogue in any collection by checking all projects
+    const projects = await db.collection('projects').find().toArray();
+    
+    for (const project of projects) {
+      if (project.dialogue_collection) {
+        const tempDialogue = await db.collection(project.dialogue_collection).findOne({
+          _id: new ObjectId(params.id)
+        });
+        if (tempDialogue) {
+          dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
+          break;
+        }
+      }
     }
 
-    // If not found and no collection specified, try the default collection
-    if (!dialogue && !collection) {
+    // If still not found, try the default collection
+    if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
         _id: new ObjectId(params.id)
-      })
+      });
     }
 
     if (!dialogue) {
@@ -103,19 +111,41 @@ export async function PUT(
     console.log('Connecting to database...')
     const { db } = await connectToDatabase()
 
-    // Get the dialogue to check project access
-    const existingDialogue = await db.collection('dialogues').findOne({
-      _id: new ObjectId(params.id)
-    })
+    // First try to find the dialogue in any collection by checking project's dialogue_collection
+    let dialogue = null;
+    let dialogueCollection = 'dialogues'; // default collection
 
-    if (!existingDialogue) {
+    // Try to find the dialogue in any collection by checking all projects
+    const projects = await db.collection('projects').find().toArray();
+    
+    for (const project of projects) {
+      if (project.dialogue_collection) {
+        const tempDialogue = await db.collection(project.dialogue_collection).findOne({
+          _id: new ObjectId(params.id)
+        });
+        if (tempDialogue) {
+          dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
+          break;
+        }
+      }
+    }
+
+    // If still not found, try the default collection
+    if (!dialogue) {
+      dialogue = await db.collection('dialogues').findOne({
+        _id: new ObjectId(params.id)
+      });
+    }
+
+    if (!dialogue) {
       console.error('Dialogue not found:', params.id)
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 })
     }
 
     // Check project access
     const project = await db.collection('projects').findOne({
-      _id: new ObjectId(existingDialogue.project),
+      _id: new ObjectId(dialogue.projectId),
       'assignedTo': {
         $elemMatch: {
           username: session.user.username,
@@ -128,7 +158,7 @@ export async function PUT(
       console.error('User not authorized to update this dialogue:', {
         username: session.user.username,
         dialogueId: params.id,
-        projectId: existingDialogue.project
+        projectId: dialogue.projectId
       })
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
@@ -142,12 +172,12 @@ export async function PUT(
 
     // Don't allow updating certain fields
     delete updateData._id
-    delete updateData.project
+    delete updateData.projectId
     delete updateData.createdAt
     delete updateData.createdBy
 
     console.log('Applying updates:', updateData)
-    const result = await db.collection('dialogues').findOneAndUpdate(
+    const result = await db.collection(dialogueCollection).findOneAndUpdate(
       { _id: new ObjectId(params.id) },
       { $set: updateData },
       { returnDocument: 'after' }
@@ -162,7 +192,7 @@ export async function PUT(
     const serializedDialogue = {
       ...result,
       _id: result._id.toString(),
-      project: result.project.toString()
+      projectId: result.projectId.toString()
     }
 
     return NextResponse.json(serializedDialogue)
@@ -189,28 +219,39 @@ export async function PATCH(
     const { db } = await connectToDatabase();
     const data = await request.json();
     const dialogueId = params.id;
-    const { collection } = data;
 
-    // First try to find the dialogue in the specified collection
-    let dialogue = null
-    if (collection) {
-      dialogue = await db.collection(collection).findOne({
-        _id: new ObjectId(dialogueId)
-      })
+    // First try to find the dialogue in any collection by checking project's dialogue_collection
+    let dialogue = null;
+    let dialogueCollection = 'dialogues'; // default collection
+
+    // Try to find the dialogue in any collection by checking all projects
+    const projects = await db.collection('projects').find().toArray();
+    
+    for (const project of projects) {
+      if (project.dialogue_collection) {
+        const tempDialogue = await db.collection(project.dialogue_collection).findOne({
+          _id: new ObjectId(dialogueId)
+        });
+        if (tempDialogue) {
+          dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
+          break;
+        }
+      }
     }
 
-    // If not found and no collection specified, try the default collection
-    if (!dialogue && !collection) {
+    // If still not found, try the default collection
+    if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
         _id: new ObjectId(dialogueId)
-      })
+      });
     }
 
     if (!dialogue) {
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 });
     }
 
-    // Get project to verify access and collection
+    // Get project to verify access
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(dialogue.projectId),
       'assignedTo': {
@@ -218,16 +259,13 @@ export async function PATCH(
           username: session.user.username
         }
       }
-    })
+    });
 
     if (!project) {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
     }
 
-    // Use the appropriate collection
-    const dialogueCollection = collection || project.dialogue_collection || 'dialogues'
-
-    // Update the dialogue
+    // Update the dialogue in the correct collection
     const result = await db.collection(dialogueCollection).updateOne(
       { _id: new ObjectId(dialogueId) },
       { 
@@ -278,26 +316,34 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
     }
 
-    // Get collection from query parameters
-    const { searchParams } = new URL(request.url)
-    const collection = searchParams.get('collection')
-
     console.log('Connecting to database...')
     const { db } = await connectToDatabase()
 
-    // First try to find the dialogue in the specified collection
-    let dialogue = null
-    if (collection) {
-      dialogue = await db.collection(collection).findOne({
-        _id: new ObjectId(params.id)
-      })
+    // First try to find the dialogue in any collection by checking project's dialogue_collection
+    let dialogue = null;
+    let dialogueCollection = 'dialogues'; // default collection
+
+    // Try to find the dialogue in any collection by checking all projects
+    const projects = await db.collection('projects').find().toArray();
+    
+    for (const project of projects) {
+      if (project.dialogue_collection) {
+        const tempDialogue = await db.collection(project.dialogue_collection).findOne({
+          _id: new ObjectId(params.id)
+        });
+        if (tempDialogue) {
+          dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
+          break;
+        }
+      }
     }
 
-    // If not found and no collection specified, try the default collection
-    if (!dialogue && !collection) {
+    // If still not found, try the default collection
+    if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
         _id: new ObjectId(params.id)
-      })
+      });
     }
 
     if (!dialogue) {
@@ -319,9 +365,6 @@ export async function DELETE(
       console.error('User not authorized to delete this dialogue')
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
-
-    // Use the appropriate collection
-    const dialogueCollection = collection || project.dialogue_collection || 'dialogues'
 
     console.log('Deleting dialogue:', params.id)
     const result = await db.collection(dialogueCollection).deleteOne({

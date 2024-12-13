@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useDialogues } from '@/hooks/useDialogues'
 import DirectorDialogueView from '../../../../components/DirectorDialogueView'
+import { useProject } from '@/hooks/useProject'
 
 export default function DirectorProjectPage({
   params,
@@ -13,7 +14,12 @@ export default function DirectorProjectPage({
 }) {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { data: project } = useProject(params.projectId)
   const { data: dialogues, isLoading } = useDialogues(params.projectId)
+
+  console.log('Director page - Project ID:', params.projectId);
+  console.log('Director page - Project:', project);
+  console.log('Director page - Dialogues:', dialogues);
 
   useEffect(() => {
     if (status === 'unauthenticated') {

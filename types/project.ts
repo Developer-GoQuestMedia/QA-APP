@@ -9,4 +9,11 @@ export interface Project {
     username: string;
     role: string;
   }>;
-} 
+  videoPath: string;
+  dialogue_collection: string;
+  updatedAt: Date;
+  createdAt?: Date;
+}
+
+export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
+export type UserRole = 'transcriber' | 'translator' | 'voice-over' | 'director' | 'admin'; 

@@ -5,19 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AdminView from '@/components/AdminView'
 import DashboardLayout from '@/components/DashboardLayout'
-
-interface Project {
-  _id: string
-  title: string
-  description: string
-  sourceLanguage: string
-  targetLanguage: string
-  status: string
-  assignedTo: Array<{
-    username: string
-    role: string
-  }>
-}
+import { Project } from '@/types/project'
 
 export default function Page() {
   const { data: session, status } = useSession()
@@ -42,7 +30,13 @@ export default function Page() {
           return
         }
         const data = await res.json()
-        setProjects(data)
+        // Transform dates to Date objects
+        const projectsWithDates = data.map((project: any) => ({
+          ...project,
+          updatedAt: new Date(project.updatedAt),
+          createdAt: project.createdAt ? new Date(project.createdAt) : undefined
+        }))
+        setProjects(projectsWithDates)
       } catch (error) {
         console.error('Error fetching projects:', error)
       }

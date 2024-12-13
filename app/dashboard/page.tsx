@@ -8,6 +8,7 @@ import TranslatorView from '@/components/TranslatorView'
 import VoiceOverView from '@/components/VoiceOverView'
 import DirectorView from '@/components/DirectorView'
 import AdminView from '@/components/AdminView'
+import { Project } from '@/types/project'
 
 interface CustomSession {
   user: {
@@ -16,21 +17,6 @@ interface CustomSession {
     email?: string;
     name?: string;
   }
-}
-
-interface Project {
-  _id: string;
-  title: string;
-  description: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  status: string;
-  assignedTo: Array<{
-    username: string;
-    role: string;
-  }>;
-  createdAt?: Date;
-  updatedAt?: Date;
 }
 
 export default function Dashboard() {
@@ -53,8 +39,13 @@ export default function Dashboard() {
           return
         }
         const data = await res.json()
-        console.log('Fetched projects:', data)
-        setProjects(data)
+        // Transform dates to Date objects
+        const projectsWithDates = data.map((project: any) => ({
+          ...project,
+          updatedAt: new Date(project.updatedAt),
+          createdAt: project.createdAt ? new Date(project.createdAt) : undefined
+        }))
+        setProjects(projectsWithDates)
       } catch (error) {
         console.error('Error fetching projects:', error)
       }

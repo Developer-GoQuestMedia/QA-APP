@@ -19,12 +19,18 @@ export default function AdminView({ projects }: AdminViewProps) {
             <div className="space-y-2">
               <h2 className="text-xl font-semibold">{project.title}</h2>
               <p className="text-gray-600 dark:text-gray-400">{project.description}</p>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-1">
                 <span className="text-sm text-gray-500 dark:text-gray-500">
                   Status: {project.status}
                 </span>
                 <span className="text-sm text-gray-500 dark:text-gray-500">
                   Language: {project.sourceLanguage} → {project.targetLanguage}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-500">
+                  Collection: {project.dialogue_collection}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-500">
+                  Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
                 </span>
               </div>
             </div>

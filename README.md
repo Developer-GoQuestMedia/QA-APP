@@ -582,7 +582,7 @@ Retrieves project progress statistics.
 
 
 
-## Points to be Added
+## Points to be need attention
 
 ### Common UI Requirements
 - Implementation of consistent UI design patterns across the application

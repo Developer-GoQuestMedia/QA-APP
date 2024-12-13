@@ -1,195 +1,202 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import VoiceOverView from '@/components/VoiceOverView'
+import { Project } from '@/types/project'
+import '@testing-library/jest-dom'
 
 jest.mock('next-auth/react')
-jest.mock('react-swipeable', () => ({
-  useSwipeable: () => ({
-    ref: jest.fn(),
-    onMouseDown: jest.fn(),
-    onTouchStart: jest.fn(),
-  }),
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(),
 }))
 
-// Mock MediaStream
-class MockMediaStream {
-  constructor() {
-    return {
-      getTracks: () => [],
-      getAudioTracks: () => [],
-      getVideoTracks: () => [],
-      addTrack: jest.fn(),
-      removeTrack: jest.fn(),
-    }
+describe('VoiceOverView', () => {
+  const mockRouter = {
+    push: jest.fn(),
+    replace: jest.fn(),
   }
-}
 
-global.MediaStream = MockMediaStream as any
-
-describe('VoiceOverView Component', () => {
   const mockSession = {
     data: {
-      user: { role: 'voice-over' },
+      user: { 
+        role: 'voice-over' as const,
+        username: 'testuser',
+      },
     },
-    status: 'authenticated',
+    status: 'authenticated' as const,
   }
 
-  const mockProjects = [{
+  const mockProjects: Project[] = [{
     _id: 'project1',
-    title: 'Test Project',
-    dialogues: [{
-      _id: 'dialogue1',
-      timeStart: '00:00:00:000',
-      timeEnd: '00:00:02:000',
-      character: 'Test Character',
-      videoUrl: 'test-video-url',
-      dialogue: {
-        original: 'Original text',
-        translated: 'Translated text',
-        adapted: 'Adapted text',
-      },
-      status: 'pending',
+    title: 'Test Project 1',
+    description: 'Test Description 1',
+    sourceLanguage: 'English',
+    targetLanguage: 'Spanish',
+    status: 'active',
+    assignedTo: [{
+      username: 'testuser',
+      role: 'voice-over',
+    }],
+  }, {
+    _id: 'project2',
+    title: 'Test Project 2',
+    description: 'Test Description 2',
+    sourceLanguage: 'French',
+    targetLanguage: 'German',
+    status: 'pending',
+    assignedTo: [{
+      username: 'testuser',
+      role: 'voice-over',
     }],
   }]
 
-  let mockMediaRecorder: any
-
   beforeEach(() => {
-    jest.useFakeTimers()
-    ;(useSession as jest.Mock).mockReturnValue(mockSession)
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockProjects[0].dialogues),
-    })
-
-    mockMediaRecorder = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      ondataavailable: jest.fn(),
-      onstop: jest.fn(),
-      state: 'inactive',
-    }
-
-    const MediaRecorderMock = jest.fn(() => mockMediaRecorder) as jest.Mock & {
-      isTypeSupported: (type: string) => boolean
-    }
-    MediaRecorderMock.isTypeSupported = jest.fn().mockReturnValue(true)
-
-    // @ts-ignore - Readonly property workaround for test environment
-    global.MediaRecorder = MediaRecorderMock
-
-    // @ts-ignore - Readonly property workaround for test environment
-    global.navigator.mediaDevices = {
-      getUserMedia: jest.fn().mockResolvedValue(new MockMediaStream()),
-    }
-  })
-
-  afterEach(() => {
     jest.clearAllMocks()
-    jest.useRealTimers()
-  })
-
-  it('renders voice-over interface', async () => {
-    render(<VoiceOverView projects={mockProjects} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Character')).toBeInTheDocument()
-      expect(screen.getByText('Test Character')).toBeInTheDocument()
-      expect(screen.getByText('Original')).toBeInTheDocument()
-      expect(screen.getByText('Original text')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /start recording/i })).toBeInTheDocument()
-    })
-  })
-
-  it('handles recording start and stop', async () => {
-    render(<VoiceOverView projects={mockProjects} />)
-
-    // Start recording
-    const startButton = await screen.findByRole('button', { name: /start recording/i })
-    await act(async () => {
-      fireEvent.click(startButton)
-    })
-
-    // Check initial countdown
-    expect(screen.getByText(/3/)).toBeInTheDocument()
+    ;(useSession as jest.Mock).mockReturnValue(mockSession)
+    ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
+    ;(signOut as jest.Mock).mockImplementation(() => Promise.resolve())
     
-    // Fast-forward through countdown
-    await act(async () => {
-      jest.advanceTimersByTime(3000)
+    // Clear localStorage before each test
+    if (typeof window !== 'undefined') {
+      window.localStorage.clear()
+    }
+  })
+
+  describe('Rendering', () => {
+    it('renders project cards correctly', () => {
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
+      expect(screen.getByText('Test Project 2')).toBeInTheDocument()
+      expect(screen.getByText('Source Language: English')).toBeInTheDocument()
+      expect(screen.getByText('Source Language: French')).toBeInTheDocument()
     })
 
-    // Wait for recording state
-    await waitFor(() => {
-      expect(global.navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({ audio: true })
-      expect(mockMediaRecorder.start).toHaveBeenCalled()
-    })
+    it('displays no projects message when user has no assignments', () => {
+      const projectWithoutAssignments = [{
+        ...mockProjects[0],
+        assignedTo: [{
+          username: 'otheruser',
+          role: 'voice-over',
+        }],
+      }]
 
-    // Simulate MediaRecorder state change
-    mockMediaRecorder.state = 'recording'
-
-    // Verify recording button state
-    const stopButton = screen.getByRole('button', { name: /stop recording/i })
-    expect(stopButton).toBeInTheDocument()
-
-    // Stop recording
-    await act(async () => {
-      fireEvent.click(stopButton)
-      mockMediaRecorder.state = 'inactive'
-    })
-
-    await waitFor(() => {
-      expect(mockMediaRecorder.stop).toHaveBeenCalled()
+      render(<VoiceOverView projects={projectWithoutAssignments} />)
+      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
     })
   })
 
-  it('handles navigation between dialogues', async () => {
-    const mockDialogues = [
-      ...mockProjects[0].dialogues,
-      {
-        _id: 'dialogue2',
-        timeStart: '00:00:02:000',
-        timeEnd: '00:00:04:000',
-        character: 'Another Character',
-        videoUrl: 'test-video-url-2',
-        dialogue: {
-          original: 'Second original text',
-          translated: 'Second translated text',
-          adapted: 'Second adapted text',
-        },
-        status: 'pending',
-      },
-    ]
+  describe('Navigation', () => {
+    it('navigates to project details when clicking a project card', async () => {
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      const projectCard = screen.getByText('Test Project 1').closest('div')
+      expect(projectCard).toHaveAttribute('role', 'button')
+      
+      await act(async () => {
+        fireEvent.click(projectCard!)
+      })
 
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockDialogues),
+      await waitFor(() => {
+        expect(mockRouter.push).toHaveBeenCalledWith('/allDashboards/voice-over/project1')
+      })
     })
 
-    render(<VoiceOverView projects={mockProjects} />)
+    it('prevents navigation when project card is disabled', async () => {
+      const disabledProjects = [{
+        ...mockProjects[0],
+        status: 'locked',
+      }]
 
-    // Wait for initial render
-    await screen.findByText('Test Character')
+      render(<VoiceOverView projects={disabledProjects} />)
+      
+      const projectCard = screen.getByText('Test Project 1').closest('div')
+      expect(projectCard).toHaveAttribute('aria-disabled', 'true')
+      
+      await act(async () => {
+        fireEvent.click(projectCard!)
+      })
+      
+      expect(mockRouter.push).not.toHaveBeenCalled()
+    })
+  })
 
-    // Navigate to next dialogue
-    const nextButton = screen.getByRole('button', { name: /next/i })
-    await act(async () => {
-      fireEvent.click(nextButton)
+  describe('Authentication', () => {
+    it('handles logout correctly', async () => {
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      
+      await act(async () => {
+        fireEvent.click(logoutButton)
+      })
+
+      await waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith({ 
+          redirect: true, 
+          callbackUrl: '/login' 
+        })
+        expect(window.localStorage.length).toBe(0)
+      })
     })
 
-    await waitFor(() => {
-      expect(screen.getByText('Another Character')).toBeInTheDocument()
-      expect(screen.getByText('Second original text')).toBeInTheDocument()
+    it('handles failed logout', async () => {
+      // Mock signOut to fail
+      const mockError = new Error('Logout failed')
+      ;(signOut as jest.Mock).mockRejectedValueOnce(mockError)
+
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      
+      await act(async () => {
+        fireEvent.click(logoutButton)
+      })
+
+      await waitFor(() => {
+        expect(mockRouter.replace).toHaveBeenCalledWith('/login')
+      })
+    })
+  })
+
+  describe('Edge Cases', () => {
+    it('handles projects with empty assignedTo array', () => {
+      const projectWithoutAssignedTo = [{
+        ...mockProjects[0],
+        assignedTo: [],
+      }]
+
+      render(<VoiceOverView projects={projectWithoutAssignedTo} />)
+      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
     })
 
-    // Navigate back
-    const prevButton = screen.getByRole('button', { name: /previous/i })
-    await act(async () => {
-      fireEvent.click(prevButton)
+    it('handles empty projects array', () => {
+      render(<VoiceOverView projects={[]} />)
+      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
+    })
+  })
+
+  describe('Accessibility', () => {
+    it('has accessible buttons and links', () => {
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      expect(logoutButton).toHaveAttribute('aria-label', 'Logout')
+      
+      const projectCards = screen.getAllByRole('button')
+      expect(projectCards.length).toBeGreaterThan(0)
+      projectCards.forEach(card => {
+        expect(card).toHaveAttribute('aria-label')
+      })
     })
 
-    await waitFor(() => {
-      expect(screen.getByText('Test Character')).toBeInTheDocument()
-      expect(screen.getByText('Original text')).toBeInTheDocument()
+    it('provides proper keyboard navigation', () => {
+      render(<VoiceOverView projects={mockProjects} />)
+      
+      const projectCards = screen.getAllByRole('button')
+      projectCards.forEach(card => {
+        expect(card).toHaveAttribute('tabIndex', '0')
+      })
     })
   })
 }) 

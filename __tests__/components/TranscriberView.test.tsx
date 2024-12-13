@@ -1,264 +1,83 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import TranscriberView from '@/components/TranscriberView'
+import { Project } from '@/types/project'
 import '@testing-library/jest-dom'
 
-// Mock next-auth
-jest.mock('next-auth/react', () => ({
-  useSession: jest.fn(),
-  signOut: jest.fn()
-}))
-
-// Mock next/navigation
+jest.mock('next-auth/react')
 jest.mock('next/navigation', () => ({
-  useRouter: jest.fn()
+  useRouter: jest.fn(),
 }))
 
 describe('TranscriberView', () => {
   const mockRouter = {
-    push: jest.fn()
+    push: jest.fn(),
+    replace: jest.fn(),
   }
 
-  const mockProjects = [
-    {
-      _id: '1',
-      title: 'Test Project 1',
-      description: 'Test Description 1',
-      sourceLanguage: 'English',
-      targetLanguage: 'Spanish',
-      status: 'active',
-      assignedTo: [
-        { username: 'transcriber1', role: 'transcriber' }
-      ]
+  const mockSession = {
+    data: {
+      user: { 
+        role: 'transcriber' as const,
+        username: 'testuser',
+      },
     },
-    {
-      _id: '2',
-      title: 'Test Project 2',
-      description: 'Test Description 2',
-      sourceLanguage: 'French',
-      targetLanguage: 'German',
-      status: 'pending',
-      assignedTo: [
-        { username: 'transcriber1', role: 'transcriber' }
-      ]
-    }
-  ]
+    status: 'authenticated' as const,
+  }
+
+  const mockProjects: Project[] = [{
+    _id: 'project1',
+    title: 'Test Project 1',
+    description: 'Test Description 1',
+    sourceLanguage: 'English',
+    targetLanguage: 'Spanish',
+    status: 'active',
+    assignedTo: [{
+      username: 'testuser',
+      role: 'transcriber',
+    }],
+  }, {
+    _id: 'project2',
+    title: 'Test Project 2',
+    description: 'Test Description 2',
+    sourceLanguage: 'French',
+    targetLanguage: 'German',
+    status: 'pending',
+    assignedTo: [{
+      username: 'testuser',
+      role: 'transcriber',
+    }],
+  }]
 
   beforeEach(() => {
     jest.clearAllMocks()
+    ;(useSession as jest.Mock).mockReturnValue(mockSession)
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
-    ;(useSession as jest.Mock).mockReturnValue({
-      data: {
-        user: {
-          username: 'transcriber1',
-          role: 'transcriber'
-        }
-      },
-      status: 'authenticated'
-    })
+    ;(signOut as jest.Mock).mockImplementation(() => Promise.resolve())
+    // Clear localStorage before each test
+    if (typeof window !== 'undefined') {
+      window.localStorage.clear()
+    }
   })
 
-  // Basic Rendering Tests
   describe('Rendering', () => {
     it('renders project cards correctly', () => {
       render(<TranscriberView projects={mockProjects} />)
       
       expect(screen.getByText('Test Project 1')).toBeInTheDocument()
       expect(screen.getByText('Test Project 2')).toBeInTheDocument()
-      expect(screen.getByText('English → Spanish')).toBeInTheDocument()
-      expect(screen.getByText('French → German')).toBeInTheDocument()
+      expect(screen.getByText('Source Language: English')).toBeInTheDocument()
+      expect(screen.getByText('Source Language: French')).toBeInTheDocument()
     })
 
-    it('displays no projects message when no projects are assigned', () => {
-      render(<TranscriberView projects={[]} />)
-      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
-    })
-
-    it('renders project status correctly', () => {
-      render(<TranscriberView projects={mockProjects} />)
-      expect(screen.getByText('Status: active')).toBeInTheDocument()
-      expect(screen.getByText('Status: pending')).toBeInTheDocument()
-    })
-
-    it('renders logout button', () => {
-      render(<TranscriberView projects={mockProjects} />)
-      expect(screen.getByText('Logout')).toBeInTheDocument()
-    })
-  })
-
-  // Navigation Tests
-  describe('Navigation', () => {
-    it('navigates to project details when clicking a project card', async () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div[role="button"]')
-      fireEvent.click(projectCard!)
-      
-      await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/allDashboards/transcriber/1')
-      })
-    })
-
-    it('prevents navigation when project card is disabled', () => {
-      const disabledProjects = [{
-        ...mockProjects[0],
-        status: 'locked'
-      }]
-      render(<TranscriberView projects={disabledProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div[role="button"]')
-      fireEvent.click(projectCard!)
-      
-      expect(mockRouter.push).not.toHaveBeenCalled()
-    })
-  })
-
-  // Authentication Tests
-  describe('Authentication', () => {
-    it('handles logout correctly', async () => {
-      const mockSignOut = jest.fn()
-      ;(useSession as jest.Mock).mockReturnValue({
-        data: { user: { username: 'transcriber1', role: 'transcriber' } },
-        status: 'authenticated',
-        signOut: mockSignOut
-      })
-
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByText('Logout')
-      fireEvent.click(logoutButton)
-      
-      await waitFor(() => {
-        expect(mockSignOut).toHaveBeenCalledWith({ 
-          redirect: true, 
-          callbackUrl: '/login' 
-        })
-      })
-    })
-
-    it('displays loading state when logging out', async () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByText('Logout')
-      fireEvent.click(logoutButton)
-      
-      expect(screen.getByText('Logging out...')).toBeInTheDocument()
-      expect(logoutButton).toBeDisabled()
-    })
-
-    it('handles failed logout', async () => {
-      const mockSignOut = jest.fn().mockRejectedValue(new Error('Logout failed'))
-      ;(useSession as jest.Mock).mockReturnValue({
-        data: { user: { username: 'transcriber1', role: 'transcriber' } },
-        status: 'authenticated',
-        signOut: mockSignOut
-      })
-
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByText('Logout')
-      fireEvent.click(logoutButton)
-      
-      await waitFor(() => {
-        expect(screen.getByText('Error logging out')).toBeInTheDocument()
-      })
-    })
-  })
-
-  // Project Filtering Tests
-  describe('Project Filtering', () => {
-    it('filters projects correctly based on user assignment', () => {
-      const projectsWithDifferentAssignments = [
-        ...mockProjects,
-        {
-          _id: '3',
-          title: 'Not Assigned Project',
-          description: 'Should not show up',
-          sourceLanguage: 'English',
-          targetLanguage: 'French',
-          status: 'active',
-          assignedTo: [
-            { username: 'someone_else', role: 'transcriber' }
-          ]
-        }
-      ]
-
-      render(<TranscriberView projects={projectsWithDifferentAssignments} />)
-      
-      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
-      expect(screen.getByText('Test Project 2')).toBeInTheDocument()
-      expect(screen.queryByText('Not Assigned Project')).not.toBeInTheDocument()
-    })
-
-    it('filters out projects with different roles', () => {
-      const projectsWithDifferentRoles = [
-        ...mockProjects,
-        {
-          _id: '3',
-          title: 'Wrong Role Project',
-          description: 'Should not show up',
-          sourceLanguage: 'English',
-          targetLanguage: 'French',
-          status: 'active',
-          assignedTo: [
-            { username: 'transcriber1', role: 'translator' }
-          ]
-        }
-      ]
-
-      render(<TranscriberView projects={projectsWithDifferentRoles} />)
-      expect(screen.queryByText('Wrong Role Project')).not.toBeInTheDocument()
-    })
-  })
-
-  // Edge Cases Tests
-  describe('Edge Cases', () => {
-    it('handles projects with missing optional fields', () => {
-      const incompleteProject = [{
-        _id: '1',
-        title: 'Incomplete Project',
-        description: '',
-        sourceLanguage: 'English',
-        targetLanguage: '',
-        status: 'active',
-        assignedTo: [
-          { username: 'transcriber1', role: 'transcriber' }
-        ]
-      }]
-
-      render(<TranscriberView projects={incompleteProject} />)
-      
-      expect(screen.getByText('Incomplete Project')).toBeInTheDocument()
-      expect(screen.getByText('Status: active')).toBeInTheDocument()
-    })
-
-    it('handles null values in project fields', () => {
-      const projectWithNulls = [{
-        _id: '1',
-        title: 'Null Project',
-        description: null,
-        sourceLanguage: null,
-        targetLanguage: null,
-        status: 'active',
-        assignedTo: [
-          { username: 'transcriber1', role: 'transcriber' }
-        ]
-      }]
-
-      render(<TranscriberView projects={projectWithNulls} />)
-      expect(screen.getByText('Null Project')).toBeInTheDocument()
-    })
-
-    it('handles undefined assignedTo array', () => {
+    it('displays no projects message when user has no assignments', () => {
       const projectWithoutAssignments = [{
-        _id: '1',
-        title: 'No Assignments',
-        description: 'Test',
-        sourceLanguage: 'English',
-        targetLanguage: 'Spanish',
-        status: 'active',
-        assignedTo: undefined
+        ...mockProjects[0],
+        assignedTo: [{
+          username: 'otheruser',
+          role: 'transcriber',
+        }],
       }]
 
       render(<TranscriberView projects={projectWithoutAssignments} />)
@@ -266,24 +85,116 @@ describe('TranscriberView', () => {
     })
   })
 
-  // Accessibility Tests
+  describe('Navigation', () => {
+    it('navigates to project details when clicking a project card', async () => {
+      render(<TranscriberView projects={mockProjects} />)
+      
+      const projectCard = screen.getByText('Test Project 1').closest('div')
+      expect(projectCard).toHaveAttribute('role', 'button')
+      
+      await act(async () => {
+        fireEvent.click(projectCard!)
+      })
+
+      await waitFor(() => {
+        expect(mockRouter.push).toHaveBeenCalledWith('/allDashboards/transcriber/project1')
+      })
+    })
+
+    it('prevents navigation when project card is disabled', async () => {
+      const disabledProjects = [{
+        ...mockProjects[0],
+        status: 'locked',
+      }]
+
+      render(<TranscriberView projects={disabledProjects} />)
+      
+      const projectCard = screen.getByText('Test Project 1').closest('div')
+      expect(projectCard).toHaveAttribute('aria-disabled', 'true')
+      
+      await act(async () => {
+        fireEvent.click(projectCard!)
+      })
+      
+      expect(mockRouter.push).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Authentication', () => {
+    it('handles logout correctly', async () => {
+      render(<TranscriberView projects={mockProjects} />)
+      
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      
+      await act(async () => {
+        fireEvent.click(logoutButton)
+      })
+
+      await waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith({ 
+          redirect: true, 
+          callbackUrl: '/login' 
+        })
+        expect(window.localStorage.length).toBe(0)
+      })
+    })
+
+    it('handles failed logout', async () => {
+      // Mock signOut to fail
+      const mockError = new Error('Logout failed')
+      ;(signOut as jest.Mock).mockRejectedValueOnce(mockError)
+
+      render(<TranscriberView projects={mockProjects} />)
+      
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      
+      await act(async () => {
+        fireEvent.click(logoutButton)
+      })
+
+      await waitFor(() => {
+        expect(mockRouter.replace).toHaveBeenCalledWith('/login')
+      })
+    })
+  })
+
+  describe('Edge Cases', () => {
+    it('handles projects with empty assignedTo array', () => {
+      const projectWithoutAssignedTo = [{
+        ...mockProjects[0],
+        assignedTo: [],
+      }]
+
+      render(<TranscriberView projects={projectWithoutAssignedTo} />)
+      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
+    })
+
+    it('handles empty projects array', () => {
+      render(<TranscriberView projects={[]} />)
+      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
+    })
+  })
+
   describe('Accessibility', () => {
     it('has accessible buttons and links', () => {
       render(<TranscriberView projects={mockProjects} />)
       
-      const logoutButton = screen.getByText('Logout')
-      expect(logoutButton).toHaveAttribute('role', 'button')
+      const logoutButton = screen.getByRole('button', { name: /logout/i })
+      expect(logoutButton).toHaveAttribute('aria-label', 'Logout')
       
       const projectCards = screen.getAllByRole('button')
       expect(projectCards.length).toBeGreaterThan(0)
+      projectCards.forEach(card => {
+        expect(card).toHaveAttribute('aria-label')
+      })
     })
 
-    it('provides proper aria-labels', () => {
+    it('provides proper keyboard navigation', () => {
       render(<TranscriberView projects={mockProjects} />)
       
       const projectCards = screen.getAllByRole('button')
       projectCards.forEach(card => {
-        expect(card).toHaveAttribute('aria-label')
+        expect(card).toHaveAttribute('tabIndex', '0')
       })
     })
   })

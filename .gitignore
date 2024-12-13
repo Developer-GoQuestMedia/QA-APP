@@ -17,7 +17,6 @@
 /build
 
 # misc
-.DS_Store
 *.pem
 
 # debug
@@ -27,6 +26,10 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+.env.development
+.env.test
+.env.production
 
 # vercel
 .vercel
@@ -34,3 +37,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Build and Cache
+.swc/
+.turbo
+.cache/
+dist/
+
+# Logs
+logs/
+*.log
+
+# System Files
+Thumbs.db
+.DS_Store
+desktop.ini

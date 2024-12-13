@@ -760,3 +760,7 @@ Retrieves project progress statistics.
 ### Questions to Address
 - Evaluation of unified UI architecture approach
 - Implementation of artist registration system for admin
+
+### Database configuration
+- How to configure the database for the project releated to dialogues as per the series and episodes?
+- I HAVE SUGGESTION WE CAN USE 2 DATABASE ONE FOR COMMON USE (PROJECT AND USERS) AND OTHER ONE FOR DIALOGUES AND MEDIA(WITH COLLECTION NAME AS PER SERIES AND EPISODES).

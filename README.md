@@ -582,30 +582,55 @@ Retrieves project progress statistics.
 
 
 
-## point need to be added
+## Points to be Added
 
--Having confucianism in the project reated to the common UI
--Having a common UI for the dashboard and QA application
--Feature for voice-over recording
--Feature for video playback
--Feature for video upload for admim
--Feature for video trimming using python script
--Feature for video cropping using python script
--Feature for video merging using python script
--UI for regocrding voice-over start Time
--waveform for voice-over
--any other feature that is needed in the project
--UI for transcriber
--UI for translator
--UI for director
--UI for admin
--UI for QA
--UI for voice-over artist
--UI for transcriber
--UI for translator
--UI for director
--UI for admin
--UI for QA
--UI for voice-over artist
--Do we need to have a common UI for the project?
--Do we need to have a artist registration for the admin?    
+### Common UI Requirements
+- Implementation of consistent UI design patterns across the application
+- Unified dashboard interface for QA application
+- Common components library development
+
+### Media Features
+- Voice-over recording functionality
+- Video playback implementation
+- Admin video upload capabilities
+- Python-based video processing:
+  - Video trimming functionality
+  - Video cropping tools
+  - Video merging capabilities
+- Voice-over timing interface
+- Waveform visualization for audio
+
+### Role-Specific UI Requirements
+- Transcriber Interface:
+  - Transcription workspace
+  - Progress tracking
+  - Quality metrics
+
+- Translator Interface:
+  - Translation workspace
+  - Reference materials
+  - Version control
+
+- Director Interface:
+  - Review dashboard
+  - Approval workflow
+  - Feedback system
+
+- Admin Interface:
+  - User management
+  - Project oversight
+  - System configuration
+
+- QA Interface:
+  - Quality check tools
+  - Issue tracking
+  - Performance metrics
+
+- Voice-over Artist Interface:
+  - Recording studio
+  - Take management
+  - Audio preview
+
+### Questions to Address
+- Evaluation of unified UI architecture approach
+- Implementation of artist registration system for admin

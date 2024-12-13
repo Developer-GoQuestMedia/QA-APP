@@ -2,45 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import { createWorker, createWavBlob, type AudioData } from '@/utils/audio'
-
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  videoUrl: string
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  emotions: {
-    primary: {
-      emotion: string
-      intensity: number
-    }
-    secondary: {
-      emotion: string
-      intensity: number
-    }
-  }
-  direction: string
-  lipMovements: number
-  sceneContext: string
-  technicalNotes: string
-  culturalNotes: string
-  status: string
-  recordingStatus: string
-  voiceOverUrl?: string
-  projectId: string
-  updatedAt: string
-  updatedBy: string
-}
+import { type Dialogue } from '@/types/dialogue'
 
 interface DialogueViewProps {
-  dialogues: Dialogue[]
-  projectId: string
+  dialogues: Dialogue[];
+  projectId: string;
 }
 
 type QueryData = {
@@ -569,13 +535,19 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
           <div>
             <span className="text-gray-400">Primary Emotion:</span>
             <p className="text-white">
-              {currentDialogue.emotions.primary.emotion} (Intensity: {getNumberValue(currentDialogue.emotions.primary.intensity)})
+              {currentDialogue.emotions?.primary?.emotion ?? 'Not specified'} 
+              {currentDialogue.emotions?.primary?.intensity !== undefined && 
+                `(Intensity: ${getNumberValue(currentDialogue.emotions.primary.intensity)})`
+              }
             </p>
           </div>
           <div>
             <span className="text-gray-400">Secondary Emotion:</span>
             <p className="text-white">
-              {currentDialogue.emotions.secondary.emotion} (Intensity: {getNumberValue(currentDialogue.emotions.secondary.intensity)})
+              {currentDialogue.emotions?.secondary?.emotion ?? 'Not specified'}
+              {currentDialogue.emotions?.secondary?.intensity !== undefined && 
+                `(Intensity: ${getNumberValue(currentDialogue.emotions.secondary.intensity)})`
+              }
             </p>
           </div>
         </div>
@@ -594,12 +566,12 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
           <div>
             <span className="text-gray-400">Technical Notes:</span>
-            <p className="text-white">{currentDialogue.technicalNotes}</p>
+            <p className="text-white">{currentDialogue.technicalNotes ?? 'No technical notes'}</p>
           </div>
 
           <div>
             <span className="text-gray-400">Cultural Notes:</span>
-            <p className="text-white">{currentDialogue.culturalNotes}</p>
+            <p className="text-white">{currentDialogue.culturalNotes ?? 'No cultural notes'}</p>
           </div>
 
           <div>

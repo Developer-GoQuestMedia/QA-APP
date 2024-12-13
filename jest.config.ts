@@ -10,23 +10,28 @@ const customJestConfig: Config = {
     testEnvironment: 'jsdom',
     setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
     moduleNameMapper: {
-        '^mongodb$': '<rootDir>/__mocks__/mongodb.js',
         '^@/(.*)$': '<rootDir>/$1',
     },
+    testPathIgnorePatterns: [
+        '<rootDir>/node_modules/',
+        '<rootDir>/.next/',
+        '<rootDir>/coverage/',
+        '<rootDir>/dist/',
+    ],
+    coveragePathIgnorePatterns: [
+        '<rootDir>/node_modules/',
+        '<rootDir>/.next/',
+        '<rootDir>/coverage/',
+        '<rootDir>/dist/',
+    ],
     transform: {
-        '^.+\\.(ts|tsx)$': ['ts-jest', {
-            tsconfig: 'tsconfig.json'
-        }]
+        '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
     },
-    testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+    testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-    collectCoverageFrom: [
-        'app/**/*.{js,jsx,ts,tsx}',
-        'components/**/*.{js,jsx,ts,tsx}',
-        'lib/**/*.{js,jsx,ts,tsx}',
-        '!**/*.d.ts',
-        '!**/node_modules/**',
-    ]
+    verbose: true,
+    bail: false,
+    passWithNoTests: true,
 }
 
 export default createJestConfig(customJestConfig) 

@@ -1,8 +1,6 @@
 import '@testing-library/jest-dom'
 import { TextEncoder, TextDecoder } from 'util'
-
-global.TextEncoder = TextEncoder
-global.TextDecoder = TextDecoder as any
+import { jest } from '@jest/globals'
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -21,35 +19,64 @@ jest.mock('next/navigation', () => ({
 }))
 
 // Mock next-auth
-jest.mock('next-auth/react', () => {
-  const originalModule = jest.requireActual('next-auth/react')
-  return {
-    __esModule: true,
-    ...originalModule,
-    useSession: jest.fn(() => ({
-      data: null,
-      status: 'unauthenticated',
-    })),
-    signIn: jest.fn(),
-    signOut: jest.fn(),
-  }
+jest.mock('next-auth/react', () => ({
+  useSession() {
+    return {
+      data: {
+        user: { role: 'transcriber' },
+      },
+      status: 'authenticated',
+    }
+  },
+  signIn: jest.fn(),
+  signOut: jest.fn(),
+}))
+
+// Mock react-query
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: jest.fn(),
+  useQueryClient: jest.fn(() => ({
+    setQueryData: jest.fn(),
+  })),
+}))
+
+// Set up DOM environment
+Object.defineProperty(global, 'TextEncoder', {
+  value: TextEncoder,
 })
 
-// Mock the next/router
-jest.mock('next/router', () => ({
-    useRouter() {
-        return {
-            route: '/',
-            pathname: '',
-            query: '',
-            asPath: '',
-            push: jest.fn(),
-            events: {
-                on: jest.fn(),
-                off: jest.fn()
-            },
-            beforePopState: jest.fn(() => null),
-            prefetch: jest.fn(() => null)
-        };
-    },
-})); 
+Object.defineProperty(global, 'TextDecoder', {
+  value: TextDecoder,
+})
+
+// Mock window.URL
+global.URL.createObjectURL = jest.fn(() => 'mock-url')
+global.URL.revokeObjectURL = jest.fn()
+
+// Mock MediaRecorder
+class MockMediaRecorder {
+  start = jest.fn()
+  stop = jest.fn()
+  pause = jest.fn()
+  resume = jest.fn()
+  addEventListener = jest.fn()
+  removeEventListener = jest.fn()
+  state = 'inactive'
+
+  static isTypeSupported(type: string) {
+    return true
+  }
+}
+
+global.MediaRecorder = MockMediaRecorder as any
+
+// Mock HTMLMediaElement
+Object.defineProperty(window.HTMLMediaElement.prototype, 'play', {
+  configurable: true,
+  value: jest.fn(),
+})
+
+Object.defineProperty(window.HTMLMediaElement.prototype, 'pause', {
+  configurable: true,
+  value: jest.fn(),
+})

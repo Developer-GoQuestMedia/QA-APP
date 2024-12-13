@@ -1,19 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  videoUrl: string
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  status: string
-}
+import { type Dialogue } from '@/types/dialogue'
 
 async function fetchDialogues(projectId: string): Promise<Dialogue[]> {
   console.log('Fetching dialogues for project:', projectId)

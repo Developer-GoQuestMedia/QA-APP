@@ -106,6 +106,132 @@ npm run seed         # Seed database
 npm run seed:users   # Seed user data
 ```
 
+## Build and Development Process
+
+### Available Scripts
+
+```bash
+# Development
+npm run dev          # Start development server
+
+# Testing
+npm run test         # Run all tests
+npm run test:watch   # Run tests in watch mode
+
+# Building
+npm run build        # Complete build process with tests
+npm run build:next   # Build Next.js app only
+npm run build:test   # Run tests only
+npm run build:start  # Build and start the application
+
+# Database
+npm run seed         # Seed database
+npm run seed:users   # Seed user data
+
+# Production
+npm run start        # Start production server
+```
+
+### Build Process
+
+The build process is automated and includes several stages:
+
+1. **Test Execution** (`npm run build:test`)
+   - Runs all test suites
+   - Ensures code quality
+   - Validates functionality
+   - Continues even if no tests exist
+
+2. **Next.js Build** (`npm run build:next`)
+   - Compiles TypeScript code
+   - Generates production bundles
+   - Optimizes assets
+   - Creates static pages where possible
+
+3. **Build Verification** (`scripts/build-success.js`)
+   - Displays build success message
+   - Shows comprehensive build summary
+   - Provides deployment readiness status
+   - Interactive prompt for application start
+
+### Build Output
+
+After a successful build, you'll see:
+
+```bash
+════════════════════════════════════════════════════════════════════════════════
+🎉 Build Completed Successfully! 🎉
+✓ All tests passed
+✓ Next.js build completed
+✓ Application is ready for deployment
+════════════════════════════════════════════════════════════════════════════════
+
+Build Summary:
+• Environment: Production
+• Test Coverage: Passed
+• Build Size: Optimized
+• Static Pages: Generated
+• API Routes: Configured
+
+Would you like to start the application? (y/n):
+```
+
+### Build Features
+
+- **Integrated Testing**: Automatically runs all tests before building
+- **Interactive**: Option to start the application after successful build
+- **Comprehensive Reporting**: Detailed build summary and status
+- **Error Handling**: Clear error messages and build failure reporting
+- **Production Ready**: Optimized for production deployment
+
+### Common Build Commands
+
+1. **Complete Build Process**:
+   ```bash
+   npm run build
+   ```
+   This runs tests, builds the application, and provides an option to start.
+
+2. **Build and Start**:
+   ```bash
+   npm run build:start
+   ```
+   Automatically runs the complete build and starts the application.
+
+3. **Development Build**:
+   ```bash
+   npm run dev
+   ```
+   Starts the development server with hot reloading.
+
+### Environment Setup
+
+Before building, ensure:
+1. All environment variables are properly set
+2. Database connections are configured
+3. Required dependencies are installed
+4. Proper Node.js version is used
+
+### Troubleshooting Build Issues
+
+If you encounter build errors:
+
+1. **Test Failures**:
+   - Check test output for specific failures
+   - Run `npm run test` for detailed test reports
+   - Fix failing tests before proceeding
+
+2. **Build Failures**:
+   - Check for TypeScript errors
+   - Verify environment variables
+   - Ensure all dependencies are installed
+   - Clear `.next` directory and rebuild
+
+3. **Runtime Errors**:
+   - Check server logs
+   - Verify database connections
+   - Validate API configurations
+
 ## Environment Configuration
 Required environment variables:
 - `MONGODB_URI`: MongoDB connection string

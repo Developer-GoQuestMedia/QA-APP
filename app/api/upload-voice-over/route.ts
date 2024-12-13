@@ -5,6 +5,11 @@ import { authOptions } from '@/app/api/auth/auth.config';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
+// Configure request size limit and parsing
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 const s3Client = new S3Client({
   region: 'auto',
   endpoint: process.env.R2_BUCKET_ENDPOINT,
@@ -95,10 +100,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}; 
+} 

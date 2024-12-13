@@ -1,37 +1,151 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QA Application Documentation
 
-## Getting Started
+## Overview
+A Next.js-based web application for managing and processing dialogues with multiple user roles including transcribers, translators, voice-over artists, directors, and administrators.
 
-First, run the development server:
+## Technical Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Core Technologies
+- **Framework**: Next.js 14.2
+- **Language**: TypeScript
+- **Database**: MongoDB
+- **Authentication**: NextAuth.js
+- **State Management**: TanStack React Query
+- **Styling**: TailwindCSS
+- **Animation**: Framer Motion
+- **Testing**: Jest & React Testing Library
+
+### Key Dependencies
+
+#### Backend Services:
+- MongoDB for database
+- AWS S3 for file storage
+- Vercel Blob for asset management
+
+#### Frontend Libraries:
+- React 18
+- Framer Motion for animations
+- TanStack React Query for data fetching
+- React Swipeable for touch interactions
+
+## Project Structure
+
+```
+├── app/
+│   ├── api/                 # API routes
+│   ├── allDashboards/      # Role-specific dashboard views
+│   ├── components/         # App-specific components
+│   ├── dashboard/         # Main dashboard
+│   ├── login/            # Authentication pages
+│   └── styles/          # Global styles
+├── components/         # Reusable components
+├── hooks/             # Custom React hooks
+├── lib/              # Utility functions and configurations
+├── scripts/          # Database seeding scripts
+├── types/            # TypeScript type definitions
+└── utils/            # Helper functions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Core Components
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### View Components:
+- **TranscriberView**: For transcribing dialogues
+- **TranslatorView**: For translating dialogues
+- **VoiceOverView**: For recording voice-overs
+- **DirectorView**: For reviewing and approving content
+- **AdminView**: For system administration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Dialogue Components:
+- **TranscriberDialogueView**: Detailed dialogue transcription interface
+- **TranslatorDialogueView**: Translation interface
+- **VoiceOverDialogueView**: Voice recording interface
+- **DirectorDialogueView**: Review and approval interface
 
-## Learn More
+## Features
 
-To learn more about Next.js, take a look at the following resources:
+### 1. User Management
+- Role-based authentication
+- Secure login system
+- Role-specific dashboards
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Dialogue Processing
+- Transcription workflow
+- Translation system
+- Voice-over recording
+- Director review process
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Project Management
+- Project creation and organization
+- Progress tracking
+- Status management
 
-## Deploy on Vercel
+### 4. Media Handling
+- Audio recording and playback
+- Video playback support
+- File upload and storage
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Development Tools
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# QA-APP
+### Testing
+- Jest for unit and integration testing
+- React Testing Library for component testing
+- MongoDB Memory Server for database testing
+
+### Code Quality
+- ESLint for code linting
+- TypeScript for type safety
+- Prettier for code formatting
+
+### Scripts
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+npm run test         # Run tests
+npm run seed         # Seed database
+npm run seed:users   # Seed user data
+```
+
+## Environment Configuration
+Required environment variables:
+- `MONGODB_URI`: MongoDB connection string
+- `NEXTAUTH_SECRET`: Authentication secret
+- `NEXTAUTH_URL`: Authentication URL
+- AWS S3 credentials for file storage
+- Vercel Blob configuration
+
+## Security Features
+- JWT-based authentication
+- Secure password hashing (bcryptjs)
+- Environment variable protection
+- Role-based access control
+
+## Performance Optimizations
+- Next.js image optimization
+- React Query for efficient data caching
+- Lazy loading of components
+- Optimized build process
+
+## Deployment
+The application is configured for deployment on Vercel with:
+- Automatic HTTPS
+- Edge functions support
+- Asset optimization
+- Serverless functions
+
+## Best Practices
+
+### 1. Code Organization:
+- Component-based architecture
+- Separation of concerns
+- TypeScript for type safety
+
+### 2. Security:
+- Environment variable protection
+- Secure authentication
+- Input validation
+
+### 3. Performance:
+- Optimized builds
+- Efficient data fetching
+- Proper caching strategies

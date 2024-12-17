@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import axios from 'axios'
 
 interface Dialogue {
   _id: string
@@ -105,19 +106,11 @@ export default function DirectorDialogueView({ dialogues: initialDialogues, proj
         revisionRequested,
       };
       
-      const response = await fetch(`/api/dialogues/${currentDialogue._id}`, {
-        method: 'PATCH',
+      const { data: responseData } = await axios.patch(`/api/dialogues/${currentDialogue._id}`, updateData, {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData),
       });
-
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to save review');
-      }
       
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 

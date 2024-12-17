@@ -26,7 +26,6 @@ export async function GET(
 
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
-    let dialogueCollection = 'dialogues'; // default collection
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
@@ -38,7 +37,6 @@ export async function GET(
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
-          dialogueCollection = project.dialogue_collection;
           break;
         }
       }
@@ -113,7 +111,6 @@ export async function PUT(
 
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
-    let dialogueCollection = 'dialogues'; // default collection
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
@@ -125,7 +122,6 @@ export async function PUT(
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
-          dialogueCollection = project.dialogue_collection;
           break;
         }
       }
@@ -177,7 +173,7 @@ export async function PUT(
     delete updateData.createdBy
 
     console.log('Applying updates:', updateData)
-    const result = await db.collection(dialogueCollection).findOneAndUpdate(
+    const result = await db.collection('dialogues').findOneAndUpdate(
       { _id: new ObjectId(params.id) },
       { $set: updateData },
       { returnDocument: 'after' }
@@ -222,7 +218,6 @@ export async function PATCH(
 
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
-    let dialogueCollection = 'dialogues'; // default collection
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
@@ -234,7 +229,6 @@ export async function PATCH(
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
-          dialogueCollection = project.dialogue_collection;
           break;
         }
       }
@@ -266,7 +260,7 @@ export async function PATCH(
     }
 
     // Update the dialogue in the correct collection
-    const result = await db.collection(dialogueCollection).updateOne(
+    const result = await db.collection('dialogues').updateOne(
       { _id: new ObjectId(dialogueId) },
       { 
         $set: {
@@ -285,7 +279,7 @@ export async function PATCH(
     }
 
     // Return the updated dialogue
-    const updatedDialogue = await db.collection(dialogueCollection).findOne({
+    const updatedDialogue = await db.collection('dialogues').findOne({
       _id: new ObjectId(dialogueId)
     });
 
@@ -321,7 +315,6 @@ export async function DELETE(
 
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
-    let dialogueCollection = 'dialogues'; // default collection
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
@@ -333,7 +326,6 @@ export async function DELETE(
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
-          dialogueCollection = project.dialogue_collection;
           break;
         }
       }
@@ -367,7 +359,7 @@ export async function DELETE(
     }
 
     console.log('Deleting dialogue:', params.id)
-    const result = await db.collection(dialogueCollection).deleteOne({
+    const result = await db.collection('dialogues').deleteOne({
       _id: new ObjectId(params.id)
     })
 

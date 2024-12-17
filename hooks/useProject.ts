@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { type Project } from '@/types/project'
+import axios from 'axios'
 
 async function fetchProject(projectId: string): Promise<Project> {
   console.log('=== Project Fetch Debug ===');
@@ -9,19 +10,10 @@ async function fetchProject(projectId: string): Promise<Project> {
   console.log('Fetching URL:', url);
 
   try {
-    const res = await fetch(url);
-    console.log('Response status:', res.status);
-    
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error('Fetch error:', errorText);
-      throw new Error(`Failed to fetch project: ${errorText}`);
-    }
-
-    const project = await res.json();
-    console.log('Project data:', project);
+    const { data } = await axios.get(url);
+    console.log('Project data:', data);
     console.log('=== End Debug ===');
-    return project;
+    return data;
   } catch (error) {
     console.error('Fetch error:', error);
     throw error;

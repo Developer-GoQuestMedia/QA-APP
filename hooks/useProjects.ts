@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 
 interface Project {
   _id: string
@@ -22,18 +23,19 @@ async function fetchProjects(): Promise<Project[]> {
     hasLoggedInitialFetch = true;
   }
   
-  const res = await fetch('/api/projects')
-  if (!res.ok) {
-    throw new Error('Failed to fetch projects')
+  try {
+    const { data } = await axios.get('/api/projects')
+    
+    if (!hasLoggedInitialFetch) {
+      console.log('Projects data:', data);
+      console.log('=== End Debug ===');
+    }
+    
+    return data
+  } catch (error) {
+    console.error('Failed to fetch projects:', error)
+    throw error
   }
-  const data = await res.json()
-  
-  if (!hasLoggedInitialFetch) {
-    console.log('Projects data:', data);
-    console.log('=== End Debug ===');
-  }
-  
-  return data
 }
 
 export function useProjects() {

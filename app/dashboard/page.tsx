@@ -9,6 +9,7 @@ import VoiceOverView from '@/components/VoiceOverView'
 import DirectorView from '@/components/DirectorView'
 import AdminView from '@/components/AdminView'
 import { Project } from '@/types/project'
+import axios from 'axios'
 
 interface CustomSession {
   user: {
@@ -33,12 +34,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await fetch('/api/projects')
-        if (!res.ok) {
-          console.error('Failed to fetch projects:', await res.text())
-          return
-        }
-        const data = await res.json()
+        const { data } = await axios.get('/api/projects')
         // Transform dates to Date objects
         const projectsWithDates = data.map((project: any) => ({
           ...project,

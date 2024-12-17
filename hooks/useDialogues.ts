@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { type Dialogue } from '@/types/dialogue'
 import { type Project } from '@/types/project'
+import axios from 'axios'
 
 // Maintain a record of logged projectIds
 const loggedProjectIds = new Set<string>();
@@ -15,23 +16,15 @@ async function fetchDialogues(projectId: string): Promise<Dialogue[]> {
   }
 
   try {
-    const res = await fetch(`/api/dialogues?projectId=${projectId}`);
-    
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error('Fetch error:', errorText);
-      throw new Error(`Failed to fetch dialogues: ${errorText}`);
-    }
-
-    const response = await res.json();
+    const { data } = await axios.get(`/api/dialogues?projectId=${projectId}`);
     
     // Only log response data once per projectId
     if (loggedProjectIds.size === 1) {
-      console.log('Response data:', response);
+      console.log('Response data:', data);
       console.log('=== End Debug ===');
     }
     
-    return response.data || [];
+    return data.data || [];
   } catch (error) {
     console.error('Fetch error:', error);
     throw error;

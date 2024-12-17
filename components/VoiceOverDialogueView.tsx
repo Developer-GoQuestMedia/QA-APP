@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import { type Dialogue } from '../types/dialogue'
 import { formatTime, getNumberValue, calculateDuration } from '../utils/formatters'
 import { useAudioRecording } from '../hooks/useAudioRecording'
+import axios from 'axios'
 
 // Add new type for recording status
 type RecordingStatus = 'available' | 'unavailable' | 'checking';
 
 // Sub-components
-const CharacterInfo = ({ 
+const CharacterInfo = React.memo(({ 
   character, 
   voiceOverUrl 
 }: { 
@@ -26,8 +27,8 @@ const CharacterInfo = ({
       }
 
       try {
-        const response = await fetch(voiceOverUrl, { method: 'HEAD' });
-        setRecordingStatus(response.ok ? 'available' : 'unavailable');
+        await axios.head(voiceOverUrl);
+        setRecordingStatus('available');
       } catch (error) {
         console.error('Error checking recording status:', error);
         setRecordingStatus('unavailable');
@@ -63,7 +64,9 @@ const CharacterInfo = ({
       </div>
     </div>
   );
-};
+});
+
+CharacterInfo.displayName = 'CharacterInfo';
 
 const VideoPlayer = React.memo(({ 
   videoRef, 
@@ -89,6 +92,8 @@ const VideoPlayer = React.memo(({
   </div>
 ));
 
+VideoPlayer.displayName = 'VideoPlayer';
+
 const VideoControls = React.memo(({
   isPlaying,
   togglePlayPause,
@@ -109,7 +114,9 @@ const VideoControls = React.memo(({
   </div>
 ));
 
-const EmotionsDisplay = ({ emotions }: { emotions: Dialogue['emotions'] }) => (
+VideoControls.displayName = 'VideoControls';
+
+const EmotionsDisplay = React.memo(({ emotions }: { emotions: Dialogue['emotions'] }) => (
   <div className="grid grid-cols-2 gap-4">
     <div>
       <span className="text-gray-400">Primary Emotion:</span>
@@ -121,7 +128,9 @@ const EmotionsDisplay = ({ emotions }: { emotions: Dialogue['emotions'] }) => (
       </p>
     </div>
   </div>
-)
+));
+
+EmotionsDisplay.displayName = 'EmotionsDisplay';
 
 const RecordingControls = React.memo(({
   isRecording,
@@ -216,6 +225,8 @@ const RecordingControls = React.memo(({
     </div>
   );
 });
+
+RecordingControls.displayName = 'RecordingControls';
 
 // Update the ConfirmationModal interface
 interface ConfirmationModalProps {
@@ -383,9 +394,8 @@ interface AppError extends Error {
 }
 
 // Add logging utility
-const logEvent = (message: string, data?: any) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${message}`, data ? data : '');
+const logEvent = (message: string, data?: Record<string, unknown>): void => {
+  console.log(message, data);
 };
 
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
@@ -396,8 +406,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const [error, setError] = useState<string>('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasError, setHasError] = useState<AppError | null>(null);
   const [localAudioBlob, setLocalAudioBlob] = useState<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const queryClient = useQueryClient();
@@ -484,7 +492,9 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   }, [audioBlob]);
 
   // Navigation handlers
-  const hasChanges = () => localAudioBlob !== null;
+  const hasChanges = useCallback(() => {
+    return localAudioBlob !== null;
+  }, [localAudioBlob]);
 
   const handleNext = useCallback(() => {
     if (hasChanges()) {
@@ -495,7 +505,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     } else if (currentDialogueIndex < dialoguesList.length - 1) {
       setCurrentDialogueIndex(prev => prev + 1);
     }
-  }, [currentDialogueIndex, dialoguesList.length, hasChanges]);
+  }, [currentDialogueIndex, dialoguesList.length, hasChanges, setConfirmationType, setNavigationDirection, setPendingNavigationIndex, setShowConfirmation]);
 
   const handlePrevious = useCallback(() => {
     if (currentDialogueIndex > 0) {
@@ -592,13 +602,14 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         formData.append('projectId', projectId);
         
         logEvent('Uploading audio file');
-        const uploadResponse = await fetch('/api/upload-voice-over', {
-          method: 'POST',
-          body: formData,
+        const uploadResponse = await axios.post('/api/upload-voice-over', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         });
         
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.data.ok) {
+          const errorData = await uploadResponse.data.json().catch(() => ({}));
           logEvent('Upload failed', {
             status: uploadResponse.status,
             error: errorData
@@ -606,7 +617,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
           throw new Error('Failed to upload voice-over recording');
         }
         
-        const { url } = await uploadResponse.json();
+        const { url } = uploadResponse.data;
         voiceOverUrl = url;
         logEvent('Audio upload successful', { url });
       }
@@ -622,17 +633,15 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       };
       
       logEvent('Updating dialogue metadata', { dialogueId: currentDialogue._id });
-      const response = await fetch(`/api/dialogues/${currentDialogue._id}`, {
-        method: 'PATCH',
+      const response = await axios.put(`/api/dialogues/${currentDialogue._id}`, updateData, {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData),
       });
 
-      const responseData = await response.json();
+      const responseData = await response.data;
       
-      if (!response.ok) {
+      if (!response.data.ok) {
         logEvent('Metadata update failed', {
           status: response.status,
           error: responseData.error
@@ -701,7 +710,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   };
 
-  const handleDragEnd = async (event: any, info: PanInfo) => {
+  const handleDragEnd = async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo): Promise<void> => {
     const threshold = 100;
     const velocity = info.velocity.x;
     const offset = info.offset.x;
@@ -791,6 +800,28 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       setError('Failed to start re-recording');
     }
   }, [currentDialogue, setConfirmationType, setShowConfirmation, setError]);
+
+  useEffect(() => {
+    if (currentDialogue?._id && recordingDuration && maxDuration) {
+      const key = `recording_duration_${currentDialogue._id}`;
+      localStorage.setItem(key, recordingDuration.toString());
+    }
+  }, [currentDialogue?._id, recordingDuration, maxDuration]);
+
+  useEffect(() => {
+    if (currentDialogue?._id && currentDialogueIndex < dialoguesList.length) {
+      // Your existing effect logic
+      const handleKeyPress = (event: KeyboardEvent) => {
+        if (event.key === 'ArrowRight') {
+          handleNext();
+        } else if (event.key === 'ArrowLeft') {
+          handlePrevious();
+        }
+      };
+      window.addEventListener('keydown', handleKeyPress);
+      return () => window.removeEventListener('keydown', handleKeyPress);
+    }
+  }, [currentDialogue?._id, currentDialogueIndex, dialoguesList.length, maxDuration, handleNext, handlePrevious]);
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">

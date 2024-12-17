@@ -13,14 +13,26 @@ interface Project {
   }>
 }
 
+// Track if initial fetch has been logged
+let hasLoggedInitialFetch = false;
+
 async function fetchProjects(): Promise<Project[]> {
-  console.log('Fetching projects...')
+  if (!hasLoggedInitialFetch) {
+    console.log('=== Projects Fetch Debug ===');
+    hasLoggedInitialFetch = true;
+  }
+  
   const res = await fetch('/api/projects')
   if (!res.ok) {
     throw new Error('Failed to fetch projects')
   }
   const data = await res.json()
-  console.log('Projects fetched:', data)
+  
+  if (!hasLoggedInitialFetch) {
+    console.log('Projects data:', data);
+    console.log('=== End Debug ===');
+  }
+  
   return data
 }
 

@@ -1,21 +1,71 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import { type Dialogue } from '../types/dialogue'
 import { formatTime, getNumberValue, calculateDuration } from '../utils/formatters'
 import { useAudioRecording } from '../hooks/useAudioRecording'
 
-// Sub-components
-const CharacterInfo = ({ character }: { character: string }) => (
-  <div className="p-2 bg-gray-800">
-    <div className="flex items-center justify-center gap-2">
-      <span className="text-gray-400">Character:</span>
-      <span className="text-white">{character}</span>
-    </div>
-  </div>
-)
+// Add new type for recording status
+type RecordingStatus = 'available' | 'unavailable' | 'checking';
 
-const VideoPlayer = ({ 
+// Sub-components
+const CharacterInfo = ({ 
+  character, 
+  voiceOverUrl 
+}: { 
+  character: string;
+  voiceOverUrl?: string;
+}) => {
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('checking');
+
+  useEffect(() => {
+    const checkRecordingStatus = async () => {
+      if (!voiceOverUrl) {
+        setRecordingStatus('unavailable');
+        return;
+      }
+
+      try {
+        const response = await fetch(voiceOverUrl, { method: 'HEAD' });
+        setRecordingStatus(response.ok ? 'available' : 'unavailable');
+      } catch (error) {
+        console.error('Error checking recording status:', error);
+        setRecordingStatus('unavailable');
+      }
+    };
+
+    checkRecordingStatus();
+  }, [voiceOverUrl]);
+
+  return (
+    <div className="p-2 bg-gray-800">
+      <div className="flex items-center justify-center gap-2">
+        <span className="text-gray-400">Character:</span>
+        <div className="flex items-center gap-2">
+          <span className="text-white">{character}</span>
+          <div 
+            className={`w-3 h-3 rounded-full ${
+              recordingStatus === 'checking' 
+                ? 'bg-yellow-500 animate-pulse'
+                : recordingStatus === 'available'
+                ? 'bg-green-500'
+                : 'bg-red-500'
+            }`}
+            title={
+              recordingStatus === 'checking'
+                ? 'Checking recording status...'
+                : recordingStatus === 'available'
+                ? 'Recording available'
+                : 'Recording not available'
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VideoPlayer = React.memo(({ 
   videoRef, 
   videoUrl, 
   isVideoLoading 
@@ -37,24 +87,14 @@ const VideoPlayer = ({
       </div>
     )}
   </div>
-)
+));
 
-const VideoControls = ({
+const VideoControls = React.memo(({
   isPlaying,
   togglePlayPause,
-  toggleAudioImposition,
-  isImposedAudio,
-  hasAudio,
-  timeStart,
-  timeEnd
 }: {
   isPlaying: boolean,
   togglePlayPause: () => void,
-  toggleAudioImposition: () => void,
-  isImposedAudio: boolean,
-  hasAudio: boolean,
-  timeStart: string,
-  timeEnd: string
 }) => (
   <div className="p-2 bg-gray-800 flex flex-col items-center gap-2">
     <div className="flex gap-2">
@@ -65,28 +105,9 @@ const VideoControls = ({
       >
         {isPlaying ? 'Pause' : 'Play'}
       </button>
-      <button
-        onClick={toggleAudioImposition}
-        disabled={!hasAudio}
-        className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        aria-label={isImposedAudio ? 'Remove voice-over' : 'Add voice-over'}
-      >
-        {isImposedAudio ? 'Remove Voice-over' : 'Add Voice-over'}
-      </button>
-    </div>
-    
-    <div className="flex items-center gap-4 text-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-gray-400">Start:</span>
-        <span className="text-white">{timeStart}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-gray-400">End:</span>
-        <span className="text-white">{timeEnd}</span>
-      </div>
     </div>
   </div>
-)
+));
 
 const EmotionsDisplay = ({ emotions }: { emotions: Dialogue['emotions'] }) => (
   <div className="grid grid-cols-2 gap-4">
@@ -102,15 +123,18 @@ const EmotionsDisplay = ({ emotions }: { emotions: Dialogue['emotions'] }) => (
   </div>
 )
 
-const RecordingControls = ({
+const RecordingControls = React.memo(({
   isRecording,
   isPlayingRecording,
   startRecording,
   stopRecording,
   handlePlayRecording,
   hasRecording,
+  hasExistingRecording,
   currentIndex,
-  totalCount
+  totalCount,
+  onReRecord,
+  localAudioBlob
 }: {
   isRecording: boolean,
   isPlayingRecording: boolean,
@@ -118,45 +142,80 @@ const RecordingControls = ({
   stopRecording: () => void,
   handlePlayRecording: () => void,
   hasRecording: boolean,
+  hasExistingRecording: boolean,
   currentIndex: number,
-  totalCount: number
-}) => (
-  <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700">
-    <div className="flex flex-col items-center py-4 space-y-4">
-      <div className="flex items-center space-x-4">
-        <button
-          onClick={isRecording ? stopRecording : startRecording}
-          className={`px-6 py-2 rounded-full ${
-            isRecording
-              ? 'bg-red-500 hover:bg-red-600'
-              : 'bg-blue-500 hover:bg-blue-600'
-          } text-white transition-colors`}
-          aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-        >
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
-        </button>
+  totalCount: number,
+  onReRecord: () => void,
+  localAudioBlob: Blob | null
+}) => {
+  const handleStartRecording = async () => {
+    try {
+      await startRecording();
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
+  };
 
-        {hasRecording && !isRecording && (
-          <button
-            onClick={handlePlayRecording}
-            className={`px-6 py-2 rounded-full ${
-              isPlayingRecording
-                ? 'bg-yellow-500 hover:bg-yellow-600'
-                : 'bg-green-500 hover:bg-green-600'
-            } text-white transition-colors`}
-            aria-label={isPlayingRecording ? 'Stop playing' : 'Play recording'}
-          >
-            {isPlayingRecording ? 'Stop Playing' : 'Play Recording'}
-          </button>
-        )}
-      </div>
+  const handleStopRecording = () => {
+    try {
+      stopRecording();
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+    }
+  };
 
-      <div className="text-sm text-gray-300">
-        Dialogue {currentIndex + 1} of {totalCount}
+  return (
+    <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700">
+      <div className="flex flex-col items-center py-4 space-y-4">
+        <div className="flex items-center space-x-4">
+          {!isRecording && hasExistingRecording && !localAudioBlob && (
+            <button
+              onClick={onReRecord}
+              className="px-6 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-colors"
+              aria-label="Re-record audio"
+              title="Record a new version to replace existing audio"
+            >
+              Re-Record
+            </button>
+          )}
+
+          {(!hasExistingRecording || isRecording || localAudioBlob) && (
+            <button
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              className={`px-6 py-2 rounded-full ${
+                isRecording
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-blue-500 hover:bg-blue-600'
+              } text-white transition-colors`}
+              aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              {isRecording ? 'Stop Recording' : 'Start Recording'}
+            </button>
+          )}
+
+          {!isRecording && hasRecording && (
+            <button
+              onClick={handlePlayRecording}
+              className={`px-6 py-2 rounded-full ${
+                isPlayingRecording
+                  ? 'bg-yellow-500 hover:bg-yellow-600'
+                  : 'bg-green-500 hover:bg-green-600'
+              } text-white transition-colors`}
+              aria-label={isPlayingRecording ? 'Stop playing' : 'Play recorded audio'}
+              title={isPlayingRecording ? 'Stop current playback' : 'Play recorded audio'}
+            >
+              {isPlayingRecording ? 'Stop Playing' : 'Play Recorded Audio'}
+            </button>
+          )}
+        </div>
+
+        <div className="text-sm text-gray-300">
+          Dialogue {currentIndex + 1} of {totalCount}
+        </div>
       </div>
     </div>
-  </div>
-)
+  );
+});
 
 // Update the ConfirmationModal interface
 interface ConfirmationModalProps {
@@ -279,37 +338,6 @@ const Notifications = ({
   </>
 )
 
-const NavigationControls = ({
-  onPrevious,
-  onNext,
-  hasPrevious,
-  hasNext
-}: {
-  onPrevious: () => void,
-  onNext: () => void,
-  hasPrevious: boolean,
-  hasNext: boolean
-}) => (
-  <div className="flex justify-center gap-4 p-2 bg-gray-800">
-    <button
-      onClick={onPrevious}
-      disabled={!hasPrevious}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-      aria-label="Previous dialogue"
-    >
-      Previous
-    </button>
-    <button
-      onClick={onNext}
-      disabled={!hasNext}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-      aria-label="Next dialogue"
-    >
-      Next
-    </button>
-  </div>
-)
-
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center h-screen bg-gray-900">
     <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white"></div>
@@ -354,6 +382,12 @@ interface AppError extends Error {
   status?: number;
 }
 
+// Add logging utility
+const logEvent = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`, data ? data : '');
+};
+
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
@@ -362,16 +396,12 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const [error, setError] = useState<string>('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
-  const [isImposedAudio, setIsImposedAudio] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState<AppError | null>(null);
   const [localAudioBlob, setLocalAudioBlob] = useState<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const queryClient = useQueryClient();
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const voiceOverSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const dragX = useMotionValue(0);
   const dragControls = useAnimation();
   const [confirmationType, setConfirmationType] = useState<'navigation' | 'discard'>('discard');
@@ -388,8 +418,65 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     isPlayingRecording,
     startRecording,
     stopRecording,
-    handlePlayRecording
+    handlePlayRecording,
+    setPlayingState
   } = useAudioRecording(currentDialogue);
+
+  // Add audio player ref for remote audio
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  // Function to handle playing remote audio
+  const handlePlayRemoteAudio = useCallback(() => {
+    if (!currentDialogue?.voiceOverUrl) return;
+
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current = null;
+      setPlayingState(false);
+      return;
+    }
+
+    const audio = new Audio(currentDialogue.voiceOverUrl);
+    audioPlayerRef.current = audio;
+
+    audio.addEventListener('ended', () => {
+      setPlayingState(false);
+      audioPlayerRef.current = null;
+    });
+
+    audio.addEventListener('error', () => {
+      setPlayingState(false);
+      audioPlayerRef.current = null;
+      setError('Failed to play audio');
+    });
+
+    audio.play().then(() => {
+      setPlayingState(true);
+    }).catch(error => {
+      console.error('Failed to play audio:', error);
+      setError('Failed to play audio');
+      audioPlayerRef.current = null;
+    });
+  }, [currentDialogue?.voiceOverUrl, setPlayingState]);
+
+  // Combined play function
+  const handlePlayAudio = useCallback(() => {
+    if (localAudioBlob) {
+      handlePlayRecording();
+    } else if (currentDialogue?.voiceOverUrl) {
+      handlePlayRemoteAudio();
+    }
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl, handlePlayRecording, handlePlayRemoteAudio]);
+
+  // Cleanup audio on unmount or dialogue change
+  useEffect(() => {
+    return () => {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current = null;
+      }
+    };
+  }, [currentDialogue?._id]);
 
   // Update local audio blob when recording changes
   useEffect(() => {
@@ -399,7 +486,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   // Navigation handlers
   const hasChanges = () => localAudioBlob !== null;
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (hasChanges()) {
       setConfirmationType('navigation');
       setNavigationDirection('next');
@@ -408,9 +495,9 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     } else if (currentDialogueIndex < dialoguesList.length - 1) {
       setCurrentDialogueIndex(prev => prev + 1);
     }
-  };
+  }, [currentDialogueIndex, dialoguesList.length, hasChanges]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (currentDialogueIndex > 0) {
       if (hasChanges()) {
         setConfirmationType('navigation');
@@ -421,22 +508,28 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         setCurrentDialogueIndex(prev => prev - 1);
       }
     }
-  };
+  }, [currentDialogueIndex, hasChanges]);
 
-  const handleDiscardChanges = () => {
+  const handleDiscardChanges = useCallback(() => {
     setShowConfirmation(false);
     if (currentDialogue) {
       setLocalAudioBlob(null);
       if (pendingNavigationIndex !== null) {
         setCurrentDialogueIndex(pendingNavigationIndex);
         setPendingNavigationIndex(null);
+      } else if (confirmationType === 'discard') {
+        // Start new recording after discarding
+        startRecording().catch(error => {
+          console.error('Failed to start recording:', error);
+          setError('Failed to start recording');
+        });
       }
     }
     setNavigationDirection(undefined);
-  };
+  }, [currentDialogue, pendingNavigationIndex, confirmationType, startRecording, setError]);
 
   // Video control functions
-  const togglePlayPause = () => {
+  const togglePlayPause = useCallback(() => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -445,191 +538,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       }
       setIsPlaying(!isPlaying);
     }
-  };
-
-  // Function to handle audio imposition
-  const toggleAudioImposition = async () => {
-    if (!videoRef.current) return;
-
-    if (isImposedAudio) {
-      // Remove imposed audio
-      if (audioSourceRef.current) {
-        audioSourceRef.current.disconnect();
-        audioSourceRef.current = null;
-      }
-      if (voiceOverSourceRef.current) {
-        voiceOverSourceRef.current.stop();
-        voiceOverSourceRef.current = null;
-      }
-      setIsImposedAudio(false);
-      return;
-    }
-
-    try {
-      // Check browser support
-      if (!window.AudioContext) {
-        throw new Error('AudioContext is not supported in this browser');
-      }
-
-      // Initialize audio context if needed
-      if (!audioContextRef.current) {
-        try {
-          audioContextRef.current = new AudioContext({
-            sampleRate: 44100,
-            latencyHint: 'interactive'
-          });
-        } catch (error) {
-          console.error('Failed to create AudioContext:', error);
-          throw new Error('Failed to initialize audio system');
-        }
-      }
-
-      // Resume audio context if suspended
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      // Connect video audio to context
-      if (!audioSourceRef.current) {
-        try {
-          audioSourceRef.current = audioContextRef.current.createMediaElementSource(videoRef.current);
-          audioSourceRef.current.connect(audioContextRef.current.destination);
-        } catch (error) {
-          console.error('Failed to connect audio source:', error);
-          throw new Error('Failed to connect audio source');
-        }
-      }
-
-      // Load and play voice-over audio
-      let audioData: ArrayBuffer;
-      try {
-        if (localAudioBlob) {
-          audioData = await localAudioBlob.arrayBuffer();
-        } else if (currentDialogue.voiceOverUrl) {
-          const response = await fetch(currentDialogue.voiceOverUrl);
-          if (!response.ok) {
-            throw new Error('Failed to fetch voice-over audio');
-          }
-          audioData = await response.arrayBuffer();
-        } else {
-          throw new Error('No audio source available');
-        }
-
-        const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-        if (voiceOverSourceRef.current) {
-          voiceOverSourceRef.current.stop();
-        }
-        
-        voiceOverSourceRef.current = audioContextRef.current.createBufferSource();
-        voiceOverSourceRef.current.buffer = audioBuffer;
-        voiceOverSourceRef.current.connect(audioContextRef.current.destination);
-        voiceOverSourceRef.current.start(0, videoRef.current.currentTime);
-        
-        setIsImposedAudio(true);
-      } catch (error) {
-        console.error('Failed to process audio:', error);
-        throw new Error('Failed to process audio data');
-      }
-    } catch (err) {
-      console.error('Error imposing audio:', err);
-      const error = err as AppError;
-      setError(error.message || 'Failed to impose audio');
-      setIsImposedAudio(false);
-    }
-  };
-
-  // Save changes with approval
-  const handleApproveAndSave = async () => {
-    if (!currentDialogue) return;
-    
-    try {
-      setIsSaving(true);
-      
-      let voiceOverUrl = currentDialogue.voiceOverUrl;
-      
-      // Upload audio if new recording exists
-      if (localAudioBlob) {
-        const formData = new FormData();
-        formData.append('audio', localAudioBlob);
-        formData.append('dialogueId', currentDialogue._id);
-        formData.append('dialogueIndex', currentDialogue.index.toString());
-        formData.append('projectId', projectId);
-        
-        const uploadResponse = await fetch('/api/upload-voice-over', {
-          method: 'POST',
-          body: formData,
-        });
-        
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload voice-over recording');
-        }
-        
-        const { url } = await uploadResponse.json();
-        voiceOverUrl = url;
-      }
-      
-      const updateData = {
-        dialogue: currentDialogue.dialogue,
-        character: currentDialogue.character,
-        status: 'voice-over-added',
-        timeStart: currentDialogue.timeStart,
-        timeEnd: currentDialogue.timeEnd,
-        index: currentDialogue.index,
-        voiceOverUrl,
-      };
-      
-      const response = await fetch(`/api/dialogues/${currentDialogue._id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
-      });
-
-      const responseData = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to save voice-over');
-      }
-      
-      setDialoguesList(prevDialogues => 
-        prevDialogues.map(d => 
-          d._id === currentDialogue._id ? responseData : d
-        )
-      );
-
-      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
-        if (!oldData?.data) return oldData;
-        return {
-          ...oldData,
-          data: oldData.data.map((d: Dialogue) => 
-            d._id === currentDialogue._id ? responseData : d
-          )
-        };
-      });
-
-      setShowSaveSuccess(true);
-      setShowConfirmation(false);
-      setLocalAudioBlob(null);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
-
-      // Handle navigation after save
-      if (pendingNavigationIndex !== null) {
-        setCurrentDialogueIndex(pendingNavigationIndex);
-        setPendingNavigationIndex(null);
-      } else if (currentDialogueIndex < dialoguesList.length - 1) {
-        setCurrentDialogueIndex(prev => prev + 1);
-      }
-    } catch (err) {
-      console.error('Error saving voice-over:', err);
-      const error = err as AppError;
-      setError(error.message || 'Failed to save voice-over');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setIsSaving(false);
-      setNavigationDirection(undefined);
-    }
-  };
+  }, [isPlaying]);
 
   // Add video event listeners
   useEffect(() => {
@@ -656,53 +565,141 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [currentDialogue?.videoUrl]);
 
-  // Handle video seeking
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+  // Save changes with approval
+  const handleApproveAndSave = async () => {
+    if (!currentDialogue) return;
+    
+    try {
+      setIsSaving(true);
+      logEvent('Starting save process', {
+        dialogueId: currentDialogue._id,
+        hasNewRecording: !!localAudioBlob
+      });
+      
+      let voiceOverUrl = currentDialogue.voiceOverUrl;
+      
+      // Upload audio if new recording exists
+      if (localAudioBlob) {
+        logEvent('Preparing to upload audio', {
+          dialogueId: currentDialogue._id,
+          blobSize: localAudioBlob.size
+        });
 
-    const handleSeek = () => {
-      if (isImposedAudio && voiceOverSourceRef.current) {
-        voiceOverSourceRef.current.stop();
-        const newSource = audioContextRef.current!.createBufferSource();
-        newSource.buffer = voiceOverSourceRef.current.buffer;
-        newSource.connect(audioContextRef.current!.destination);
-        newSource.start(0, video.currentTime);
-        voiceOverSourceRef.current = newSource;
+        const formData = new FormData();
+        formData.append('audio', localAudioBlob);
+        formData.append('dialogueId', currentDialogue._id);
+        formData.append('dialogueIndex', currentDialogue.index.toString());
+        formData.append('projectId', projectId);
+        
+        logEvent('Uploading audio file');
+        const uploadResponse = await fetch('/api/upload-voice-over', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          logEvent('Upload failed', {
+            status: uploadResponse.status,
+            error: errorData
+          });
+          throw new Error('Failed to upload voice-over recording');
+        }
+        
+        const { url } = await uploadResponse.json();
+        voiceOverUrl = url;
+        logEvent('Audio upload successful', { url });
       }
-    };
+      
+      const updateData = {
+        dialogue: currentDialogue.dialogue,
+        character: currentDialogue.character,
+        status: 'voice-over-added',
+        timeStart: currentDialogue.timeStart,
+        timeEnd: currentDialogue.timeEnd,
+        index: currentDialogue.index,
+        voiceOverUrl,
+      };
+      
+      logEvent('Updating dialogue metadata', { dialogueId: currentDialogue._id });
+      const response = await fetch(`/api/dialogues/${currentDialogue._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
 
-    video.addEventListener('seeked', handleSeek);
-    return () => video.removeEventListener('seeked', handleSeek);
-  }, [isImposedAudio]);
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        logEvent('Metadata update failed', {
+          status: response.status,
+          error: responseData.error
+        });
+        throw new Error(responseData.error || 'Failed to save voice-over');
+      }
+      
+      logEvent('Metadata update successful', {
+        dialogueId: currentDialogue._id,
+        newStatus: 'voice-over-added'
+      });
+      
+      setDialoguesList(prevDialogues => 
+        prevDialogues.map(d => 
+          d._id === currentDialogue._id ? responseData : d
+        )
+      );
 
-  // Cleanup audio context
-  useEffect(() => {
-    return () => {
-      voiceOverSourceRef.current?.stop();
-      audioContextRef.current?.close();
-    };
-  }, []);
+      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
+        if (!oldData?.data) return oldData;
+        return {
+          ...oldData,
+          data: oldData.data.map((d: Dialogue) => 
+            d._id === currentDialogue._id ? responseData : d
+          )
+        };
+      });
 
-  // Reset error state
-  const resetError = () => {
-    setHasError(null);
-    setError('');
+      setShowSaveSuccess(true);
+      setShowConfirmation(false);
+      setLocalAudioBlob(null);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+
+      logEvent('Save process completed successfully', {
+        dialogueId: currentDialogue._id,
+        newUrl: voiceOverUrl
+      });
+
+      // Handle navigation after save
+      if (pendingNavigationIndex !== null) {
+        logEvent('Navigating to next dialogue', {
+          from: currentDialogueIndex,
+          to: pendingNavigationIndex
+        });
+        setCurrentDialogueIndex(pendingNavigationIndex);
+        setPendingNavigationIndex(null);
+      } else if (currentDialogueIndex < dialoguesList.length - 1) {
+        logEvent('Auto-advancing to next dialogue', {
+          from: currentDialogueIndex,
+          to: currentDialogueIndex + 1
+        });
+        setCurrentDialogueIndex(prev => prev + 1);
+      }
+    } catch (err) {
+      console.error('Error saving voice-over:', err);
+      const error = err as AppError;
+      logEvent('Save process failed', {
+        error: error.message,
+        dialogueId: currentDialogue._id
+      });
+      setError(error.message || 'Failed to save voice-over');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsSaving(false);
+      setNavigationDirection(undefined);
+    }
   };
-
-  // Error boundary
-  if (hasError) {
-    return <ErrorFallback error={hasError} resetError={resetError} />;
-  }
-
-  // Loading state
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!currentDialogue) {
-    return <div className="text-center p-4">No dialogues available.</div>
-  }
 
   const handleDragEnd = async (event: any, info: PanInfo) => {
     const threshold = 100;
@@ -725,7 +722,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       } else {
         // Swipe left - go to next
         if (currentDialogueIndex < dialoguesList.length - 1) {
-          if (hasChanges()) {
+          if (localAudioBlob) {
             setConfirmationType('navigation');
             setNavigationDirection('next');
             setPendingNavigationIndex(currentDialogueIndex + 1);
@@ -740,15 +737,66 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     await dragControls.start({ x: 0 });
   };
 
+  // Add recording state logging
+  useEffect(() => {
+    if (isRecording) {
+      logEvent('Recording started', {
+        dialogueId: currentDialogue?._id,
+        maxDuration,
+        dialogueIndex: currentDialogueIndex + 1,
+        totalDialogues: dialoguesList.length
+      });
+    }
+  }, [isRecording]);
+
+  // Add audio blob logging
+  useEffect(() => {
+    if (localAudioBlob) {
+      logEvent('New recording created', {
+        dialogueId: currentDialogue?._id,
+        blobSize: localAudioBlob.size,
+        blobType: localAudioBlob.type,
+        duration: recordingDuration
+      });
+    }
+  }, [localAudioBlob]);
+
+  // Optimize audio blob state effect
+  useEffect(() => {
+    const hasLocalBlob = !!localAudioBlob;
+    const hasExistingRecording = !!currentDialogue?.voiceOverUrl;
+    
+    // Only log if there's an actual change in the state
+    if (hasLocalBlob || hasExistingRecording) {
+      logEvent('Audio blob state changed:', {
+        hasLocalBlob,
+        localBlobSize: localAudioBlob?.size,
+        hasExistingRecording
+      });
+    }
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl]);
+
+  const handleReRecord = useCallback(() => {
+    try {
+      logEvent('Re-record button clicked', {
+        dialogueId: currentDialogue?._id,
+        existingUrl: currentDialogue?.voiceOverUrl
+      });
+
+      // Show confirmation modal before starting re-record
+      setConfirmationType('discard');
+      setShowConfirmation(true);
+    } catch (error) {
+      console.error('Failed to handle re-record:', error);
+      setError('Failed to start re-recording');
+    }
+  }, [currentDialogue, setConfirmationType, setShowConfirmation, setError]);
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">
-      <CharacterInfo character={currentDialogue.character} />
-      
-      <NavigationControls 
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        hasPrevious={currentDialogueIndex > 0}
-        hasNext={currentDialogueIndex < dialoguesList.length - 1}
+      <CharacterInfo 
+        character={currentDialogue.character} 
+        voiceOverUrl={currentDialogue.voiceOverUrl}
       />
       
       <VideoPlayer 
@@ -760,11 +808,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       <VideoControls 
         isPlaying={isPlaying}
         togglePlayPause={togglePlayPause}
-        toggleAudioImposition={toggleAudioImposition}
-        isImposedAudio={isImposedAudio}
-        hasAudio={!!localAudioBlob || !!currentDialogue.voiceOverUrl}
-        timeStart={currentDialogue.timeStart}
-        timeEnd={currentDialogue.timeEnd}
       />
 
       <motion.div 
@@ -796,10 +839,13 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         isPlayingRecording={isPlayingRecording}
         startRecording={startRecording}
         stopRecording={stopRecording}
-        handlePlayRecording={handlePlayRecording}
-        hasRecording={!!localAudioBlob}
+        handlePlayRecording={handlePlayAudio}
+        hasRecording={!!localAudioBlob || !!currentDialogue?.voiceOverUrl}
+        hasExistingRecording={!!currentDialogue?.voiceOverUrl}
         currentIndex={currentDialogueIndex}
         totalCount={dialoguesList.length}
+        onReRecord={handleReRecord}
+        localAudioBlob={localAudioBlob}
       />
 
       <ConfirmationModal 
@@ -821,8 +867,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         showSaveSuccess={showSaveSuccess}
         error={error}
       />
-
-      <div className="h-24"></div>
     </div>
   );
 } 

@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import Script from 'next/script'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,22 +16,24 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <Script id="theme-switcher" strategy="beforeInteractive">
-          {`
-            try {
-              let theme = localStorage.getItem('theme')
-              if (!theme) {
-                localStorage.setItem('theme', 'dark')
-                theme = 'dark'
-              }
-              document.documentElement.classList.toggle('dark', theme === 'dark')
-            } catch (e) {}
-          `}
-        </Script>
-      </head>
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                let theme = localStorage.getItem('theme')
+                if (!theme) {
+                  localStorage.setItem('theme', 'dark')
+                  theme = 'dark'
+                }
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark')
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
         <Providers>
           {children}
         </Providers>

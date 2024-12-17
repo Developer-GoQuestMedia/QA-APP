@@ -2,16 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { type Dialogue } from '@/types/dialogue'
 import { type Project } from '@/types/project'
 
+// Maintain a record of logged projectIds
+const loggedProjectIds = new Set<string>();
+
 async function fetchDialogues(projectId: string): Promise<Dialogue[]> {
-  console.log('=== Dialogue Fetch Debug ===');
-  console.log('Project ID:', projectId);
-  
-  const url = `/api/dialogues?projectId=${projectId}`;
-  console.log('Fetching URL:', url);
+  // Only log once per projectId per session
+  if (!loggedProjectIds.has(projectId)) {
+    console.log('=== Dialogue Fetch Debug ===');
+    console.log('Project ID:', projectId);
+    console.log('Fetching URL:', `/api/dialogues?projectId=${projectId}`);
+    loggedProjectIds.add(projectId);
+  }
 
   try {
-    const res = await fetch(url);
-    console.log('Response status:', res.status);
+    const res = await fetch(`/api/dialogues?projectId=${projectId}`);
     
     if (!res.ok) {
       const errorText = await res.text();
@@ -20,8 +24,13 @@ async function fetchDialogues(projectId: string): Promise<Dialogue[]> {
     }
 
     const response = await res.json();
-    console.log('Response data:', response);
-    console.log('=== End Debug ===');
+    
+    // Only log response data once per projectId
+    if (loggedProjectIds.size === 1) {
+      console.log('Response data:', response);
+      console.log('=== End Debug ===');
+    }
+    
     return response.data || [];
   } catch (error) {
     console.error('Fetch error:', error);
@@ -30,8 +39,6 @@ async function fetchDialogues(projectId: string): Promise<Dialogue[]> {
 }
 
 export function useDialogues(projectId: string) {
-  console.log('useDialogues hook called with projectId:', projectId);
-  
   return useQuery({
     queryKey: ['dialogues', projectId],
     queryFn: () => fetchDialogues(projectId),

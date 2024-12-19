@@ -41,9 +41,10 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const videoRef = useRef<HTMLVideoElement>(null);
   const queryClient = useQueryClient();
+  const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
+  const [currentTimestamp, setCurrentTimestamp] = useState('00:00.000');
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -57,39 +58,6 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
       }
       setIsPlaying(!isPlaying);
     }
-  };
-
-  const rewindFiveSeconds = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
-    }
-  };
-
-  const changePlaybackRate = (rate: number) => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = rate;
-      setPlaybackRate(rate);
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const captureCurrentTime = (type: 'start' | 'end') => {
-    if (videoRef.current) {
-      const time = videoRef.current.currentTime;
-      const formattedTime = formatTime(time);
-      if (type === 'start') {
-        setTimeStart(formattedTime);
-      } else {
-        setTimeEnd(formattedTime);
-      }
-    }
-  };
-
-  const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    const milliseconds = Math.floor((seconds % 1) * 1000);
-    return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
   };
 
   // Check for unsaved changes
@@ -138,7 +106,7 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     if (!currentDialogue) return;
     
     try {
-      setIsSaving(true);
+      setNetworkStatus('saving');
       
       const updateData = {
         dialogue: {
@@ -175,19 +143,18 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
         };
       });
 
-      setShowSaveSuccess(true);
+      setNetworkStatus('success');
       setShowConfirmation(false);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
+      setTimeout(() => setNetworkStatus('idle'), 2000);
 
       if (currentDialogueIndex < dialoguesList.length - 1) {
         setCurrentDialogueIndex(prev => prev + 1);
       }
     } catch (error) {
+      setNetworkStatus('error');
       console.error('Error saving transcription:', error);
       setError(error instanceof Error ? error.message : 'Failed to save transcription');
       setTimeout(() => setError(''), 3000);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -224,16 +191,118 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
   }, []);
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (Math.abs(info.offset.x) < 100) {
+    const SWIPE_THRESHOLD = 50;
+    const velocity = Math.abs(info.velocity.x);
+    const offset = Math.abs(info.offset.x);
+
+    if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
       animControls.start({ x: 0, opacity: 1 })
-    } else {
-      const direction = info.offset.x > 0 ? 'right' : 'left'
-      if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-        handleNext();
-      } else if (direction === 'right' && currentDialogueIndex > 0) {
-        handlePrevious();
-      }
+      return;
     }
+
+    const direction = info.offset.x > 0 ? 'right' : 'left'
+    
+    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
+      animControls.start({ 
+        x: -200, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
+        handleNext();
+        animControls.set({ x: 0, opacity: 1 });
+      });
+    } else if (direction === 'right' && currentDialogueIndex > 0) {
+      animControls.start({ 
+        x: 200, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
+        handlePrevious();
+        animControls.set({ x: 0, opacity: 1 });
+      });
+    }
+  };
+
+  // Add new keyboard controls
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        return; // Don't trigger shortcuts when typing
+      }
+      
+      switch(e.key.toLowerCase()) {
+        case ' ':
+          e.preventDefault();
+          togglePlayPause();
+          break;
+        case 'arrowleft':
+          e.preventDefault();
+          handlePrevious();
+          break;
+        case 'arrowright':
+          e.preventDefault();
+          handleNext();
+          break;
+        case 's':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (hasChanges()) {
+              handleApproveAndSave();
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [togglePlayPause, handlePrevious, handleNext, hasChanges, handleApproveAndSave]);
+
+  // Add timestamp marker functionality
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    const milliseconds = Math.floor((seconds % 1) * 1000);
+    return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+  };
+
+  const handleVideoTimeUpdate = () => {
+    if (videoRef.current) {
+      const currentTime = videoRef.current.currentTime;
+      setCurrentTimestamp(formatTime(currentTime));
+    }
+  };
+
+  // Add auto-save functionality
+  useEffect(() => {
+    let autoSaveTimeout: NodeJS.Timeout;
+
+    if (hasChanges()) {
+      autoSaveTimeout = setTimeout(() => {
+        handleApproveAndSave();
+      }, 30000); // Auto-save after 30 seconds of inactivity
+    }
+
+    return () => clearTimeout(autoSaveTimeout);
+  }, [pendingOriginalText, character, timeStart, timeEnd]);
+
+  // Add status indicator component
+  const NetworkStatusIndicator = () => {
+    const statusConfig = {
+      saving: { bg: 'bg-blue-500', text: 'Saving...' },
+      error: { bg: 'bg-red-500', text: 'Error saving' },
+      success: { bg: 'bg-green-500', text: 'Saved!' },
+    };
+
+    if (networkStatus === 'idle') return null;
+
+    const config = statusConfig[networkStatus as keyof typeof statusConfig];
+    
+    return (
+      <div className={`fixed bottom-20 left-1/2 transform -translate-x-1/2 ${config.bg} text-white px-4 py-2 rounded-full shadow-lg text-sm`}>
+        {config.text}
+      </div>
+    );
   };
 
   if (!currentDialogue) {
@@ -249,42 +318,15 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
           src={currentDialogue.videoUrl}
           controls
           className="w-full"
+          onTimeUpdate={handleVideoTimeUpdate}
         />
-        
-        {/* Video Controls */}
-        <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={rewindFiveSeconds}
-                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-              >
-                -5s
-              </button>
-              <button
-                onClick={togglePlayPause}
-                className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-              >
-                {isPlaying ? 'Pause' : 'Play'}
-              </button>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              <span className="text-sm text-gray-600 dark:text-gray-300">Speed:</span>
-              {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
-                <button
-                  key={rate}
-                  onClick={() => changePlaybackRate(rate)}
-                  className={`px-2 py-1 rounded text-sm ${
-                    playbackRate === rate
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {rate}x
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="relative w-full h-1 bg-gray-200 dark:bg-gray-700 mt-2">
+          <div 
+            className="absolute h-full bg-blue-500"
+            style={{ 
+              width: `${(videoRef.current?.currentTime || 0) / (videoRef.current?.duration || 1) * 100}%` 
+            }}
+          />
         </div>
       </div>
 
@@ -366,6 +408,36 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
         </div>
       </motion.div>
 
+      {/* Video Controls - Moved to bottom */}
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700">
+        <button
+          onClick={togglePlayPause}
+          className="w-12 h-12 flex items-center justify-center bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? (
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="currentColor" 
+              className="w-7 h-7"
+            >
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+          ) : (
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="currentColor" 
+              className="w-7 h-7 ml-1"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -417,6 +489,9 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
           </div>
         )}
       </div>
+
+      {/* Network status indicator */}
+      <NetworkStatusIndicator />
     </div>
   )
 } 

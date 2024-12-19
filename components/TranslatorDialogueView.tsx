@@ -282,183 +282,164 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
   }
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-900 overflow-hidden">
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Video Player Card */}
-        <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700">
-          <div className="relative h-[25vh] min-h-[180px] max-h-[280px]">
-            <video
-              ref={videoRef}
-              src={currentDialogue.videoUrl}
-              className="w-full h-full object-contain bg-black"
-            />
-            {isVideoLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
-                  <span className="text-sm text-white">Loading video...</span>
-                </div>
+    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
+      {/* Video Player Card */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={currentDialogue.videoUrl}
+            className="w-full"
+          />
+          {isVideoLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                <span className="text-sm text-white">Loading video...</span>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+        
+        {/* Video Controls */}
+        <div className="p-3 flex items-center justify-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={rewindFiveSeconds}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              -5s
+            </button>
+            <button
+              onClick={togglePlayPause}
+              className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
           </div>
-          
-          {/* Video Controls */}
-          <div className="p-1.5 flex items-center justify-center gap-1.5 flex-wrap">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-700 dark:text-gray-300">Speed:</span>
+            {[0.5, 0.75, 1].map((rate) => (
               <button
-                onClick={rewindFiveSeconds}
-                className="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                key={rate}
+                onClick={() => changePlaybackRate(rate)}
+                className={`px-2 py-1 rounded ${
+                  playbackRate === rate
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                }`}
               >
-                -5s
+                {rate}x
               </button>
-              <button
-                onClick={togglePlayPause}
-                className="px-3 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-              >
-                {isPlaying ? 'Pause' : 'Play'}
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap justify-center">
-              <span className="text-xs text-gray-300">Speed:</span>
-              {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
-                <button
-                  key={rate}
-                  onClick={() => changePlaybackRate(rate)}
-                  className={`px-1.5 py-0.5 rounded text-xs ${
-                    playbackRate === rate
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {rate}x
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Time Info */}
-        <div className="flex-shrink-0 flex items-center gap-2 p-1.5 bg-gray-800 border-b border-gray-700 text-xs">
-          <div className="flex items-center gap-1">
-            <span className="text-gray-300">Start:</span>
-            <span className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">
-              {currentDialogue.timeStart || '00:00.000'}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-gray-300">End:</span>
-            <span className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">
-              {currentDialogue.timeEnd || '00:00.000'}
-            </span>
-          </div>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-grow overflow-y-auto min-h-0">
-          <motion.div
-            className="h-full"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.2}
-            animate={animControls}
-            style={{ x, rotate, opacity, scale }}
-            onDragEnd={handleDragEnd}
-            whileTap={{ cursor: 'grabbing' }}
-            transition={{ 
-              type: "spring", 
-              stiffness: 300, 
-              damping: 30,
-              opacity: { duration: 0.2 },
-              scale: { duration: 0.2 }
-            }}
-          >
-            <div className="p-2 space-y-2">
-              {/* Character Display */}
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">
-                  Character
-                </label>
-                <div className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600">
-                  {currentDialogue.character}
-                </div>
-              </div>
-
-              {/* Original Text */}
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">
-                  Original Text
-                </label>
-                <div className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600">
-                  {currentDialogue.dialogue.original}
-                </div>
-              </div>
-
-              {/* Translation Input */}
-              <div>
-                <label htmlFor="translatedText" className="block text-xs font-medium mb-1 text-gray-300">
-                  Translation
-                </label>
-                <textarea
-                  ref={translationTextareaRef}
-                  id="translatedText"
-                  value={pendingTranslatedText}
-                  onChange={(e) => setPendingTranslatedText(e.target.value)}
-                  className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-h-[40px] overflow-hidden resize-none"
-                  style={{ height: 'auto' }}
-                />
-              </div>
-
-              {/* Adapted Text Input */}
-              <div>
-                <label htmlFor="adaptedText" className="block text-xs font-medium mb-1 text-gray-300">
-                  Adapted
-                </label>
-                <textarea
-                  ref={adaptedTextareaRef}
-                  id="adaptedText"
-                  value={pendingAdaptedText}
-                  onChange={(e) => setPendingAdaptedText(e.target.value)}
-                  className="w-full p-1.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-h-[40px] overflow-hidden resize-none"
-                  style={{ height: 'auto' }}
-                />
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700">
-          <div className="flex items-center justify-center h-[3vh] min-h-[24px] max-h-[32px]">
-            <div className="text-xs text-gray-300">
-              Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
+      {/* Main Content Card */}
+      <motion.div
+        className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.2}
+        animate={animControls}
+        style={{ x, rotate, opacity, scale }}
+        onDragEnd={handleDragEnd}
+        whileTap={{ cursor: 'grabbing' }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 300, 
+          damping: 30,
+          opacity: { duration: 0.2 },
+          scale: { duration: 0.2 }
+        }}
+      >
+        <div className="p-3 sm:p-5 space-y-3 sm:space-y-4">
+          {/* Character Display */}
+          {/* <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
+              Character:
+            </span>
+            <span className="text-gray-900 dark:text-white">
+              {currentDialogue.character}
+            </span>
+          </div> */}
+
+          {/* Original Text */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
+              Original Text
+            </label>
+            <div className="w-full p-2 text-gray-900 dark:text-white">
+              {currentDialogue.dialogue.original}
+            </div>
+          </div>
+
+          {/* Translation Input */}
+          <div>
+            <label htmlFor="translatedText" className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
+              Translation
+            </label>
+            <textarea
+              ref={translationTextareaRef}
+              id="translatedText"
+              value={pendingTranslatedText}
+              onChange={(e) => setPendingTranslatedText(e.target.value)}
+              className="w-full p-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+            />
+          </div>
+
+          {/* Adapted Text Input */}
+          <div>
+            <label htmlFor="adaptedText" className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
+              Adapted
+            </label>
+            <textarea
+              ref={adaptedTextareaRef}
+              id="adaptedText"
+              value={pendingAdaptedText}
+              onChange={(e) => setPendingAdaptedText(e.target.value)}
+              className="w-full p-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+            />
+          </div>
+
+          {/* Navigation and Info */}
+          <div className="flex items-center justify-center pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-gray-200 dark:border-gray-600">
+            <div className="text-center">
+              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {currentDialogue.timeStart} - {currentDialogue.timeEnd}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
             <p className="mb-4">You have unsaved changes. What would you like to do?</p>
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end gap-2 sm:gap-4">
               <button
                 onClick={handleDiscardChanges}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white text-sm"
               >
                 Discard Changes
               </button>
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
               >
                 Keep Editing
               </button>
               <button
                 onClick={handleApproveAndSave}
                 disabled={isSaving}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {isSaving ? 'Saving...' : 'Save Translation'}
               </button>
@@ -468,23 +449,25 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
       )}
 
       {/* Feedback Messages */}
-      {isSaving && (
-        <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          Saving translation...
-        </div>
-      )}
-      
-      {showSaveSuccess && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          Translation saved successfully!
-        </div>
-      )}
-      
-      {error && (
-        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          {error}
-        </div>
-      )}
+      <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2">
+        {isSaving && (
+          <div className="bg-blue-500 text-white px-4 py-2 rounded shadow-lg text-sm text-center sm:text-left">
+            Saving translation...
+          </div>
+        )}
+        
+        {showSaveSuccess && (
+          <div className="bg-green-500 text-white px-4 py-2 rounded shadow-lg text-sm text-center sm:text-left">
+            Translation saved successfully!
+          </div>
+        )}
+        
+        {error && (
+          <div className="bg-red-500 text-white px-4 py-2 rounded shadow-lg text-sm text-center sm:text-left">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   )
 } 

@@ -46,6 +46,8 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
   const queryClient = useQueryClient();
   const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
   const [currentTimestamp, setCurrentTimestamp] = useState('00:00.000');
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -338,6 +340,43 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     );
   };
 
+  // Add video control functions
+  const rewindFiveSeconds = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
+    }
+  };
+
+  const changePlaybackRate = (rate: number) => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+      setPlaybackRate(rate);
+    }
+  };
+
+  // Add video loading event handlers
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      const handleLoadStart = () => setIsVideoLoading(true);
+      const handleCanPlay = () => setIsVideoLoading(false);
+      const handleWaiting = () => setIsVideoLoading(true);
+      const handlePlaying = () => setIsVideoLoading(false);
+      
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('waiting', handleWaiting);
+      video.addEventListener('playing', handlePlaying);
+      
+      return () => {
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('waiting', handleWaiting);
+        video.removeEventListener('playing', handlePlaying);
+      };
+    }
+  }, []);
+
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
   }
@@ -346,20 +385,54 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
       {/* Video Player Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-        <video
-          ref={videoRef}
-          src={currentDialogue.videoUrl}
-          controls
-          className="w-full"
-          onTimeUpdate={handleVideoTimeUpdate}
-        />
-        <div className="relative w-full h-1 bg-gray-200 dark:bg-gray-700 mt-2">
-          <div 
-            className="absolute h-full bg-blue-500"
-            style={{ 
-              width: `${(videoRef.current?.currentTime || 0) / (videoRef.current?.duration || 1) * 100}%` 
-            }}
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={currentDialogue.videoUrl}
+            className="w-full"
           />
+          {isVideoLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                <span className="text-sm text-white">Loading video...</span>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Video Controls */}
+        <div className="p-3 flex items-center justify-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={rewindFiveSeconds}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              -5s
+            </button>
+            <button
+              onClick={togglePlayPause}
+              className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-700 dark:text-gray-300">Speed:</span>
+            {[0.5, 0.75, 1].map((rate) => (
+              <button
+                key={rate}
+                onClick={() => changePlaybackRate(rate)}
+                className={`px-2 py-1 rounded ${
+                  playbackRate === rate
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                {rate}x
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -382,22 +455,6 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
         }}
       >
         <div className="p-3 sm:p-5 space-y-3 sm:space-y-4">
-          {/* Time Controls */}
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">Start:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {timeStart || '00:00.000'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">End:</span>
-              <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                {timeEnd || '00:00.000'}
-              </p>
-            </div>
-          </div>
-
           {/* Character Input */}
           <div>
             <label htmlFor="character" className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
@@ -440,36 +497,6 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
           </div>
         </div>
       </motion.div>
-
-      {/* Video Controls - Moved to bottom */}
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700">
-        <button
-          onClick={togglePlayPause}
-          className="w-12 h-12 flex items-center justify-center bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-          aria-label={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? (
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="currentColor" 
-              className="w-7 h-7"
-            >
-              <rect x="6" y="4" width="4" height="16" />
-              <rect x="14" y="4" width="4" height="16" />
-            </svg>
-          ) : (
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="currentColor" 
-              className="w-7 h-7 ml-1"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </button>
-      </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (

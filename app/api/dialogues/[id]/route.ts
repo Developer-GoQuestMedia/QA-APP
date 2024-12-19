@@ -216,19 +216,28 @@ export async function PATCH(
     const data = await request.json();
     const dialogueId = params.id;
 
+    // Validate required fields
+    if (!data.dialogue || !data.projectId) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
+    let dialogueCollection = 'dialogues'; // default collection
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
     
     for (const project of projects) {
       if (project.dialogue_collection) {
+        console.log('Checking collection:', project.dialogue_collection);
         const tempDialogue = await db.collection(project.dialogue_collection).findOne({
           _id: new ObjectId(dialogueId)
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
+          console.log('Found dialogue in collection:', dialogueCollection);
           break;
         }
       }
@@ -259,31 +268,40 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
     }
 
+    // Prepare update data
+    const updateData = {
+      dialogue: data.dialogue,
+      character: data.character,
+      status: data.status,
+      timeStart: data.timeStart,
+      timeEnd: data.timeEnd,
+      index: data.index,
+      updatedAt: new Date(),
+      updatedBy: session.user.email
+    };
+
     // Update the dialogue in the correct collection
-    const result = await db.collection('dialogues').updateOne(
+    const result = await db.collection(dialogueCollection).findOneAndUpdate(
       { _id: new ObjectId(dialogueId) },
-      { 
-        $set: {
-          ...data,
-          updatedAt: new Date(),
-          updatedBy: session.user.email
-        } 
-      }
+      { $set: updateData },
+      { returnDocument: 'after' }
     );
 
-    if (result.modifiedCount === 0) {
+    if (!result) {
       return NextResponse.json(
         { error: 'Failed to update dialogue' },
         { status: 400 }
       );
     }
 
-    // Return the updated dialogue
-    const updatedDialogue = await db.collection('dialogues').findOne({
-      _id: new ObjectId(dialogueId)
-    });
+    // Transform ObjectIds to strings for response
+    const serializedDialogue = {
+      ...result,
+      _id: result._id.toString(),
+      projectId: result.projectId.toString()
+    };
 
-    return NextResponse.json(updatedDialogue);
+    return NextResponse.json(serializedDialogue);
   } catch (error) {
     console.error('Error updating dialogue:', error);
     return NextResponse.json(

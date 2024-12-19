@@ -10,6 +10,7 @@ interface Dialogue {
   timeEnd: string
   character: string
   videoUrl: string
+  projectId?: string
   dialogue: {
     original: string
     translated: string
@@ -107,6 +108,11 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     
     try {
       setNetworkStatus('saving');
+      setIsSaving(true);
+      
+      if (currentDialogue.projectId !== projectId) {
+        throw new Error('Project ID mismatch');
+      }
       
       const updateData = {
         dialogue: {
@@ -119,13 +125,20 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
         timeStart: timeStart || currentDialogue.timeStart,
         timeEnd: timeEnd || currentDialogue.timeEnd,
         index: currentDialogue.index,
+        projectId
       };
       
-      const { data: responseData } = await axios.patch(`/api/dialogues/${currentDialogue._id}`, updateData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      console.log('Save attempt:', {
+        dialogueId: currentDialogue._id,
+        currentProjectId: projectId,
+        dialogueProjectId: currentDialogue.projectId,
+        updateData
       });
+      
+      const { data: responseData } = await axios.patch(
+        `/api/dialogues/${currentDialogue._id}`,
+        updateData
+      );
       
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
@@ -151,10 +164,30 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
         setCurrentDialogueIndex(prev => prev + 1);
       }
     } catch (error) {
+      console.error('Save error details:', {
+        error,
+        dialogue: currentDialogue,
+        projectContext: {
+          componentProjectId: projectId,
+          dialogueProjectId: currentDialogue.projectId,
+          dialogueId: currentDialogue._id
+        },
+        requestData: {
+          character,
+          pendingOriginalText,
+          timeStart,
+          timeEnd,
+        }
+      });
+      
       setNetworkStatus('error');
-      console.error('Error saving transcription:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save transcription');
-      setTimeout(() => setError(''), 3000);
+      setError(
+        error instanceof Error 
+          ? `Save failed: ${error.message}` 
+          : 'Failed to save transcription'
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 

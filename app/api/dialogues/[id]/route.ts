@@ -205,10 +205,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  console.log('=== PATCH /api/dialogues/[id] Debug ===');
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session) {
+      console.log('Authentication failed: No session');
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
@@ -216,15 +218,27 @@ export async function PATCH(
     const data = await request.json();
     const dialogueId = params.id;
 
+    console.log('Request data:', {
+      dialogueId,
+      data,
+      userEmail: session.user?.email
+    });
+
     // Validate required fields
     if (!data.dialogue || !data.projectId) {
+      console.log('Validation failed:', { 
+        hasDialogue: !!data.dialogue, 
+        hasProjectId: !!data.projectId 
+      });
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // First try to find the dialogue in any collection by checking project's dialogue_collection
+    // First try to find the dialogue
     let dialogue = null;
-    let dialogueCollection = 'dialogues'; // default collection
+    let dialogueCollection = 'dialogues';
 
+    console.log('Searching for dialogue in collections...');
+    
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
     
@@ -248,9 +262,11 @@ export async function PATCH(
       dialogue = await db.collection('dialogues').findOne({
         _id: new ObjectId(dialogueId)
       });
+      console.log('Dialogue search result:', { found: !!dialogue });
     }
 
     if (!dialogue) {
+      console.log('Dialogue not found:', dialogueId);
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 });
     }
 
@@ -262,6 +278,11 @@ export async function PATCH(
           username: session.user.username
         }
       }
+    });
+
+    console.log('Project access check:', {
+      projectFound: !!project,
+      username: session.user.username
     });
 
     if (!project) {

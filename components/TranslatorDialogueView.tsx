@@ -92,22 +92,28 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
       
       const updateData = {
         dialogue: {
-          original: currentDialogue.dialogue.original,
-          translated: pendingTranslatedText,
-          adapted: pendingAdaptedText,
+          original: currentDialogue.dialogue.original || '',
+          translated: pendingTranslatedText || '',
+          adapted: pendingAdaptedText || '',
         },
-        character: currentDialogue.character,
+        character: currentDialogue.character || '',
         status: 'translated',
-        timeStart: currentDialogue.timeStart,
-        timeEnd: currentDialogue.timeEnd,
+        timeStart: currentDialogue.timeStart || '',
+        timeEnd: currentDialogue.timeEnd || '',
         index: currentDialogue.index,
+        projectId
       };
       
-      const { data: responseData } = await axios.patch(`/api/dialogues/${currentDialogue._id}`, updateData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      console.log('Translation save attempt:', {
+        dialogueId: currentDialogue._id,
+        projectId,
+        updateData
       });
+      
+      const { data: responseData } = await axios.patch(
+        `/api/dialogues/${currentDialogue._id}`,
+        updateData
+      );
       
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
@@ -133,7 +139,15 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         setCurrentDialogueIndex(prev => prev + 1);
       }
     } catch (error) {
-      console.error('Error saving translation:', error);
+      console.error('Translation save error:', {
+        error,
+        dialogue: currentDialogue,
+        projectId,
+        requestData: {
+          translated: pendingTranslatedText,
+          adapted: pendingAdaptedText
+        }
+      });
       setError(error instanceof Error ? error.message : 'Failed to save translation');
       setTimeout(() => setError(''), 3000);
     } finally {

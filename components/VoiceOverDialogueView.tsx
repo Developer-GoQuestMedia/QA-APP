@@ -1,3 +1,5 @@
+// VoiceOverDialougeView.tsx
+
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
@@ -147,7 +149,8 @@ const RecordingControls = React.memo(({
   onReRecord,
   localAudioBlob,
   isProcessing,
-  countdown
+  countdown,
+  isWaitingForVoice
 }: {
   isRecording: boolean,
   isPlayingRecording: boolean,
@@ -161,7 +164,8 @@ const RecordingControls = React.memo(({
   onReRecord: () => void,
   localAudioBlob: Blob | null,
   isProcessing: boolean,
-  countdown: number
+  countdown: number,
+  isWaitingForVoice: boolean
 }) => {
   const handleStartRecording = async () => {
     if (isProcessing) return;
@@ -212,6 +216,10 @@ const RecordingControls = React.memo(({
                 <span className="flex items-center">
                   <span className="text-lg font-bold mr-2">{countdown}</span>
                   Starting...
+                </span>
+              ) : isWaitingForVoice ? (
+                <span className="flex items-center">
+                  <span className="animate-pulse">Waiting for voice...</span>
                 </span>
               ) : isRecording ? (
                 'Stop Recording'
@@ -450,6 +458,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     setPlayingState,
     isProcessing,
     countdown,
+    isWaitingForVoice,
     audioStream
   } = useAudioRecording(currentDialogue);
 
@@ -936,6 +945,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         localAudioBlob={localAudioBlob}
         isProcessing={isProcessing}
         countdown={countdown}
+        isWaitingForVoice={isWaitingForVoice}
       />
 
       <ConfirmationModal 

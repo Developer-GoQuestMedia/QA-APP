@@ -1,3 +1,5 @@
+//useAudioRecording.ts
+
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { type Dialogue } from '../types/dialogue';
 import { createWorker, createWavBlob, type AudioData } from '../utils/audio';
@@ -23,7 +25,8 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
   // Add new state for processing and countdown
   const [processingState, setProcessingState] = useState({
     isProcessing: false,
-    countdown: 0
+    countdown: 0,
+    isWaitingForVoice: false
   });
 
   // Group related states to reduce re-renders
@@ -193,6 +196,8 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       startCountdown();
       await new Promise(resolve => setTimeout(resolve, 3000));
 
+      setProcessingState(prev => ({ ...prev, isWaitingForVoice: true }));
+
       if (!window.AudioContext) {
         throw new Error('AudioContext not supported');
       }
@@ -212,9 +217,32 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
         sampleRate: AUDIO_CONFIG.sampleRate,
         latencyHint: AUDIO_CONFIG.latencyHint
       });
+
+      // Create analyzer for voice detection
+      const analyser = refs.current.audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
       
       const sourceNode = refs.current.audioContext.createMediaStreamSource(stream);
+      sourceNode.connect(analyser);
       refs.current.sourceNode = sourceNode;
+
+      // Wait for voice input
+      await new Promise((resolve) => {
+        const checkAudio = () => {
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((acc, value) => acc + value, 0) / bufferLength;
+          
+          if (average > 20) { // Threshold for voice detection
+            setProcessingState(prev => ({ ...prev, isWaitingForVoice: false }));
+            resolve(true);
+          } else {
+            requestAnimationFrame(checkAudio);
+          }
+        };
+        checkAudio();
+      });
 
       const workletNode = await createWorker(refs.current.audioContext);
       refs.current.workletNode = workletNode;
@@ -273,7 +301,8 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
         }
       });
 
-      // Connect nodes
+      // Connect nodes for recording
+      sourceNode.disconnect(); // Disconnect from analyzer
       sourceNode.connect(workletNode);
       workletNode.connect(refs.current.audioContext.destination);
 
@@ -301,7 +330,11 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       cleanup();
       throw error;
     } finally {
-      setProcessingState(prev => ({ ...prev, isProcessing: false }));
+      setProcessingState(prev => ({ 
+        ...prev, 
+        isProcessing: false,
+        isWaitingForVoice: false 
+      }));
     }
   }, [cleanup, stopRecording, startCountdown]);
 
@@ -385,6 +418,7 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
     isPlayingRecording: recordingState.isPlaying,
     isProcessing: processingState.isProcessing,
     countdown: processingState.countdown,
+    isWaitingForVoice: processingState.isWaitingForVoice,
     startRecording,
     stopRecording,
     handlePlayRecording,

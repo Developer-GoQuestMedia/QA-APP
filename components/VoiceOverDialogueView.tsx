@@ -172,6 +172,15 @@ const RecordingControls = React.memo(({
   const handleStartRecording = async () => {
     if (isProcessing) return;
     
+    console.log('Start recording clicked', {
+      isProcessing,
+      isRecording,
+      hasExistingRecording,
+      hasLocalBlob: !!localAudioBlob,
+      countdown,
+      isWaitingForVoice
+    });
+    
     try {
       await startRecording();
     } catch (error) {
@@ -205,7 +214,6 @@ const RecordingControls = React.memo(({
 
           {(!hasExistingRecording || isRecording || localAudioBlob) && (
             <button
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
               className={`px-6 py-2 rounded-full ${
                 isRecording
                   ? 'bg-red-500 hover:bg-red-600'
@@ -213,6 +221,17 @@ const RecordingControls = React.memo(({
               } text-white transition-colors`}
               aria-label={isRecording ? 'Stop recording' : 'Start recording'}
               disabled={isProcessing}
+              onClick={() => {
+                console.log('Recording button clicked', {
+                  isRecording,
+                  isProcessing,
+                  hasExistingRecording,
+                  localAudioBlob,
+                  countdown,
+                  isWaitingForVoice
+                });
+                isRecording ? handleStopRecording() : handleStartRecording();
+              }}
             >
               {isProcessing && countdown > 0 ? (
                 <span className="flex items-center">

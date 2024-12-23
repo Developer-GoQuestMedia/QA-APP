@@ -5,6 +5,8 @@ import { type Dialogue } from '../types/dialogue'
 import { formatTime, getNumberValue, calculateDuration } from '../utils/formatters'
 import { useAudioRecording } from '../hooks/useAudioRecording'
 import axios from 'axios'
+import AudioVisualizer from './AudioVisualizer'
+import RecordingTimer from './RecordingTimer'
 
 // Add new type for recording status
 type RecordingStatus = 'available' | 'unavailable' | 'checking';
@@ -143,11 +145,13 @@ const RecordingControls = React.memo(({
   currentIndex,
   totalCount,
   onReRecord,
-  localAudioBlob
+  localAudioBlob,
+  isProcessing,
+  countdown
 }: {
   isRecording: boolean,
   isPlayingRecording: boolean,
-  startRecording: () => void,
+  startRecording: () => Promise<void>,
   stopRecording: () => void,
   handlePlayRecording: () => void,
   hasRecording: boolean,
@@ -155,9 +159,13 @@ const RecordingControls = React.memo(({
   currentIndex: number,
   totalCount: number,
   onReRecord: () => void,
-  localAudioBlob: Blob | null
+  localAudioBlob: Blob | null,
+  isProcessing: boolean,
+  countdown: number
 }) => {
   const handleStartRecording = async () => {
+    if (isProcessing) return;
+    
     try {
       await startRecording();
     } catch (error) {
@@ -183,6 +191,7 @@ const RecordingControls = React.memo(({
               className="px-6 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-colors"
               aria-label="Re-record audio"
               title="Record a new version to replace existing audio"
+              disabled={isProcessing}
             >
               Re-Record
             </button>
@@ -197,8 +206,18 @@ const RecordingControls = React.memo(({
                   : 'bg-blue-500 hover:bg-blue-600'
               } text-white transition-colors`}
               aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+              disabled={isProcessing}
             >
-              {isRecording ? 'Stop Recording' : 'Start Recording'}
+              {isProcessing && countdown > 0 ? (
+                <span className="flex items-center">
+                  <span className="text-lg font-bold mr-2">{countdown}</span>
+                  Starting...
+                </span>
+              ) : isRecording ? (
+                'Stop Recording'
+              ) : (
+                'Start Recording'
+              )}
             </button>
           )}
 
@@ -212,6 +231,7 @@ const RecordingControls = React.memo(({
               } text-white transition-colors`}
               aria-label={isPlayingRecording ? 'Stop playing' : 'Play recorded audio'}
               title={isPlayingRecording ? 'Stop current playback' : 'Play recorded audio'}
+              disabled={isProcessing}
             >
               {isPlayingRecording ? 'Stop Playing' : 'Play Recorded Audio'}
             </button>
@@ -427,7 +447,10 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     startRecording,
     stopRecording,
     handlePlayRecording,
-    setPlayingState
+    setPlayingState,
+    isProcessing,
+    countdown,
+    audioStream
   } = useAudioRecording(currentDialogue);
 
   // Add audio player ref for remote audio
@@ -823,6 +846,27 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [currentDialogue?._id, currentDialogueIndex, dialoguesList.length, maxDuration, handleNext, handlePrevious]);
 
+  // Add cleanup effect for dialogue changes
+  useEffect(() => {
+    // Clean up audio when switching dialogues
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current = null;
+    }
+    
+    // Reset states
+    setIsPlaying(false);
+    setLocalAudioBlob(null);
+    
+    return () => {
+      // Cleanup on unmount
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current = null;
+      }
+    };
+  }, [currentDialogue?._id]);
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">
       <CharacterInfo 
@@ -857,6 +901,19 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
           <p className="text-white">{currentDialogue.dialogue.adapted}</p>
         </div>
 
+        {isRecording && audioStream && (
+          <div className="mt-4 space-y-4">
+            <AudioVisualizer
+              audioStream={audioStream}
+              maxDuration={maxDuration}
+            />
+            <RecordingTimer
+              isRecording={isRecording}
+              maxDuration={maxDuration}
+            />
+          </div>
+        )}
+
         <div className="flex flex-col items-center justify-center text-sm text-gray-400 space-y-2 mt-4">
           <span>Recording duration limit: {formatTime(maxDuration)}</span>
           {isRecording && (
@@ -877,6 +934,8 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         totalCount={dialoguesList.length}
         onReRecord={handleReRecord}
         localAudioBlob={localAudioBlob}
+        isProcessing={isProcessing}
+        countdown={countdown}
       />
 
       <ConfirmationModal 

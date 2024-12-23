@@ -20,6 +20,12 @@ const logEvent = (message: string, data?: any) => {
 };
 
 export const useAudioRecording = (currentDialogue: Dialogue) => {
+  // Add new state for processing and countdown
+  const [processingState, setProcessingState] = useState({
+    isProcessing: false,
+    countdown: 0
+  });
+
   // Group related states to reduce re-renders
   const [recordingState, setRecordingState] = useState({
     isRecording: false,
@@ -43,7 +49,9 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
     maxDuration: 0,
     stream: null as MediaStream | null,
     cleanupInProgress: false,
-    stoppingInProgress: false
+    stoppingInProgress: false,
+    countdownInterval: null as NodeJS.Timeout | null,
+    maxDurationTimeout: null as NodeJS.Timeout | null
   });
 
   // Memoize parseTime function
@@ -156,11 +164,34 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
     }
   }, [audioState.chunks.length, cleanup]);
 
+  // Add countdown functionality
+  const startCountdown = useCallback(() => {
+    setProcessingState(prev => ({ ...prev, countdown: 3 }));
+    
+    refs.current.countdownInterval = setInterval(() => {
+      setProcessingState(prev => {
+        if (prev.countdown <= 1) {
+          if (refs.current.countdownInterval) {
+            clearInterval(refs.current.countdownInterval);
+          }
+          return { ...prev, countdown: 0 };
+        }
+        return { ...prev, countdown: prev.countdown - 1 };
+      });
+    }, 1000);
+  }, []);
+
   const startRecording = useCallback(async () => {
+    if (processingState.isProcessing) return;
+    
     try {
-      logEvent('Starting recording');
+      setProcessingState(prev => ({ ...prev, isProcessing: true }));
       cleanup();
       setAudioState(prev => ({ ...prev, chunks: [], blob: null }));
+
+      // Start countdown
+      startCountdown();
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       if (!window.AudioContext) {
         throw new Error('AudioContext not supported');
@@ -188,34 +219,22 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       const workletNode = await createWorker(refs.current.audioContext);
       refs.current.workletNode = workletNode;
 
-      // Create a ref to store chunks during recording
+      // Set up recording chunks
       const recordingChunks = [] as AudioData[];
 
-      // Set up event listeners
       workletNode.addEventListener('audiochunk', ((event: CustomEvent<AudioData>) => {
         const chunk = event.detail;
         recordingChunks.push(chunk);
         setAudioState(prev => ({ ...prev, chunks: [...prev.chunks, chunk] }));
-        logEvent('Received audio chunk', { 
-          channels: chunk.audioData.length,
-          samplesPerChannel: chunk.audioData[0].length,
-          peakLevel: chunk.peakLevel
-        });
       }) as EventListener);
 
       workletNode.addEventListener('stopped', () => {
         if (recordingChunks.length === 0) {
-          logEvent('No recorded chunks available');
           cleanup();
           return;
         }
 
         try {
-          logEvent('Processing audio chunks', { 
-            chunkCount: recordingChunks.length,
-            firstChunkSize: recordingChunks[0]?.audioData?.[0]?.length
-          });
-
           const combinedAudioData = recordingChunks.reduce((acc: Float32Array[], chunk) => {
             if (!chunk.audioData?.length) return acc;
             
@@ -244,18 +263,11 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
           }
 
           const wavBlob = createWavBlob(combinedAudioData, refs.current.audioContext.sampleRate);
-          logEvent('WAV blob created', { 
-            size: wavBlob.size,
-            channels: combinedAudioData.length,
-            samplesPerChannel: combinedAudioData[0].length
-          });
           setAudioState(prev => ({ ...prev, blob: wavBlob, chunks: [] }));
         } catch (error) {
           console.error('Error processing audio:', error);
-          logEvent('Audio processing failed', { error });
           throw error;
         } finally {
-          // Clear recording chunks
           recordingChunks.length = 0;
           cleanup();
         }
@@ -267,6 +279,12 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
 
       setRecordingState(prev => ({ ...prev, isRecording: true, duration: 0 }));
       
+      // Set up max duration timeout
+      refs.current.maxDurationTimeout = setTimeout(() => {
+        stopRecording();
+      }, refs.current.maxDuration * 1000);
+
+      // Set up duration timer
       refs.current.recordingTimer = setInterval(() => {
         setRecordingState(prev => {
           const newDuration = prev.duration + 0.1;
@@ -278,22 +296,20 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
         });
       }, 100);
 
-      logEvent('Recording started');
     } catch (error) {
       console.error('Recording failed:', error);
       cleanup();
       throw error;
+    } finally {
+      setProcessingState(prev => ({ ...prev, isProcessing: false }));
     }
-  }, [cleanup, stopRecording]);
+  }, [cleanup, stopRecording, startCountdown]);
 
   const handlePlayRecording = useCallback(() => {
-    if (!audioState.blob) {
-      logEvent('Play recording attempted but no blob available');
-      return;
-    }
+    if (!audioState.blob) return;
 
+    // If already playing, stop playback
     if (recordingState.isPlaying) {
-      logEvent('Stopping recording playback');
       if (refs.current.audioPlayer) {
         refs.current.audioPlayer.pause();
         refs.current.audioPlayer = null;
@@ -302,64 +318,44 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       return;
     }
 
-    logEvent('Starting recording playback', {
-      blobSize: audioState.blob.size,
-      blobType: audioState.blob.type,
-      hasExistingUrl: !!audioState.blobUrl
-    });
+    try {
+      // Create new audio element and URL
+      const audioUrl = URL.createObjectURL(audioState.blob);
+      const audio = new Audio(audioUrl);
+      refs.current.audioPlayer = audio;
 
-    const audioUrl = URL.createObjectURL(audioState.blob);
-    setAudioState(prev => ({ ...prev, blobUrl: audioUrl }));
-
-    const audio = new Audio(audioUrl);
-    refs.current.audioPlayer = audio;
-
-    audio.addEventListener('loadstart', () => {
-      logEvent('Audio loading started');
-    });
-
-    audio.addEventListener('canplay', () => {
-      logEvent('Audio ready to play', {
-        duration: audio.duration,
-        sampleRate: refs.current.audioContext?.sampleRate
+      // Set up event listeners
+      audio.addEventListener('ended', () => {
+        setRecordingState(prev => ({ ...prev, isPlaying: false }));
+        refs.current.audioPlayer = null;
+        URL.revokeObjectURL(audioUrl);
       });
-    });
 
-    audio.addEventListener('play', () => {
-      logEvent('Audio playback started');
-    });
-
-    audio.addEventListener('pause', () => {
-      logEvent('Audio playback paused');
-    });
-
-    audio.addEventListener('ended', () => {
-      logEvent('Audio playback ended');
-      setRecordingState(prev => ({ ...prev, isPlaying: false }));
-      URL.revokeObjectURL(audioUrl);
-      setAudioState(prev => ({ ...prev, blobUrl: null }));
-    });
-
-    audio.addEventListener('error', (e) => {
-      const error = e.currentTarget as HTMLAudioElement;
-      logEvent('Audio playback error', {
-        error: error.error,
-        networkState: error.networkState,
-        readyState: error.readyState
+      audio.addEventListener('error', () => {
+        console.error('Audio playback error');
+        setRecordingState(prev => ({ ...prev, isPlaying: false }));
+        refs.current.audioPlayer = null;
+        URL.revokeObjectURL(audioUrl);
       });
-      setRecordingState(prev => ({ ...prev, isPlaying: false }));
-      URL.revokeObjectURL(audioUrl);
-      setAudioState(prev => ({ ...prev, blobUrl: null }));
-    });
 
-    audio.play().catch(error => {
-      logEvent('Failed to start audio playback', { error: error.message });
+      // Start playback
+      audio.play()
+        .then(() => {
+          setRecordingState(prev => ({ ...prev, isPlaying: true }));
+        })
+        .catch(error => {
+          console.error('Failed to play audio:', error);
+          setRecordingState(prev => ({ ...prev, isPlaying: false }));
+          refs.current.audioPlayer = null;
+          URL.revokeObjectURL(audioUrl);
+        });
+    } catch (error) {
+      console.error('Error setting up audio playback:', error);
       setRecordingState(prev => ({ ...prev, isPlaying: false }));
-      URL.revokeObjectURL(audioUrl);
-      setAudioState(prev => ({ ...prev, blobUrl: null }));
-    });
-
-    setRecordingState(prev => ({ ...prev, isPlaying: true }));
+      if (refs.current.audioPlayer) {
+        refs.current.audioPlayer = null;
+      }
+    }
   }, [audioState.blob, recordingState.isPlaying]);
 
   // Reset state when dialogue changes
@@ -370,15 +366,30 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
     setAudioState({ blob: null, blobUrl: null, chunks: [] });
   }, [currentDialogue?._id, cleanup]);
 
+  // Add cleanup for countdown interval
+  useEffect(() => {
+    return () => {
+      if (refs.current.countdownInterval) {
+        clearInterval(refs.current.countdownInterval);
+      }
+      if (refs.current.maxDurationTimeout) {
+        clearTimeout(refs.current.maxDurationTimeout);
+      }
+    };
+  }, []);
+
   return {
     isRecording: recordingState.isRecording,
     recordingDuration: recordingState.duration,
     audioBlob: audioState.blob,
     isPlayingRecording: recordingState.isPlaying,
+    isProcessing: processingState.isProcessing,
+    countdown: processingState.countdown,
     startRecording,
     stopRecording,
     handlePlayRecording,
     hasRecording: !!audioState.blob || !!currentDialogue?.voiceOverUrl,
-    setPlayingState: (isPlaying: boolean) => setRecordingState(prev => ({ ...prev, isPlaying }))
+    setPlayingState: (isPlaying: boolean) => setRecordingState(prev => ({ ...prev, isPlaying })),
+    audioStream: refs.current.stream
   };
 }; 

@@ -351,24 +351,27 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       return;
     }
 
+    let audioUrl: string | null = null;
     try {
       // Create new audio element and URL
-      const audioUrl = URL.createObjectURL(audioState.blob);
+      audioUrl = URL.createObjectURL(audioState.blob);
       const audio = new Audio(audioUrl);
       refs.current.audioPlayer = audio;
 
       // Set up event listeners
-      audio.addEventListener('ended', () => {
+      const cleanup = () => {
         setRecordingState(prev => ({ ...prev, isPlaying: false }));
         refs.current.audioPlayer = null;
-        URL.revokeObjectURL(audioUrl);
-      });
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          audioUrl = null;
+        }
+      };
 
+      audio.addEventListener('ended', cleanup);
       audio.addEventListener('error', () => {
         console.error('Audio playback error');
-        setRecordingState(prev => ({ ...prev, isPlaying: false }));
-        refs.current.audioPlayer = null;
-        URL.revokeObjectURL(audioUrl);
+        cleanup();
       });
 
       // Start playback
@@ -378,15 +381,16 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
         })
         .catch(error => {
           console.error('Failed to play audio:', error);
-          setRecordingState(prev => ({ ...prev, isPlaying: false }));
-          refs.current.audioPlayer = null;
-          URL.revokeObjectURL(audioUrl);
+          cleanup();
         });
     } catch (error) {
       console.error('Error setting up audio playback:', error);
       setRecordingState(prev => ({ ...prev, isPlaying: false }));
       if (refs.current.audioPlayer) {
         refs.current.audioPlayer = null;
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
       }
     }
   }, [audioState.blob, recordingState.isPlaying]);

@@ -106,11 +106,27 @@ export async function PUT(
     const updates = await request.json()
     console.log('Requested updates:', updates)
 
+    // Handle voice-over deletion
+    if (updates.deleteVoiceOver) {
+      console.log('Deleting voice-over for dialogue:', params.id);
+      updates.voiceOverUrl = null;
+      updates.status = 'pending';
+    }
+    // Validate voiceOverUrl if status is voice-over-added
+    else if (updates.status === 'voice-over-added' && !updates.voiceOverUrl) {
+      console.error('Missing voiceOverUrl for voice-over-added status');
+      return NextResponse.json(
+        { error: 'Voice-over URL is required when status is voice-over-added' },
+        { status: 400 }
+      );
+    }
+
     console.log('Connecting to database...')
     const { db } = await connectToDatabase()
 
     // First try to find the dialogue in any collection by checking project's dialogue_collection
     let dialogue = null;
+    let dialogueCollection = 'dialogues';
 
     // Try to find the dialogue in any collection by checking all projects
     const projects = await db.collection('projects').find().toArray();
@@ -122,6 +138,7 @@ export async function PUT(
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
+          dialogueCollection = project.dialogue_collection;
           break;
         }
       }
@@ -145,7 +162,7 @@ export async function PUT(
       'assignedTo': {
         $elemMatch: {
           username: session.user.username,
-          role: 'transcriber'
+          role: { $in: ['transcriber', 'voice-over'] }
         }
       }
     })
@@ -173,16 +190,27 @@ export async function PUT(
     delete updateData.createdBy
 
     console.log('Applying updates:', updateData)
-    const result = await db.collection('dialogues').findOneAndUpdate(
+    const result = await db.collection(dialogueCollection).findOneAndUpdate(
       { _id: new ObjectId(params.id) },
       { $set: updateData },
       { returnDocument: 'after' }
     )
 
     if (!result) {
-      console.error('Failed to update dialogue:', params.id)
+      console.error('Failed to update dialogue:', {
+        id: params.id,
+        collection: dialogueCollection,
+        updateData
+      });
       return NextResponse.json({ error: 'Failed to update dialogue' }, { status: 500 })
     }
+
+    console.log('Update successful:', {
+      id: params.id,
+      collection: dialogueCollection,
+      status: result.status,
+      voiceOverUrl: result.voiceOverUrl
+    });
 
     // Transform ObjectIds to strings
     const serializedDialogue = {

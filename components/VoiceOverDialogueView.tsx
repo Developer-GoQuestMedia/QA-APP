@@ -147,6 +147,7 @@ const RecordingControls = React.memo(({
   currentIndex,
   totalCount,
   onReRecord,
+  onDelete,
   localAudioBlob,
   isProcessing,
   countdown,
@@ -162,6 +163,7 @@ const RecordingControls = React.memo(({
   currentIndex: number,
   totalCount: number,
   onReRecord: () => void,
+  onDelete: () => void,
   localAudioBlob: Blob | null,
   isProcessing: boolean,
   countdown: number,
@@ -552,23 +554,76 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [currentDialogueIndex, hasChanges]);
 
-  const handleDiscardChanges = useCallback(() => {
-    setShowConfirmation(false);
-    if (currentDialogue) {
-      setLocalAudioBlob(null);
-      if (pendingNavigationIndex !== null) {
-        setCurrentDialogueIndex(pendingNavigationIndex);
-        setPendingNavigationIndex(null);
-      } else if (confirmationType === 'discard') {
-        // Start new recording after discarding
-        startRecording().catch(error => {
-          console.error('Failed to start recording:', error);
-          setError('Failed to start recording');
-        });
+  const handleDeleteRecording = async () => {
+    if (!currentDialogue) return;
+
+    try {
+      setIsSaving(true);
+      logEvent('Deleting voice-over recording', { dialogueId: currentDialogue._id });
+
+      const updateData = {
+        dialogue: currentDialogue.dialogue,
+        character: currentDialogue.character,
+        timeStart: currentDialogue.timeStart,
+        timeEnd: currentDialogue.timeEnd,
+        index: currentDialogue.index,
+        deleteVoiceOver: true
+      };
+
+      const response = await axios.put(`/api/dialogues/${currentDialogue._id}`, updateData);
+
+      if (!response.data || !response.data._id) {
+        throw new Error('Failed to delete recording: Invalid response');
       }
+
+      // Update local state
+      const updatedDialogues = dialoguesList.map(dialogue => 
+        dialogue._id === currentDialogue._id 
+          ? { ...dialogue, voiceOverUrl: undefined, status: 'pending' }
+          : dialogue
+      );
+      setDialoguesList(updatedDialogues);
+
+      // Clear local audio blob
+      setLocalAudioBlob(null);
+
+      // Show success message
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 3000);
+
+      // Invalidate queries to refetch data
+      await queryClient.invalidateQueries({ queryKey: ['dialogues', projectId] });
+
+      logEvent('Voice-over recording deleted successfully', { dialogueId: currentDialogue._id });
+    } catch (error) {
+      console.error('Error deleting recording:', error);
+      setError('Failed to delete recording');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsSaving(false);
     }
-    setNavigationDirection(undefined);
-  }, [currentDialogue, pendingNavigationIndex, confirmationType, startRecording, setError]);
+  };
+
+  const handleDiscardChanges = async () => {
+    try {
+      if (confirmationType === 'navigation') {
+        if (pendingNavigationIndex !== null) {
+          setCurrentDialogueIndex(pendingNavigationIndex);
+          setPendingNavigationIndex(null);
+        }
+      } else {
+        await handleDeleteRecording();
+      }
+
+      // Close confirmation modal
+      setShowConfirmation(false);
+      setNavigationDirection(undefined);
+    } catch (error) {
+      console.error('Error discarding changes:', error);
+      setError('Failed to delete recording');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
 
   // Video control functions
   const togglePlayPause = useCallback(() => {
@@ -615,7 +670,8 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       setIsSaving(true);
       logEvent('Starting save process', {
         dialogueId: currentDialogue._id,
-        hasNewRecording: !!localAudioBlob
+        hasNewRecording: !!localAudioBlob,
+        hasExistingRecording: !!currentDialogue.voiceOverUrl
       });
       
       let voiceOverUrl = currentDialogue.voiceOverUrl;
@@ -634,24 +690,41 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         formData.append('projectId', projectId);
         
         logEvent('Uploading audio file');
-        const uploadResponse = await axios.post('/api/upload-voice-over', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        
-        if (!uploadResponse.data.ok) {
-          const errorData = await uploadResponse.data.json().catch(() => ({}));
-          logEvent('Upload failed', {
-            status: uploadResponse.status,
-            error: errorData
+        try {
+          const uploadResponse = await axios.post('/api/upload-voice-over', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            validateStatus: function (status) {
+              return status < 500; // Resolve only if the status code is less than 500
+            }
           });
-          throw new Error('Failed to upload voice-over recording');
+          
+          if (!uploadResponse.data.url) {
+            logEvent('Upload failed', {
+              status: uploadResponse.status,
+              error: uploadResponse.data.error || 'No URL returned'
+            });
+            throw new Error(uploadResponse.data.error || 'Failed to upload voice-over recording');
+          }
+          
+          const { url } = uploadResponse.data;
+          voiceOverUrl = url;
+          logEvent('Audio upload successful', { url });
+        } catch (error: unknown) {
+          const uploadError = error as { message: string; response?: { status: number } };
+          logEvent('Upload failed', {
+            error: uploadError.message,
+            status: uploadError.response?.status
+          });
+          throw new Error('Failed to upload voice-over recording: ' + uploadError.message);
         }
-        
-        const { url } = uploadResponse.data;
-        voiceOverUrl = url;
-        logEvent('Audio upload successful', { url });
+      }
+      
+      // Only check for voiceOverUrl if we're not uploading a new recording
+      if (!localAudioBlob && !voiceOverUrl && !currentDialogue.voiceOverUrl) {
+        logEvent('No voice-over URL available', { dialogueId: currentDialogue._id });
+        throw new Error('No voice-over recording available to save');
       }
       
       const updateData = {
@@ -661,55 +734,46 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         timeStart: currentDialogue.timeStart,
         timeEnd: currentDialogue.timeEnd,
         index: currentDialogue.index,
-        voiceOverUrl,
+        voiceOverUrl: voiceOverUrl || currentDialogue.voiceOverUrl,
       };
       
-      logEvent('Updating dialogue metadata', { dialogueId: currentDialogue._id });
-      const response = await axios.put(`/api/dialogues/${currentDialogue._id}`, updateData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      logEvent('Updating dialogue metadata', { 
+        dialogueId: currentDialogue._id,
+        voiceOverUrl: updateData.voiceOverUrl
       });
-
-      const responseData = await response.data;
       
-      if (!response.data.ok) {
+      const response = await axios.put(`/api/dialogues/${currentDialogue._id}`, updateData);
+      
+      if (!response.data || !response.data._id) {
         logEvent('Metadata update failed', {
           status: response.status,
-          error: responseData.error
+          error: response.data?.error || 'No response data'
         });
-        throw new Error(responseData.error || 'Failed to save voice-over');
+        throw new Error(response.data?.error || 'Failed to save voice-over: Invalid response');
       }
-      
-      logEvent('Metadata update successful', {
-        dialogueId: currentDialogue._id,
-        newStatus: 'voice-over-added'
-      });
-      
-      setDialoguesList(prevDialogues => 
-        prevDialogues.map(d => 
-          d._id === currentDialogue._id ? responseData : d
-        )
+
+      // Get fresh copy of dialogues list to avoid race conditions
+      const currentDialogues = [...dialoguesList];
+      const updatedDialogues = currentDialogues.map(dialogue => 
+        dialogue._id === currentDialogue._id ? { ...dialogue, ...response.data } : dialogue
       );
+      setDialoguesList(updatedDialogues);
 
-      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
-        if (!oldData?.data) return oldData;
-        return {
-          ...oldData,
-          data: oldData.data.map((d: Dialogue) => 
-            d._id === currentDialogue._id ? responseData : d
-          )
-        };
-      });
-
-      setShowSaveSuccess(true);
-      setShowConfirmation(false);
+      // Clear local audio blob
       setLocalAudioBlob(null);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
+
+      // Show success message
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 3000);
+
+      // Close confirmation modal if open
+      setShowConfirmation(false);
+
+      // Invalidate queries to refetch data
+      await queryClient.invalidateQueries({ queryKey: ['dialogues', projectId] });
 
       logEvent('Save process completed successfully', {
-        dialogueId: currentDialogue._id,
-        newUrl: voiceOverUrl
+        dialogueId: currentDialogue._id
       });
 
       // Handle navigation after save
@@ -732,7 +796,9 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       const error = err as AppError;
       logEvent('Save process failed', {
         error: error.message,
-        dialogueId: currentDialogue._id
+        dialogueId: currentDialogue._id,
+        hasLocalBlob: !!localAudioBlob,
+        hasExistingUrl: !!currentDialogue.voiceOverUrl
       });
       setError(error.message || 'Failed to save voice-over');
       setTimeout(() => setError(''), 3000);
@@ -942,6 +1008,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         currentIndex={currentDialogueIndex}
         totalCount={dialoguesList.length}
         onReRecord={handleReRecord}
+        onDelete={handleDeleteRecording}
         localAudioBlob={localAudioBlob}
         isProcessing={isProcessing}
         countdown={countdown}

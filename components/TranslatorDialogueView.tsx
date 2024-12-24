@@ -183,7 +183,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
     
     if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
       animControls.start({ 
-        x: -90, 
+        x: -200, 
         opacity: 0,
         transition: { duration: 0.2 }
       }).then(() => {
@@ -192,7 +192,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
       });
     } else if (direction === 'right' && currentDialogueIndex > 0) {
       animControls.start({ 
-        x: 90, 
+        x: 200, 
         opacity: 0,
         transition: { duration: 0.2 }
       }).then(() => {

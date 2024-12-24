@@ -195,7 +195,7 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
 
   // Motion values for swipe animation
   const x = useMotionValue(0)
-  const rotate = useTransform(x, [-100, 100], [-10, 10])
+  const rotate = useTransform(x, [-90, 90], [-10, 10])
   const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
   const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
   const animControls = useAnimation()

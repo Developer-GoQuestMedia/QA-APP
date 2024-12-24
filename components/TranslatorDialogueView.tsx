@@ -170,17 +170,38 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
   }, [currentDialogue])
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (Math.abs(info.offset.x) < 100) {
+    const SWIPE_THRESHOLD = 50;
+    const velocity = Math.abs(info.velocity.x);
+    const offset = Math.abs(info.offset.x);
+
+    if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
       animControls.start({ x: 0, opacity: 1 })
-    } else {
-      const direction = info.offset.x > 0 ? 'right' : 'left'
-      if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
+      return;
+    }
+
+    const direction = info.offset.x > 0 ? 'right' : 'left'
+    
+    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
+      animControls.start({ 
+        x: -90, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
         handleNext();
-      } else if (direction === 'right' && currentDialogueIndex > 0) {
+        animControls.set({ x: 0, opacity: 1 });
+      });
+    } else if (direction === 'right' && currentDialogueIndex > 0) {
+      animControls.start({ 
+        x: 90, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
         handlePrevious();
-      }
+        animControls.set({ x: 0, opacity: 1 });
+      });
     }
   };
+
 
   // Add video control functions
   const togglePlayPause = () => {

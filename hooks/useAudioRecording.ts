@@ -316,14 +316,14 @@ export const useAudioRecording = (currentDialogue: Dialogue) => {
       // Set up duration timer
       refs.current.recordingTimer = setInterval(() => {
         setRecordingState(prev => {
-          const newDuration = prev.duration + 0.1;
+          const newDuration = Number((prev.duration + 0.01).toFixed(3));
           if (newDuration >= refs.current.maxDuration) {
             stopRecording();
             return { ...prev, duration: refs.current.maxDuration };
           }
           return { ...prev, duration: newDuration };
         });
-      }, 100);
+      }, 10);
 
     } catch (error) {
       console.error('Recording failed:', error);

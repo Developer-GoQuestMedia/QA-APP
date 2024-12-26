@@ -101,22 +101,53 @@ VideoPlayer.displayName = 'VideoPlayer';
 const VideoControls = React.memo(({
   isPlaying,
   togglePlayPause,
+  handleSyncedPlayback,
+  isSyncedPlaying,
+  hasRecording,
+  audioDuration,
+  videoDuration,
 }: {
   isPlaying: boolean,
   togglePlayPause: () => void,
-}) => (
-  <div className="p-2 bg-gray-800 flex flex-col items-center gap-2">
-    <div className="flex gap-2">
-      <button
-        onClick={togglePlayPause}
-        className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-        aria-label={isPlaying ? 'Pause video' : 'Play video'}
-      >
-        {isPlaying ? 'Pause' : 'Play'}
-      </button>
+  handleSyncedPlayback: () => void,
+  isSyncedPlaying: boolean,
+  hasRecording: boolean,
+  audioDuration: number,
+  videoDuration: number,
+}) => {
+  const durationMatches = Math.abs(audioDuration - videoDuration) < 0.1; // Allow 100ms tolerance
+
+  return (
+    <div className="p-2 bg-gray-800 flex flex-col items-center gap-2">
+      <div className="flex gap-2 items-center">
+        <button
+          onClick={togglePlayPause}
+          className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+          aria-label={isPlaying ? 'Pause video' : 'Play video'}
+        >
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        {hasRecording && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSyncedPlayback}
+              className="px-4 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+              aria-label={isSyncedPlaying ? 'Stop synced playback' : 'Play with audio'}
+            >
+              {isSyncedPlaying ? 'Stop Synced' : 'Play with Audio'}
+            </button>
+            <div 
+              className={`w-3 h-3 rounded-full ${durationMatches ? 'bg-green-500' : 'bg-red-500'}`}
+              title={durationMatches 
+                ? 'Audio and video durations match' 
+                : `Duration mismatch - Video: ${videoDuration.toFixed(3)}s, Audio: ${audioDuration.toFixed(3)}s`}
+            />
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 VideoControls.displayName = 'VideoControls';
 
@@ -445,6 +476,9 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const [confirmationType, setConfirmationType] = useState<'navigation' | 'discard'>('discard');
   const [navigationDirection, setNavigationDirection] = useState<'next' | 'previous' | undefined>();
   const [pendingNavigationIndex, setPendingNavigationIndex] = useState<number | null>(null);
+  const [isSyncedPlaying, setIsSyncedPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioDuration, setAudioDuration] = useState(0);
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
   const maxDuration = currentDialogue ? calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd) : 0;
@@ -942,6 +976,132 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     };
   }, [currentDialogue?._id]);
 
+  // Add function to handle synced playback
+  const handleSyncedPlayback = useCallback(() => {
+    if (isSyncedPlaying) {
+      // Stop both video and audio
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setIsSyncedPlaying(false);
+      setIsPlaying(false);
+      return;
+    }
+
+    const playSync = async () => {
+      try {
+        if (!videoRef.current) return;
+
+        // Create audio element
+        const audio = new Audio();
+        if (localAudioBlob) {
+          audio.src = URL.createObjectURL(localAudioBlob);
+        } else if (currentDialogue?.voiceOverUrl) {
+          audio.src = currentDialogue.voiceOverUrl;
+        } else {
+          return;
+        }
+
+        audioRef.current = audio;
+
+        // Set up cleanup on audio end
+        audio.addEventListener('ended', () => {
+          setIsSyncedPlaying(false);
+          setIsPlaying(false);
+          if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.muted = false; // Restore video audio
+          }
+          URL.revokeObjectURL(audio.src);
+          audioRef.current = null;
+        });
+
+        // Mute video audio
+        videoRef.current.muted = true;
+
+        // Start playback
+        videoRef.current.currentTime = 0;
+        await Promise.all([
+          videoRef.current.play(),
+          audio.play()
+        ]);
+
+        setIsSyncedPlaying(true);
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('Failed to start synced playback:', error);
+        setIsSyncedPlaying(false);
+        setIsPlaying(false);
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.muted = false; // Restore video audio on error
+        }
+      }
+    };
+
+    playSync();
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl, isSyncedPlaying]);
+
+  // Add cleanup for synced playback
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [currentDialogue?._id]);
+
+  // Add function to get audio duration
+  const updateAudioDuration = useCallback(async (blob: Blob | string) => {
+    try {
+      const audio = new Audio();
+      if (blob instanceof Blob) {
+        audio.src = URL.createObjectURL(blob);
+      } else {
+        audio.src = blob;
+      }
+
+      await new Promise((resolve) => {
+        audio.addEventListener('loadedmetadata', () => {
+          setAudioDuration(audio.duration);
+          resolve(true);
+        });
+        audio.addEventListener('error', () => {
+          console.error('Error loading audio duration');
+          setAudioDuration(0);
+          resolve(false);
+        });
+      });
+
+      if (blob instanceof Blob) {
+        URL.revokeObjectURL(audio.src);
+      }
+    } catch (error) {
+      console.error('Error getting audio duration:', error);
+      setAudioDuration(0);
+    }
+  }, []);
+
+  // Update audio duration when audio blob or URL changes
+  useEffect(() => {
+    if (localAudioBlob) {
+      updateAudioDuration(localAudioBlob);
+    } else if (currentDialogue?.voiceOverUrl) {
+      updateAudioDuration(currentDialogue.voiceOverUrl);
+    } else {
+      setAudioDuration(0);
+    }
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl, updateAudioDuration]);
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">
       <CharacterInfo 
@@ -958,6 +1118,11 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       <VideoControls 
         isPlaying={isPlaying}
         togglePlayPause={togglePlayPause}
+        handleSyncedPlayback={handleSyncedPlayback}
+        isSyncedPlaying={isSyncedPlaying}
+        hasRecording={!!localAudioBlob || !!currentDialogue?.voiceOverUrl}
+        audioDuration={audioDuration}
+        videoDuration={maxDuration}
       />
 
       <motion.div 

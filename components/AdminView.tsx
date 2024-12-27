@@ -1,7 +1,5 @@
-
-
 import { Project, ProjectStatus } from '@/types/project'
-import { User } from '@/types/user'
+import { User, UserRole } from '@/types/user'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
@@ -10,6 +8,7 @@ import { Search, Plus, Filter, MoreVertical, Users, Settings, ChartBar, Trash2, 
 
 interface AdminViewProps {
   projects: Project[];
+  refetchProjects: () => Promise<any>;
 }
 
 const STATUS_COLORS = {
@@ -21,7 +20,7 @@ const STATUS_COLORS = {
 
 type Tab = 'projects' | 'users';
 
-export default function AdminView({ projects: initialProjects }: AdminViewProps) {
+export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projects');
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -48,7 +47,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
     username: '',
     email: '',
     password: '',
-    role: 'translator',
+    role: 'transcriber' as UserRole,
     isActive: true
   });
   
@@ -57,10 +56,9 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isAssigning, setIsAssigning] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
 
-  // Fetch users
-  const { data: users = [] } = useQuery<User[]>({
+  const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: async () => {
       const response = await axios.get('/api/admin/users');
@@ -69,14 +67,14 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
   });
 
   // Filter and sort projects
-  const filteredProjects = initialProjects
-    .filter(project => {
+  const filteredProjects = projects
+    .filter((project: Project) => {
       const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           project.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filterStatus === 'all' || project.status === filterStatus;
       return matchesSearch && matchesStatus;
     })
-    .sort((a, b) => {
+    .sort((a: Project, b: Project) => {
       switch (sortBy) {
         case 'title':
           return a.title.localeCompare(b.title);
@@ -108,7 +106,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
           dialogue_collection: '',
           status: 'pending'
         });
-        queryClient.invalidateQueries({ queryKey: ['projects'] });
+        await refetchProjects();
         setSuccess('Project created successfully');
         setTimeout(() => setSuccess(''), 3000);
       }
@@ -128,7 +126,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
           username: '',
           email: '',
           password: '',
-          role: 'translator',
+          role: 'transcriber',
           isActive: true
         });
         queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -144,7 +142,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
   const handleUpdateStatus = async (projectId: string, newStatus: ProjectStatus) => {
     try {
       await axios.patch(`/api/admin/projects/${projectId}`, { status: newStatus });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      await refetchProjects();
       setSuccess('Status updated successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -156,7 +154,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
   const handleDeleteProject = async (projectId: string) => {
     try {
       await axios.delete(`/api/admin/projects/${projectId}`);
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      await refetchProjects();
       setShowDeleteConfirm(false);
       setSelectedProject(null);
       setSuccess('Project deleted successfully');
@@ -198,12 +196,12 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
       if (!selectedProject) return;
       
       await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
-        userIds: selectedUserIds
+        usernames: selectedUsernames
       });
       
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      await refetchProjects();
       setIsAssigning(false);
-      setSelectedUserIds([]);
+      setSelectedUsernames([]);
       setSelectedProject(null);
       setSuccess('Users assigned successfully');
       setTimeout(() => setSuccess(''), 3000);
@@ -213,13 +211,13 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
     }
   };
 
-  const handleRemoveUser = async (projectId: string, userId: string) => {
+  const handleRemoveUser = async (projectId: string, username: string) => {
     try {
       await axios.delete(`/api/admin/projects/${projectId}/assign`, {
-        data: { userIds: [userId] }
+        data: { usernames: [username] }
       });
       
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      await refetchProjects();
       setSuccess('User removed successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -453,6 +451,13 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                               Collection: {project.dialogue_collection}
                             </span>
                           </div>
+                          {project.videoPath && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500 dark:text-gray-400">
+                                Video Path: {project.videoPath}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
                               Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
@@ -467,7 +472,13 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                           {project.assignedTo.map((user, index) => (
                             <span
                               key={index}
-                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
+                                user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                                user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                                user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}
                             >
                               {user.username} ({user.role})
                             </span>
@@ -519,7 +530,13 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
+                        user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                        user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                        user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}>
                         {user.role}
                       </span>
                     </td>
@@ -537,6 +554,9 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {user.assignedProjects?.length || 0} projects
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                        Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
@@ -674,13 +694,15 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
               <div>
                 <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Role</label>
                 <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}
+                  value={newUser.role === 'admin' ? 'director' : newUser.role}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value as UserRole }))}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 >
+                  <option value="transcriber">Transcriber</option>
                   <option value="translator">Translator</option>
-                  <option value="reviewer">Reviewer</option>
+                  <option value="voice-over">Voice Over</option>
+                  <option value="director">Director</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -745,14 +767,20 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
               <div className="flex flex-wrap gap-2">
                 {selectedProject.assignedTo.map((user) => (
                   <div
-                    key={user._id}
-                    className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full"
+                    key={user.username}
+                    className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                      user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
+                      user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                      user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                      user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    }`}
                   >
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <span className="text-sm">
                       {user.username} ({user.role})
                     </span>
                     <button
-                      onClick={() => handleRemoveUser(selectedProject._id, user._id)}
+                      onClick={() => handleRemoveUser(selectedProject._id, user.username)}
                       className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       ×
@@ -768,7 +796,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Users</h3>
               <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-lg">
                 {users
-                  .filter(user => user.isActive && !selectedProject.assignedTo.some(assigned => assigned._id === user._id))
+                  .filter(user => user.isActive && !selectedProject.assignedTo.some(assigned => assigned.username === user.username))
                   .map((user) => (
                     <label
                       key={user._id}
@@ -776,19 +804,21 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                     >
                       <input
                         type="checkbox"
-                        checked={selectedUserIds.includes(user._id)}
+                        checked={selectedUsernames.includes(user.username)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedUserIds(prev => [...prev, user._id]);
+                            setSelectedUsernames(prev => [...prev, user.username]);
                           } else {
-                            setSelectedUserIds(prev => prev.filter(id => id !== user._id));
+                            setSelectedUsernames(prev => prev.filter(name => name !== user.username));
                           }
                         }}
                         className="rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
                       />
                       <div className="ml-3">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.email} • {user.role}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {user.email} • {user.role} • Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                        </div>
                       </div>
                     </label>
                   ))}
@@ -799,7 +829,7 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
                 onClick={() => {
                   setIsAssigning(false);
                   setSelectedProject(null);
-                  setSelectedUserIds([]);
+                  setSelectedUsernames([]);
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
@@ -807,12 +837,113 @@ export default function AdminView({ projects: initialProjects }: AdminViewProps)
               </button>
               <button
                 onClick={handleAssignUsers}
-                disabled={selectedUserIds.length === 0}
+                disabled={selectedUsernames.length === 0}
                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Assign Selected Users
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {isEditing && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Edit Project</h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await axios.patch(`/api/admin/projects/${selectedProject._id}`, {
+                  title: selectedProject.title,
+                  description: selectedProject.description,
+                  sourceLanguage: selectedProject.sourceLanguage,
+                  targetLanguage: selectedProject.targetLanguage,
+                  dialogue_collection: selectedProject.dialogue_collection,
+                  status: selectedProject.status
+                });
+                await refetchProjects();
+                setIsEditing(false);
+                setSelectedProject(null);
+                setSuccess('Project updated successfully');
+                setTimeout(() => setSuccess(''), 3000);
+              } catch (err) {
+                setError('Failed to update project');
+                setTimeout(() => setError(''), 3000);
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
+                <input
+                  type="text"
+                  value={selectedProject.title}
+                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, title: e.target.value } : null)}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
+                <textarea
+                  value={selectedProject.description}
+                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  rows={3}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                  <input
+                    type="text"
+                    value={selectedProject.sourceLanguage}
+                    onChange={(e) => setSelectedProject(prev => prev ? { ...prev, sourceLanguage: e.target.value } : null)}
+                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
+                  <input
+                    type="text"
+                    value={selectedProject.targetLanguage}
+                    onChange={(e) => setSelectedProject(prev => prev ? { ...prev, targetLanguage: e.target.value } : null)}
+                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Collection Name</label>
+                <input
+                  type="text"
+                  value={selectedProject.dialogue_collection}
+                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, dialogue_collection: e.target.value } : null)}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setSelectedProject(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

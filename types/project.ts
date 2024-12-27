@@ -1,9 +1,7 @@
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
 
 interface AssignedUser {
-  _id: string;
   username: string;
-  email: string;
   role: string;
 }
 
@@ -13,9 +11,10 @@ export interface Project {
   description: string;
   sourceLanguage: string;
   targetLanguage: string;
-  dialogue_collection: string;
   status: ProjectStatus;
+  videoPath?: string;
+  dialogue_collection: string;
   assignedTo: AssignedUser[];
-  createdAt: string;
-  updatedAt: string;
+  updatedAt: string | Date;
+  createdAt?: string | Date;
 } 

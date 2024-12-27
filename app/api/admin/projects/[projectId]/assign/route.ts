@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { ObjectId } from 'mongodb';
+import { ObjectId, Document } from 'mongodb';
 
 // POST assign users to project
 export async function POST(
@@ -20,29 +20,35 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { userIds } = body;
+    const { usernames } = body;
 
-    if (!userIds || !Array.isArray(userIds)) {
+    if (!usernames || !Array.isArray(usernames)) {
       return NextResponse.json(
-        { error: 'Invalid user IDs' },
+        { error: 'Invalid usernames' },
         { status: 400 }
       );
     }
 
     const { db } = await connectToDatabase();
 
-    // Get users to assign
+    // Get users to assign by username
     const users = await db.collection('users')
       .find(
         { 
-          _id: { $in: userIds.map(id => new ObjectId(id)) },
+          username: { $in: usernames },
           isActive: true 
         },
-        { projection: { _id: 1, username: 1, email: 1, role: 1 } }
+        { projection: { username: 1, email: 1, role: 1 } }
       )
       .toArray();
 
-    if (users.length !== userIds.length) {
+    console.log('Users to assign:', users);
+    console.log('Mapped users for assignment:', users.map(user => ({
+      username: user.username,
+      role: user.role
+    })));
+
+    if (users.length !== usernames.length) {
       return NextResponse.json(
         { error: 'One or more users not found or inactive' },
         { status: 400 }
@@ -54,7 +60,10 @@ export async function POST(
       { _id: new ObjectId(params.projectId) },
       { 
         $set: { 
-          assignedTo: users,
+          assignedTo: users.map(user => ({
+            username: user.username,
+            role: user.role
+          })),
           updatedAt: new Date()
         }
       }
@@ -97,29 +106,46 @@ export async function DELETE(
     }
 
     const body = await request.json();
-    const { userIds } = body;
+    const { usernames } = body;
 
-    if (!userIds || !Array.isArray(userIds)) {
+    if (!usernames || !Array.isArray(usernames)) {
       return NextResponse.json(
-        { error: 'Invalid user IDs' },
+        { error: 'Invalid usernames' },
         { status: 400 }
       );
     }
 
     const { db } = await connectToDatabase();
 
-    // Remove users from project
+    // First get the project
+    const project = await db.collection('projects').findOne(
+      { _id: new ObjectId(params.projectId) }
+    );
+
+    if (!project) {
+      return NextResponse.json(
+        { error: 'Project not found' },
+        { status: 404 }
+      );
+    }
+
+    // Filter out the users to remove
+    const updatedAssignedTo = project.assignedTo.filter(
+      (user: { username: string }) => !usernames.includes(user.username)
+    );
+
+    console.log('Original assigned users:', project.assignedTo);
+    console.log('Usernames to remove:', usernames);
+    console.log('Updated assigned users:', updatedAssignedTo);
+
+    // Update the project with the filtered users
     const result = await db.collection('projects').updateOne(
       { _id: new ObjectId(params.projectId) },
       { 
-        $pull: { 
-          assignedTo: { 
-            _id: { 
-              $in: userIds.map(id => new ObjectId(id))
-            } 
-          }
-        },
-        $set: { updatedAt: new Date() }
+        $set: { 
+          assignedTo: updatedAssignedTo,
+          updatedAt: new Date()
+        }
       }
     );
 

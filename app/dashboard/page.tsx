@@ -1,29 +1,34 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import TranscriberView from '@/components/TranscriberView'
 import TranslatorView from '@/components/TranslatorView'
 import VoiceOverView from '@/components/VoiceOverView'
 import DirectorView from '@/components/DirectorView'
 import AdminView from '@/components/AdminView'
 import { Project } from '@/types/project'
-import axios from 'axios'
-
-interface CustomSession {
-  user: {
-    username: string;
-    role: string;
-    email?: string;
-    name?: string;
-  }
-}
+import { Session } from 'next-auth'
 
 export default function Dashboard() {
-  const { data: session, status } = useSession() as { data: CustomSession | null, status: string }
+  const { data: session, status } = useSession() as { data: Session | null, status: string }
   const router = useRouter()
-  const [projects, setProjects] = useState<Project[]>([])
+
+  const { data: projects = [], isLoading, refetch: refetchProjects } = useQuery<Project[]>({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data } = await axios.get('/api/projects')
+      return data.data.map((project: any) => ({
+        ...project,
+        updatedAt: new Date(project.updatedAt),
+        createdAt: project.createdAt ? new Date(project.createdAt) : undefined
+      }))
+    },
+    enabled: !!session // Only fetch when session exists
+  })
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -31,25 +36,7 @@ export default function Dashboard() {
     }
   }, [status, router])
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const { data } = await axios.get('/api/projects')
-        // Transform dates to Date objects
-        const projectsWithDates = data.map((project: any) => ({
-          ...project,
-          updatedAt: new Date(project.updatedAt),
-          createdAt: project.createdAt ? new Date(project.createdAt) : undefined
-        }))
-        setProjects(projectsWithDates)
-      } catch (error) {
-        console.error('Error fetching projects:', error)
-      }
-    }
-    fetchProjects()
-  }, [])
-
-  if (status === 'loading') {
+  if (status === 'loading' || isLoading) {
     return <div>Loading...</div>
   }
 
@@ -68,23 +55,12 @@ export default function Dashboard() {
       case 'director':
         return <DirectorView projects={projects} />
       case 'admin':
-        return <AdminView projects={projects} />
+        return <AdminView projects={projects} refetchProjects={refetchProjects} />
       default:
         return <div>Unknown role</div>
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <h1 className="text-2xl font-bold mb-4">Welcome, {session.user.username}</h1>
-      <button 
-        onClick={() => signOut()} 
-        className="bg-red-500 text-black px-4 py-2 rounded mb-4"
-      >
-        Logout
-      </button>
-      {renderContent()}
-    </div>
-  )
+  return renderContent()
 }
 

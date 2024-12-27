@@ -37,7 +37,6 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Check if user is authenticated and is an admin
     if (!session || session.user.role !== 'admin') {
       return NextResponse.json(
         { error: 'Unauthorized access' },
@@ -66,9 +65,9 @@ export async function POST(request: Request) {
       dialogue_collection,
       status: 'pending',
       assignedTo: [],
-      createdAt: new Date(),
+      videoPath: `${title}/videos/`,  // Default video path structure
       updatedAt: new Date(),
-      createdBy: session.user.id
+      createdAt: new Date()
     };
 
     const result = await db.collection('projects').insertOne(newProject);

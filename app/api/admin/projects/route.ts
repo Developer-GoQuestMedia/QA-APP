@@ -57,6 +57,17 @@ export async function POST(request: Request) {
 
     const { db } = await connectToDatabase();
     
+    // Create a new collection for dialogues
+    try {
+      await db.createCollection(dialogue_collection);
+      console.log(`Created new collection: ${dialogue_collection}`);
+    } catch (error: any) {
+      // If collection already exists, continue
+      if (error.code !== 48) { // 48 is MongoDB's error code for "collection already exists"
+        throw error;
+      }
+    }
+    
     const newProject = {
       title,
       description,

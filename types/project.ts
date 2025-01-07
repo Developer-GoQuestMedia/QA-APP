@@ -17,4 +17,12 @@ export interface Project {
   assignedTo: AssignedUser[];
   updatedAt: string | Date;
   createdAt?: string | Date;
+  
+  // Episode specific fields
+  episodeNumber: number;
+  seasonNumber?: number;
+  seriesTitle?: string;
+  duration?: number; // in minutes
+  originalAirDate?: string | Date;
+  subtitleDeadline?: string | Date;
 } 

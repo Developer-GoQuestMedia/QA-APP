@@ -95,8 +95,23 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      console.log('Creating project with payload:', newProject);
+      
+      // Validate required fields
+      const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage', 'dialogue_collection'];
+      const missingFields = requiredFields.filter(field => !newProject[field as keyof typeof newProject]);
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        setError(`Missing required fields: ${missingFields.join(', ')}`);
+        return;
+      }
+
       const response = await axios.post('/api/admin/projects', newProject);
+      console.log('Project creation response:', response.data);
+
       if (response.data.success) {
+        console.log('Project created successfully:', response.data);
         setIsCreating(false);
         setNewProject({
           title: '',
@@ -106,12 +121,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           dialogue_collection: '',
           status: 'pending'
         });
-        await refetchProjects();
+        
+        if (typeof refetchProjects === 'function') {
+          try {
+            await refetchProjects();
+          } catch (refetchError) {
+            console.error('Error refetching projects:', refetchError);
+          }
+        } else {
+          console.warn('refetchProjects is not available, projects list may be stale');
+        }
+        
         setSuccess('Project created successfully');
         setTimeout(() => setSuccess(''), 3000);
+      } else {
+        console.error('Project creation failed:', response.data);
+        setError(response.data.message || 'Failed to create project');
+        setTimeout(() => setError(''), 3000);
       }
-    } catch (err) {
-      setError('Failed to create project');
+    } catch (err: any) {
+      console.error('Project creation error:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
+      console.error('Error details:', errorMessage);
+      setError(errorMessage);
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -142,7 +174,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleUpdateStatus = async (projectId: string, newStatus: ProjectStatus) => {
     try {
       await axios.patch(`/api/admin/projects/${projectId}`, { status: newStatus });
-      await refetchProjects();
+      if (typeof refetchProjects === 'function') {
+        await refetchProjects();
+      }
       setSuccess('Status updated successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -154,12 +188,15 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleDeleteProject = async (projectId: string) => {
     try {
       await axios.delete(`/api/admin/projects/${projectId}`);
-      await refetchProjects();
+      if (typeof refetchProjects === 'function') {
+        await refetchProjects();
+      }
       setShowDeleteConfirm(false);
       setSelectedProject(null);
       setSuccess('Project deleted successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
+      console.error('Delete project error:', err);
       setError('Failed to delete project');
       setTimeout(() => setError(''), 3000);
     }
@@ -199,7 +236,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         usernames: selectedUsernames
       });
       
-      await refetchProjects();
+      if (typeof refetchProjects === 'function') {
+        await refetchProjects();
+      }
       setIsAssigning(false);
       setSelectedUsernames([]);
       setSelectedProject(null);
@@ -217,7 +256,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         data: { usernames: [username] }
       });
       
-      await refetchProjects();
+      if (refetchProjects) {
+        await refetchProjects();
+      }
       setSuccess('User removed successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -944,6 +985,35 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Confirmation Modal */}
+      {showDeleteConfirm && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Delete Project</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete "{selectedProject.title}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setSelectedProject(null);
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteProject(selectedProject._id)}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

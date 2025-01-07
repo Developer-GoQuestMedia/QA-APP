@@ -13,6 +13,26 @@ export default function Page() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
 
+  const fetchProjects = async () => {
+    try {
+      console.log('Fetching projects...');
+      const { data } = await axios.get('/api/projects')
+      // Transform dates to Date objects
+      const projectsWithDates = data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
+        updatedAt: string;
+        createdAt?: string;
+      }) => ({
+        ...project,
+        updatedAt: new Date(project.updatedAt),
+        createdAt: project.createdAt ? new Date(project.createdAt) : undefined
+      }))
+      console.log('Projects fetched successfully:', projectsWithDates.length);
+      setProjects(projectsWithDates)
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -23,23 +43,6 @@ export default function Page() {
   }, [status, session, router])
 
   useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const { data } = await axios.get('/api/projects')
-        // Transform dates to Date objects
-        const projectsWithDates = data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
-          updatedAt: string;
-          createdAt?: string;
-        }) => ({
-          ...project,
-          updatedAt: new Date(project.updatedAt),
-          createdAt: project.createdAt ? new Date(project.createdAt) : undefined
-        }))
-        setProjects(projectsWithDates)
-      } catch (error) {
-        console.error('Error fetching projects:', error)
-      }
-    }
     fetchProjects()
   }, [])
 
@@ -53,7 +56,7 @@ export default function Page() {
 
   return (
     <DashboardLayout title="Admin Dashboard">
-      <AdminView projects={projects} />
+      <AdminView projects={projects} refetchProjects={fetchProjects} />
     </DashboardLayout>
   )
 } 

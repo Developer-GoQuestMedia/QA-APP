@@ -139,6 +139,18 @@ export async function POST(request: NextRequest) {
     // Connect to MongoDB
     const { db } = await connectToDatabase();
 
+    // Create a new collection for dialogues
+    const dialogue_collection = projectData.dialogue_collection;
+    try {
+      await db.createCollection(dialogue_collection);
+      console.log(`Created new collection: ${dialogue_collection}`);
+    } catch (error: any) {
+      // If collection already exists, continue
+      if (error.code !== 48) { // 48 is MongoDB's error code for "collection already exists"
+        throw error;
+      }
+    }
+
     // Create project with video path
     const result = await db.collection('projects').insertOne({
       ...projectData,

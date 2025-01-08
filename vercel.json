@@ -1,6 +1,6 @@
 {
   "functions": {
-    "/api/admin/projects": {
+    "app/api/admin/projects": {
       "maxDuration": 30
     }
   }

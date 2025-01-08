@@ -206,6 +206,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    // Delete the dialogue collection
+    try {
+      await db.dropCollection(project.dialogue_collection);
+      console.log(`Dropped collection: ${project.dialogue_collection}`);
+    } catch (error: any) {
+      // If collection doesn't exist, continue
+      if (error.code !== 26) { // 26 is MongoDB's error code for "namespace not found"
+        throw error;
+      }
+    }
+
     // Delete the project's folder from R2
     if (project.folderPath) {
       await deleteR2Folder(project.folderPath);

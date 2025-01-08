@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { signIn, useSession } from 'next-auth/react'
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
 import ThemeToggle from '../components/ThemeToggle'
 
 export default function Login() {
@@ -10,34 +9,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-  const { data: session } = useSession()
-
-  // Handle session-based redirects in useEffect
-  useEffect(() => {
-    if (session?.user) {
-      const role = session.user.role
-      switch (role) {
-        case 'admin':
-          router.push('/allDashboards/admin')
-          break
-        case 'voice-over':
-          router.push('/allDashboards/voice-over')
-          break
-        case 'transcriber':
-          router.push('/allDashboards/transcriber')
-          break
-        case 'translator':
-          router.push('/allDashboards/translator')
-          break
-        case 'director':
-          router.push('/allDashboards/director')
-          break
-        default:
-          router.push('/dashboard')
-      }
-    }
-  }, [session, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,7 +19,8 @@ export default function Login() {
       const result = await signIn('credentials', {
         email,
         password,
-        redirect: false,
+        redirect: true,
+        callbackUrl: '/allDashboards'
       })
 
       if (result?.error) {
@@ -62,19 +34,8 @@ export default function Login() {
     }
   }
 
-  // Don't render the form if we're already authenticated
-  if (session?.user) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-2 text-foreground">Redirecting...</p>
-      </div>
-    </div>
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      {/* Theme Toggle */}
       <div className="fixed top-4 right-4">
         <ThemeToggle />
       </div>

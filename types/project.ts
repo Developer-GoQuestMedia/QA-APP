@@ -26,3 +26,10 @@ export interface Project {
   originalAirDate?: string | Date;
   subtitleDeadline?: string | Date;
 } 
+
+export type UserRole = 
+  | 'admin'
+  | 'director'
+  | 'voiceOver'
+  | 'transcriber'
+  | 'translator'; 

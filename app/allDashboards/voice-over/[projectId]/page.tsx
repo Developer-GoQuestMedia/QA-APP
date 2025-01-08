@@ -2,7 +2,6 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
 import { useDialogues } from '@/hooks/useDialogues'
 import VoiceOverDialogueView from '../../../../components/VoiceOverDialogueView'
 
@@ -11,17 +10,9 @@ export default function VoiceOverProjectPage({
 }: {
   params: { projectId: string }
 }) {
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const router = useRouter()
   const { data: dialogues, isLoading } = useDialogues(params.projectId)
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login')
-    } else if (session?.user?.role !== 'voice-over') {
-      router.push('/login')
-    }
-  }, [status, session, router])
 
   if (status === 'loading' || isLoading) {
     return (
@@ -32,10 +23,6 @@ export default function VoiceOverProjectPage({
         </div>
       </div>
     )
-  }
-
-  if (!session) {
-    return null
   }
 
   return (

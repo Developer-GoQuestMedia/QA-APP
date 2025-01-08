@@ -2,7 +2,13 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import { SpeedInsights } from "@vercel/speed-insights/next"
+import dynamic from 'next/dynamic'
+
+const SpeedInsights = dynamic(() => 
+  process.env.NODE_ENV === 'production'
+    ? import('@vercel/speed-insights/next').then(mod => mod.SpeedInsights)
+    : Promise.resolve(() => null)
+, { ssr: false })
 
 const inter = Inter({ subsets: ['latin'] })
 

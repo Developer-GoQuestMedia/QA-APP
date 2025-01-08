@@ -68,7 +68,7 @@ async function seedUsers() {
         username: 'voiceover1',
         email: 'voiceover1@email.com',
         password: await bcrypt.hash('voice123', 10),
-        role: 'voice-over',
+        role: 'voiceOver',
         lastLogin: null,
         lastLogout: null,
         sessionsLog: [],

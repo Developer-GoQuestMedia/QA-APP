@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ObjectId } from 'mongodb';
+import bcrypt from 'bcrypt';
 
 // GET single user
 export async function GET(
@@ -72,10 +73,10 @@ export async function PATCH(
     };
 
     // Remove password if it's empty
-    if (updateData.password === '') {
+    if (!updateData.password) {
       delete updateData.password;
     } else if (updateData.password) {
-      updateData.password = await hash(updateData.password, 12);
+      updateData.password = await bcrypt.hash(updateData.password, 12);
     }
 
     const { db } = await connectToDatabase();
@@ -121,10 +122,16 @@ export async function DELETE(
 
     const { db } = await connectToDatabase();
     
-    // Remove user from all assigned projects
+    // Remove user from all projects they were assigned to
     await db.collection('projects').updateMany(
       { 'assignedTo._id': params.userId },
-      { $pull: { assignedTo: { _id: params.userId } } }
+      { 
+        $pull: { 
+          assignedTo: { 
+            _id: new ObjectId(params.userId) 
+          } 
+        } 
+      } as any // Type assertion needed due to MongoDB types limitation
     );
 
     // Delete the user

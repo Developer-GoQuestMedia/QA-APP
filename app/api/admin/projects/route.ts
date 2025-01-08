@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
+// Route Segment Config
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes
+export const runtime = 'nodejs';
+
 // Initialize S3 client for R2
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  endpoint: process.env.R2_BUCKET_ENDPOINT,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || session.user.role !== 'admin') {
+    if (!session?.user || session.user.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,13 +69,13 @@ export async function POST(request: NextRequest) {
     
     // Extract project data
     const projectData = {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      sourceLanguage: formData.get('sourceLanguage'),
-      targetLanguage: formData.get('targetLanguage'),
-      dialogue_collection: formData.get('dialogue_collection'),
-      status: formData.get('status'),
-      videoPath: formData.get('videoPath'),
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      sourceLanguage: formData.get('sourceLanguage') as string,
+      targetLanguage: formData.get('targetLanguage') as string,
+      dialogue_collection: formData.get('dialogue_collection') as string,
+      status: formData.get('status') as string || 'pending',
+      videoPath: formData.get('videoPath') as string,
     };
 
     // Validate required fields
@@ -87,6 +92,7 @@ export async function POST(request: NextRequest) {
     // Handle video upload if present
     const videoFile = formData.get('video') as File | null;
     let videoPath = projectData.videoPath;
+    let videoKey = '';
 
     if (videoFile) {
       try {
@@ -97,6 +103,7 @@ export async function POST(request: NextRequest) {
         const fileExtension = videoFile.name.split('.').pop();
         const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
         const key = `${folderPath}${uniqueFilename}`;
+        videoKey = key;
 
         // Convert File to Buffer
         const arrayBuffer = await videoFile.arrayBuffer();
@@ -113,12 +120,13 @@ export async function POST(request: NextRequest) {
         await s3Client.send(putCommand);
 
         // Generate a signed URL for the uploaded file
-        const getCommand = new PutObjectCommand({
+        const getCommand = new GetObjectCommand({
           Bucket: BUCKET_NAME,
           Key: key,
         });
 
-        videoPath = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 }); // URL expires in 1 hour
+        const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+        videoPath = signedUrl;
       } catch (uploadError) {
         console.error('Error uploading video:', uploadError);
         return NextResponse.json(
@@ -135,10 +143,11 @@ export async function POST(request: NextRequest) {
     const result = await db.collection('projects').insertOne({
       ...projectData,
       videoPath,
+      videoKey, // Store the key for future reference
       createdAt: new Date(),
       updatedAt: new Date(),
       assignedTo: [],
-      folderPath: `${projectData.dialogue_collection}/videos/`, // Store the folder path
+      folderPath: `${projectData.dialogue_collection}/videos/`,
     });
 
     return NextResponse.json({
@@ -147,6 +156,7 @@ export async function POST(request: NextRequest) {
         _id: result.insertedId,
         ...projectData,
         videoPath,
+        videoKey,
         folderPath: `${projectData.dialogue_collection}/videos/`,
       },
     });
@@ -206,7 +216,7 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -228,12 +238,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-// Add size limit for the API route
-export const config = {
-  api: {
-    bodyParser: false,
-    sizeLimit: '100mb',
-  },
-}; 
+} 

@@ -1,0 +1,155 @@
+﻿# Current Directory Structure
+
+## Core Components
+
+`
+- **.notes/**
+    - project_overview.md
+    - task_list.md
+- **app/**
+    - **admin/**
+        - **project/**
+            - **[projectId]/**
+    - **allDashboards/**
+        - **admin/**
+            - page.tsx
+        - **director/**
+            - **[projectId]/**
+            - page.tsx
+        - **transcriber/**
+            - **[projectId]/**
+            - page.tsx
+        - **translator/**
+            - **[projectId]/**
+            - page.tsx
+        - **voice-over/**
+            - **[projectId]/**
+            - page.tsx
+        - page.tsx
+    - **api/**
+        - **admin/**
+            - **projects/**
+                - **[projectId]/**
+                - route.ts
+            - **users/**
+                - **[userId]/**
+                - route.ts
+        - **auth/**
+            - **login/**
+                - route.ts
+            - **[...nextauth]/**
+            - auth.config.ts
+        - **dialogues/**
+            - **[id]/**
+            - route.ts
+        - **projects/**
+            - **[id]/**
+            - route.ts
+        - **upload-audio/**
+            - route.ts
+        - **upload-voice-over/**
+            - route.ts
+        - **users/**
+            - **me/**
+                - route.ts
+            - route.ts
+        - **voice-over/**
+            - **upload/**
+                - route.ts
+    - **components/**
+        - Button.tsx
+        - Card.tsx
+        - ThemeToggle.tsx
+    - **dashboard/**
+        - page.tsx
+    - **fonts/**
+        - GeistMonoVF.woff
+        - GeistVF.woff
+    - **login/**
+        - page.tsx
+    - **styles/**
+        - styleLogger.ts
+        - theme.ts
+    - favicon.ico
+    - globals.css
+    - layout.tsx
+    - page.tsx
+    - providers.tsx
+- **components/**
+    - **audio/**
+    - **common/**
+    - **layout/**
+    - **ui/**
+        - alert.tsx
+    - **views/**
+    - AdminView.tsx
+    - AudioVisualizer.tsx
+    - Button.tsx
+    - Card.tsx
+    - DashboardLayout.tsx
+    - DirectorDialogueView.tsx
+    - DirectorView.tsx
+    - RecordingTimer.tsx
+    - TranscriberDialogueView.tsx
+    - TranscriberView.tsx
+    - TranslatorDialogueView.tsx
+    - TranslatorView.tsx
+    - VoiceOverDialogueView.tsx
+    - VoiceOverView.tsx
+- **hooks/**
+    - useAudioRecording.ts
+    - useDialogues.ts
+    - useProject.ts
+    - useProjects.ts
+- **lib/**
+    - auth.ts
+    - mongodb.ts
+    - seed.ts
+    - utils.ts
+- **scripts/**
+    - build-success.js
+    - seed-users.ts
+    - seed.ts
+    - start-app.js
+- **src/**
+    - **types/**
+        - dialogue.ts
+- **Tools/**
+    - copyandpaste.js
+    - project_structure_and_contents.txt
+- **types/**
+    - dialogue.ts
+    - next-auth.d.ts
+    - project.ts
+    - user.ts
+- **utils/**
+    - audio.ts
+    - cn.ts
+    - formatters.ts
+- **__tests__/**
+    - **components/**
+        - TranscriberDialogueView.test.tsx
+        - TranscriberView.test.tsx
+        - VoiceOverDialogueView.test.tsx
+        - VoiceOverView.test.tsx
+    - login.test.tsx
+    - mongodb.test.ts
+- .cursorignore
+- .cursorrules
+- .env
+- .env.local
+- .eslintrc.json
+- .gitignore
+- components.json
+- jest.config.ts
+- jest.setup.ts
+- next-env.d.ts
+- next.config.mjs
+- package-lock.json
+- package.json
+- postcss.config.mjs
+- README.md
+- tailwind.config.ts
+- tsconfig.json
+- update_directory.ps1
+`

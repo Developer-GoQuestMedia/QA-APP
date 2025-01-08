@@ -22,16 +22,37 @@ export default function VoiceOverView({ projects }: { projects: Project[] }) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
+  console.log('VoiceOverView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: projects.length
+  })
+
   // Filter projects assigned to current user as voice-over
   const assignedProjects = projects.filter(project => 
-    project.assignedTo.some(assignment => 
-      assignment.username === session?.user?.username && 
-      assignment.role === 'voice-over'
-    )
+    project.assignedTo.some(assignment => {
+      const matches = assignment.username === session?.user?.username && 
+                     assignment.role === 'voiceOver'
+      console.log('Project assignment check:', {
+        projectTitle: project.title,
+        assignmentUsername: assignment.username,
+        assignmentRole: assignment.role,
+        userUsername: session?.user?.username,
+        matches
+      })
+      return matches
+    })
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map(p => p.title)
+  })
 
   const handleLogout = async () => {
     try {
+      console.log('Initiating logout')
       setIsLoggingOut(true)
       // Clear any client-side session data
       if (typeof window !== 'undefined') {
@@ -76,7 +97,13 @@ export default function VoiceOverView({ projects }: { projects: Project[] }) {
             {assignedProjects.map((project) => (
               <div
                 key={project._id}
-                onClick={() => router.push(`/allDashboards/voice-over/${project._id}`)}
+                onClick={() => {
+                  console.log('Navigating to project:', {
+                    projectId: project._id,
+                    projectTitle: project.title
+                  })
+                  router.push(`/allDashboards/voice-over/${project._id}`)
+                }}
                 className="bg-card rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
               >
                 <h2 className="text-xl font-semibold mb-2">{project.title}</h2>

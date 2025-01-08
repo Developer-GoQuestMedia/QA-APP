@@ -1,0 +1,15 @@
+/node_modules
+/build
+/temp
+/Tools
+/Doc.txt
+/project_structure_and_contents.txt
+/.next
+/.vscode
+.DS_Store
+.git
+.gitignore
+.notes
+.cursorrules
+.cursorignore
+.cursorignore

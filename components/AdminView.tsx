@@ -543,7 +543,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                 user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                                 user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                                user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                                user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                                 user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                                 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                               }`}
@@ -601,7 +601,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                         user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                        user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                        user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                         user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                         'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
@@ -749,7 +749,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
                         <p className="mt-2 text-sm">
-                          {newProject.videoFile ? newProject.videoFile.name : "Click or drag to upload video"}
+                          {newProject.videoFile ? newProject.videoFile.name : 'Click or drag to upload video'}
                         </p>
                       </div>
                       <input
@@ -833,7 +833,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 >
                   <option value="transcriber">Transcriber</option>
                   <option value="translator">Translator</option>
-                  <option value="voice-over">Voice Over</option>
+                  <option value="voiceOver">Voice Over</option>
                   <option value="director">Director</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -903,7 +903,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     className={`flex items-center gap-2 px-3 py-1 rounded-full ${
                       user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                       user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                      user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                      user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                       user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                       'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                     }`}

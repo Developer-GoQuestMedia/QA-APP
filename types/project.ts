@@ -1,3 +1,5 @@
+import { User } from './user';
+
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
 
 interface AssignedUser {
@@ -25,11 +27,7 @@ export interface Project {
   duration?: number; // in minutes
   originalAirDate?: string | Date;
   subtitleDeadline?: string | Date;
-} 
+}
 
-export type UserRole = 
-  | 'admin'
-  | 'director'
-  | 'voiceOver'
-  | 'transcriber'
-  | 'translator'; 
+// Import and re-export the UserRole type from types/user
+export type { UserRole } from './user'; 

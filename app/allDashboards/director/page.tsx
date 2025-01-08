@@ -1,14 +1,12 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
 import DirectorView from '@/components/DirectorView'
 import { useProjects } from '@/hooks/useProjects'
 
 export default function DirectorDashboard() {
-  const { data: session, status } = useSession()
   const { data: projects, isLoading: isLoadingProjects } = useProjects()
 
-  if (status === 'loading' || isLoadingProjects) {
+  if (isLoadingProjects) {
     return <div>Loading...</div>
   }
 

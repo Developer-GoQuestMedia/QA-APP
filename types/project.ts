@@ -15,6 +15,7 @@ export interface Project {
   targetLanguage: string;
   status: ProjectStatus;
   videoPath?: string;
+  folderPath?: string;
   dialogue_collection: string;
   assignedTo: AssignedUser[];
   updatedAt: string | Date;

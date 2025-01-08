@@ -162,7 +162,7 @@ export async function PUT(
       'assignedTo': {
         $elemMatch: {
           username: session.user.username,
-          role: { $in: ['transcriber', 'voice-over'] }
+          role: { $in: ['transcriber', 'voiceOver'] }
         }
       }
     })

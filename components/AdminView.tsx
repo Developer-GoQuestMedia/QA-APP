@@ -519,13 +519,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               Collection: {project.dialogue_collection}
                             </span>
                           </div>
-                          {project.videoPath && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500 dark:text-gray-400">
-                                Video Path: {project.videoPath}
-                              </span>
-                            </div>
-                          )}
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500 dark:text-gray-400">
+                              Folder Path: {project.folderPath}
+                            </span>
+                          </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
                               Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
@@ -1111,4 +1109,5 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     </div>
   );
 }
+
 

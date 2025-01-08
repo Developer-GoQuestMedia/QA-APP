@@ -40,7 +40,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     sourceLanguage: '',
     targetLanguage: '',
     dialogue_collection: '',
-    status: 'pending' as ProjectStatus
+    status: 'pending' as ProjectStatus,
+    videoPath: '',
+    videoFile: null as File | null
   });
 
   const [newUser, setNewUser] = useState({
@@ -57,6 +59,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const queryClient = useQueryClient();
   const [isAssigning, setIsAssigning] = useState(false);
   const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
+
+  const [uploadMethod, setUploadMethod] = useState<'file' | 'url'>('url');
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ['users'],
@@ -107,7 +111,28 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         return;
       }
 
-      const response = await axios.post('/api/admin/projects', newProject);
+      let videoPath = newProject.videoPath;
+
+      // If using file upload, first upload the file
+      if (uploadMethod === 'file' && newProject.videoFile) {
+        const formData = new FormData();
+        formData.append('video', newProject.videoFile);
+        
+        const uploadResponse = await axios.post('/api/admin/upload-video', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        videoPath = uploadResponse.data.videoPath;
+      }
+
+      const response = await axios.post('/api/admin/projects', {
+        ...newProject,
+        videoPath,
+        videoFile: undefined // Remove the file object before sending
+      });
+      
       console.log('Project creation response:', response.data);
 
       if (response.data.success) {
@@ -119,7 +144,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           sourceLanguage: '',
           targetLanguage: '',
           dialogue_collection: '',
-          status: 'pending'
+          status: 'pending',
+          videoPath: '',
+          videoFile: null
         });
         
         if (typeof refetchProjects === 'function') {
@@ -675,6 +702,70 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Video Upload Method</label>
+                <div className="flex space-x-4 mb-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="url"
+                      checked={uploadMethod === 'url'}
+                      onChange={(e) => {
+                        setUploadMethod('url');
+                        setNewProject(prev => ({ ...prev, videoFile: null }));
+                      }}
+                      className="form-radio text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    />
+                    <span className="ml-2 text-gray-700 dark:text-gray-300">Video URL</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      value="file"
+                      checked={uploadMethod === 'file'}
+                      onChange={(e) => {
+                        setUploadMethod('file');
+                        setNewProject(prev => ({ ...prev, videoPath: '' }));
+                      }}
+                      className="form-radio text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    />
+                    <span className="ml-2 text-gray-700 dark:text-gray-300">Upload File</span>
+                  </label>
+                </div>
+                {uploadMethod === 'url' ? (
+                  <input
+                    type="url"
+                    placeholder="Enter video URL"
+                    value={newProject.videoPath}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, videoPath: e.target.value }))}
+                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center w-full">
+                    <label className="w-full flex flex-col items-center px-4 py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
+                      <div className="flex flex-col items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p className="mt-2 text-sm">
+                          {newProject.videoFile ? newProject.videoFile.name : "Click or drag to upload video"}
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setNewProject(prev => ({ ...prev, videoFile: file }));
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2 mt-4">
                 <button

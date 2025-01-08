@@ -8,7 +8,7 @@ import { ObjectId } from 'mongodb';
 
 // Route Segment Config
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 60; // Maximum allowed for hobby plan
 export const runtime = 'nodejs';
 
 // Initialize S3 client for R2

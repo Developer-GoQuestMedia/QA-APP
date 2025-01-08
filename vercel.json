@@ -1,7 +1,7 @@
 {
   "functions": {
-    "app/api/**/*": {
-      "maxDuration": 10
+    "/api/admin/projects": {
+      "maxDuration": 30
     }
   }
 } 

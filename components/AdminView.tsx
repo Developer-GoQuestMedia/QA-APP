@@ -111,26 +111,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         return;
       }
 
-      let videoPath = newProject.videoPath;
+      // Create FormData and append all project data
+      const formData = new FormData();
+      formData.append('title', newProject.title);
+      formData.append('description', newProject.description);
+      formData.append('sourceLanguage', newProject.sourceLanguage);
+      formData.append('targetLanguage', newProject.targetLanguage);
+      formData.append('dialogue_collection', newProject.dialogue_collection);
+      formData.append('status', newProject.status);
 
-      // If using file upload, first upload the file
-      if (uploadMethod === 'file' && newProject.videoFile) {
-        const formData = new FormData();
+      // Handle video based on upload method
+      if (uploadMethod === 'url') {
+        formData.append('videoPath', newProject.videoPath);
+      } else if (newProject.videoFile) {
         formData.append('video', newProject.videoFile);
-        
-        const uploadResponse = await axios.post('/api/admin/upload-video', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        
-        videoPath = uploadResponse.data.videoPath;
       }
 
-      const response = await axios.post('/api/admin/projects', {
-        ...newProject,
-        videoPath,
-        videoFile: undefined // Remove the file object before sending
+      const response = await axios.post('/api/admin/projects', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
       
       console.log('Project creation response:', response.data);
@@ -214,13 +214,13 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await axios.delete(`/api/admin/projects/${projectId}`);
+      await axios.delete(`/api/admin/projects?id=${projectId}`);
       if (typeof refetchProjects === 'function') {
         await refetchProjects();
       }
       setShowDeleteConfirm(false);
       setSelectedProject(null);
-      setSuccess('Project deleted successfully');
+      setSuccess('Project and associated files deleted successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Delete project error:', err);

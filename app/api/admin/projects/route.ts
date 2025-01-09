@@ -96,13 +96,15 @@ export async function POST(request: NextRequest) {
 
     if (videoFile) {
       try {
-        // Generate folder path based on collection name
-        const folderPath = `${projectData.dialogue_collection}/videos/`;
+        // Get parent folder and metadata
+        const parentFolder = formData.get('parentFolder') as string;
+        const metadata = JSON.parse(formData.get('metadata') as string);
+        const currentFile = metadata.currentFile;
         
-        // Generate a unique filename
-        const fileExtension = videoFile.name.split('.').pop();
-        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-        const key = `${folderPath}${uniqueFilename}`;
+        // Generate folder path using parent folder structure
+        const collectionName = videoFile.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const folderPath = `${parentFolder}/${collectionName}/`;
+        const key = `${folderPath}${videoFile.name}`;
         videoKey = key;
 
         // Convert File to Buffer
@@ -137,46 +139,110 @@ export async function POST(request: NextRequest) {
     }
 
     // Connect to MongoDB
-    const { db } = await connectToDatabase();
+    const { db, client } = await connectToDatabase();
 
-    // Create a new collection for dialogues
-    const dialogue_collection = projectData.dialogue_collection;
+    // Get metadata for collections
+    const metadata = JSON.parse(formData.get('metadata') as string);
+    const collections = metadata.collections || [];
+    
+    // Create a new database with the project title
+    const databaseName = projectData.title.replace(/[^a-zA-Z0-9-_]/g, '_');
+    console.log('Attempting to create database:', databaseName);
+    
     try {
-      await db.createCollection(dialogue_collection);
-      console.log(`Created new collection: ${dialogue_collection}`);
-    } catch (error: any) {
-      // If collection already exists, continue
-      if (error.code !== 48) { // 48 is MongoDB's error code for "collection already exists"
-        throw error;
+      // Create new database instance
+      const newDb = client.db(databaseName);
+      console.log('Database instance created:', databaseName);
+
+      // Create collections for each video file
+      for (const collectionName of collections) {
+        try {
+          await newDb.createCollection(collectionName);
+          console.log(`Created collection: ${collectionName} in database: ${databaseName}`);
+          
+          // Initialize the collection with an empty document to ensure it's created
+          await newDb.collection(collectionName).insertOne({
+            _id: new ObjectId(),
+            collectionName,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            dialogues: []
+          });
+          console.log(`Initialized collection: ${collectionName} with metadata document`);
+        } catch (collectionError: any) {
+          console.error(`Error creating collection ${collectionName}:`, collectionError);
+          throw collectionError;
+        }
       }
-    }
 
-    // Create project with video path
-    const result = await db.collection('projects').insertOne({
-      ...projectData,
-      videoPath,
-      videoKey, // Store the key for future reference
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      assignedTo: [],
-      folderPath: `${projectData.dialogue_collection}/videos/`,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        _id: result.insertedId,
+      // Create project with video path and database info
+      const result = await db.collection('projects').insertOne({
         ...projectData,
         videoPath,
         videoKey,
-        folderPath: `${projectData.dialogue_collection}/videos/`,
-      },
-    });
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        assignedTo: [],
+        folderPath: `${formData.get('parentFolder')}/`,
+        databaseName,
+        collections, // Store the list of collections
+      });
 
-  } catch (error) {
-    console.error('Error creating project:', error);
+      return NextResponse.json({
+        success: true,
+        data: {
+          _id: result.insertedId,
+          ...projectData,
+          videoPath,
+          videoKey,
+          folderPath: `${formData.get('parentFolder')}/`,
+          databaseName,
+          collections,
+        },
+      });
+
+    } catch (error: any) {
+      console.error('Detailed error creating project:', {
+        error: error.message,
+        code: error.code,
+        stack: error.stack,
+        databaseName,
+        projectData,
+        collections
+      });
+      
+      // Try to clean up if database was partially created
+      try {
+        if (client.db(databaseName)) {
+          await client.db(databaseName).dropDatabase();
+          console.log('Cleaned up partially created database:', databaseName);
+        }
+      } catch (cleanupError) {
+        console.error('Error during cleanup:', cleanupError);
+      }
+
+      return NextResponse.json(
+        { 
+          error: 'Failed to create project',
+          details: error.message,
+          code: error.code
+        },
+        { status: 500 }
+      );
+    }
+
+  } catch (error: any) {
+    console.error('Error in main try block:', {
+      error: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { 
+        error: 'Failed to create project',
+        details: error.message,
+        code: error.code
+      },
       { status: 500 }
     );
   }
@@ -197,7 +263,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    const { db } = await connectToDatabase();
+    const { db, client } = await connectToDatabase();
 
     // Get project details before deletion
     const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
@@ -206,34 +272,59 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Delete the dialogue collection
-    try {
-      await db.dropCollection(project.dialogue_collection);
-      console.log(`Dropped collection: ${project.dialogue_collection}`);
-    } catch (error: any) {
-      // If collection doesn't exist, continue
-      if (error.code !== 26) { // 26 is MongoDB's error code for "namespace not found"
-        throw error;
+    console.log('Deleting project:', {
+      projectId,
+      databaseName: project.databaseName,
+      collections: project.collections,
+      folderPath: project.folderPath
+    });
+
+    // Drop the project's database if it exists
+    if (project.databaseName) {
+      try {
+        await client.db(project.databaseName).dropDatabase();
+        console.log(`Dropped database: ${project.databaseName}`);
+      } catch (error: any) {
+        console.error('Error dropping database:', error);
+        // If database doesn't exist, continue
+        if (error.code !== 26) { // 26 is MongoDB's error code for "database not found"
+          throw error;
+        }
       }
     }
 
     // Delete the project's folder from R2
     if (project.folderPath) {
-      await deleteR2Folder(project.folderPath);
+      try {
+        await deleteR2Folder(project.folderPath);
+        console.log(`Deleted R2 folder: ${project.folderPath}`);
+      } catch (error: any) {
+        console.error('Error deleting R2 folder:', error);
+        throw error;
+      }
     }
 
     // Delete the project from MongoDB
     await db.collection('projects').deleteOne({ _id: new ObjectId(projectId) });
+    console.log('Deleted project document from MongoDB');
 
     return NextResponse.json({
       success: true,
-      message: 'Project and associated files deleted successfully',
+      message: 'Project, database, and associated files deleted successfully',
     });
 
-  } catch (error) {
-    console.error('Error deleting project:', error);
+  } catch (error: any) {
+    console.error('Error deleting project:', {
+      error: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return NextResponse.json(
-      { error: 'Failed to delete project' },
+      { 
+        error: 'Failed to delete project',
+        details: error.message,
+        code: error.code
+      },
       { status: 500 }
     );
   }

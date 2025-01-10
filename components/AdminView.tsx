@@ -116,6 +116,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         return;
       }
 
+      // Variable to store project ID for subsequent uploads
+      let projectId: string | undefined;
+
       // Create project metadata
       const projectMetadata = {
         title: newProject.title,
@@ -161,45 +164,21 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           currentFile: {
             index: i,
             total: newProject.videoFiles.length,
-            isLast: i === newProject.videoFiles.length - 1
+            isFirst: i === 0,
+            isLast: i === newProject.videoFiles.length - 1,
+            projectId: projectId // Will be undefined for first file
           }
         }));
 
         // Add the file
         formData.append('video', file);
 
-        // Log the request payload
-        console.log(`Uploading file ${i + 1}/${newProject.videoFiles.length}:`, {
-          fileName: file.name,
-          fileSize: file.size,
-          metadata: {
-            databaseName: projectMetadata.databaseName,
-            collections: projectMetadata.collections,
-            filePaths: projectMetadata.filePaths,
-            parentFolder: parentFolder,
-            currentFile: {
-              index: i,
-              total: newProject.videoFiles.length,
-              isLast: i === newProject.videoFiles.length - 1
-            }
-          }
-        });
-
-        // Log FormData contents
-        console.log('FormData contents:');
-        Array.from(formData.entries()).forEach(([key, value]) => {
-          if (value instanceof File) {
-            console.log(`${key}:`, {
-              name: value.name,
-              type: value.type,
-              size: value.size
-            });
-          } else {
-            console.log(`${key}:`, value);
-          }
-        });
-
         try {
+          // If not the first file, add a small delay to ensure previous upload is complete
+          if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
           const response = await axios.post('/api/admin/projects', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
@@ -221,6 +200,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
           if (!response.data.success) {
             throw new Error(response.data.message || `Failed to upload file ${file.name}`);
+          }
+
+          // Store the project ID from the first upload to use for subsequent uploads
+          if (i === 0) {
+            projectId = response.data.data._id;
           }
 
           setUploadStatus(prev => ({
@@ -739,146 +723,150 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
       {/* Create Project Modal */}
       {isCreating && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-lg mx-auto my-8">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New Project</h2>
             <form onSubmit={handleCreateProject} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
-                <input
-                  type="text"
-                  value={newProject.title}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
-                <textarea
-                  value={newProject.description}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
                   <input
                     type="text"
-                    value={newProject.sourceLanguage}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, sourceLanguage: e.target.value }))}
+                    value={newProject.title}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
-                  <input
-                    type="text"
-                    value={newProject.targetLanguage}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, targetLanguage: e.target.value }))}
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
+                  <textarea
+                    value={newProject.description}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    rows={3}
                     required
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Video Upload</label>
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center justify-center w-full">
-                    <label className="w-full flex flex-col items-center px-4 py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
-                      <div className="flex flex-col items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p className="mt-2 text-sm text-center">
-                          Click or drag to upload videos<br />
-                          <span className="text-xs text-gray-500">Multiple files allowed • No size limit</span>
-                        </p>
-                      </div>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="video/*"
-                        multiple
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          setNewProject(prev => ({
-                            ...prev,
-                            videoFiles: [...prev.videoFiles, ...files]
-                          }));
-                          
-                          // Initialize progress and status for new files
-                          const newProgress = { ...uploadProgress };
-                          const newStatus = { ...uploadStatus };
-                          files.forEach(file => {
-                            newProgress[file.name] = 0;
-                            newStatus[file.name] = 'pending';
-                          });
-                          setUploadProgress(newProgress);
-                          setUploadStatus(newStatus);
-                        }}
-                      />
-                    </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                    <input
+                      type="text"
+                      value={newProject.sourceLanguage}
+                      onChange={(e) => setNewProject(prev => ({ ...prev, sourceLanguage: e.target.value }))}
+                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      required
+                    />
                   </div>
-                  {newProject.videoFiles.length > 0 && (
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Files:</h4>
-                      <div className="space-y-3">
-                        {newProject.videoFiles.map((file, index) => (
-                          <div key={index} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-300">{file.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setNewProject(prev => ({
-                                    ...prev,
-                                    videoFiles: prev.videoFiles.filter((_, i) => i !== index)
-                                  }));
-                                  
-                                  // Remove progress and status for the file
-                                  const newProgress = { ...uploadProgress };
-                                  const newStatus = { ...uploadStatus };
-                                  delete newProgress[file.name];
-                                  delete newStatus[file.name];
-                                  setUploadProgress(newProgress);
-                                  setUploadStatus(newStatus);
-                                }}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                            {uploadProgress[file.name] > 0 && (
-                              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                <div 
-                                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                                  style={{ width: `${uploadProgress[file.name]}%` }}
-                                ></div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
+                    <input
+                      type="text"
+                      value={newProject.targetLanguage}
+                      onChange={(e) => setNewProject(prev => ({ ...prev, targetLanguage: e.target.value }))}
+                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Video Upload</label>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center w-full">
+                      <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="text-sm">
+                            Click or drag to upload videos
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Multiple files allowed • No size limit
+                          </p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="video/*"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setNewProject(prev => ({
+                              ...prev,
+                              videoFiles: [...prev.videoFiles, ...files]
+                            }));
+                            
+                            // Initialize progress and status for new files
+                            const newProgress = { ...uploadProgress };
+                            const newStatus = { ...uploadStatus };
+                            files.forEach(file => {
+                              newProgress[file.name] = 0;
+                              newStatus[file.name] = 'pending';
+                            });
+                            setUploadProgress(newProgress);
+                            setUploadStatus(newStatus);
+                          }}
+                        />
+                      </label>
                     </div>
-                  )}
+                    {newProject.videoFiles.length > 0 && (
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4">
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Files:</h4>
+                        <div className="space-y-3 max-h-48 overflow-y-auto">
+                          {newProject.videoFiles.map((file, index) => (
+                            <div key={index} className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-300 truncate pr-2">{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNewProject(prev => ({
+                                      ...prev,
+                                      videoFiles: prev.videoFiles.filter((_, i) => i !== index)
+                                    }));
+                                    
+                                    // Remove progress and status for the file
+                                    const newProgress = { ...uploadProgress };
+                                    const newStatus = { ...uploadStatus };
+                                    delete newProgress[file.name];
+                                    delete newStatus[file.name];
+                                    setUploadProgress(newProgress);
+                                    setUploadStatus(newStatus);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              {uploadProgress[file.name] > 0 && (
+                                <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${uploadProgress[file.name]}%` }}
+                                  ></div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 mt-4">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                 <button
                   type="button"
                   onClick={() => setIsCreating(false)}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                 >
                   Create Project
                 </button>

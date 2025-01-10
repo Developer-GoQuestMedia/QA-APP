@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import dynamic from 'next/dynamic'
+import SystemInit from '@/components/SystemInit'
 
 const SpeedInsights = dynamic(() => 
   process.env.NODE_ENV === 'production'
@@ -42,6 +43,7 @@ export default function RootLayout({
           }}
         />
         <Providers>
+          <SystemInit />
           {children}
         </Providers>
         <SpeedInsights />

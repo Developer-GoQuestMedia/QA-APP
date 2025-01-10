@@ -30,7 +30,7 @@ export default function VoiceOverProjectPage({
       <div className="w-full max-w-7xl mx-auto py-4 sm:py-6">
         <div className="flex justify-between items-center mb-4 sm:mb-6 px-4">
           <button
-            onClick={() => router.push('/allDashboards/voice-over')}
+            onClick={() => router.push('/allDashboards/voiceOver')}
             className="text-primary hover:text-primary/80 transition-colors text-sm sm:text-base"
           >
             ← Back to Projects

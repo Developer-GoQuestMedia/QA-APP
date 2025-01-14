@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 const gitignorePath = join(process.cwd(), '.gitignore');
 const ig = ignore();
 // Always ignore .git directory and README.md
-ig.add(['.git/**', 'README.md', 'package-lock.json', 'notes/**', '.cursorignore', '.cursorrules']);
+ig.add(['.git/**', ".__tests__/**", 'README.md', 'package-lock.json', 'notes/**', '.cursorignore', '.cursorrules']);
 try {
     const gitignoreContent = readFileSync(gitignorePath, 'utf8');
     ig.add(gitignoreContent);

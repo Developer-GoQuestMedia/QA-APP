@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialogues } from '@/hooks/useDialogues'
+import { useEpisodes } from '@/hooks/useEpisodes'
 import TranscriberDialogueView from '../../../../components/TranscriberDialogueView'
 
 export default function TranscriberProjectPage({
@@ -12,9 +13,10 @@ export default function TranscriberProjectPage({
 }) {
   const { status } = useSession()
   const router = useRouter()
-  const { data: dialogues, isLoading } = useDialogues(params.projectId)
+  const { data: dialogues, isLoading: isLoadingDialogues } = useDialogues(params.projectId)
+  const { data: episodes, isLoading: isLoadingEpisodes } = useEpisodes(params.projectId)
 
-  if (status === 'loading' || isLoading) {
+  if (status === 'loading' || isLoadingDialogues || isLoadingEpisodes) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
@@ -36,7 +38,11 @@ export default function TranscriberProjectPage({
             ← Back to Projects
           </button>
         </div>
-        <TranscriberDialogueView dialogues={dialogues || []} projectId={params.projectId} />
+        <TranscriberDialogueView 
+          dialogues={dialogues || []} 
+          projectId={params.projectId} 
+          episodes={episodes || []}
+        />
       </div>
     </div>
   )

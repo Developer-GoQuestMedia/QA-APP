@@ -1,4 +1,4 @@
-import { Project, ProjectStatus } from '@/types/project'
+import { Project, ProjectStatus, Episode } from '@/types/project'
 import { User, UserRole } from '@/types/user'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,6 +11,13 @@ interface AdminViewProps {
   refetchProjects: () => Promise<any>;
 }
 
+interface UploadProgressData {
+  loaded: number;
+  total: number;
+  phase: 'pending' | 'uploading' | 'creating-collection' | 'processing' | 'success' | 'error';
+  message?: string;
+}
+
 const STATUS_COLORS = {
   'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
   'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -19,6 +26,19 @@ const STATUS_COLORS = {
 } as const;
 
 type Tab = 'projects' | 'users';
+
+const formatBytes = (bytes: number, decimals: number = 2) => {
+  if (bytes === 0) return '0 MB';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+const getTimeStamp = () => {
+  return new Date().toISOString();
+};
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projects');
@@ -58,8 +78,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const [isAssigning, setIsAssigning] = useState(false);
   const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
 
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressData>>({});
   const [uploadStatus, setUploadStatus] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
+
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ['users'],
@@ -97,27 +119,46 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    const startTime = Date.now();
     try {
-      console.log('Creating project with payload:', newProject);
+      console.log(`[${getTimeStamp()}] Starting project creation with payload:`, {
+        title: newProject.title,
+        description: newProject.description,
+        sourceLanguage: newProject.sourceLanguage,
+        targetLanguage: newProject.targetLanguage,
+        totalFiles: newProject.videoFiles.length,
+        fileNames: newProject.videoFiles.map(f => f.name),
+        totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0)
+      });
       
       // Validate required fields
       const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
       const missingFields = requiredFields.filter(field => !newProject[field as keyof typeof newProject]);
       
       if (missingFields.length > 0) {
-        console.error('Missing required fields:', missingFields);
+        console.error('Validation failed - Missing required fields:', missingFields);
         setError(`Missing required fields: ${missingFields.join(', ')}`);
         return;
       }
 
       // Validate if files are selected
       if (newProject.videoFiles.length === 0) {
+        console.error('Validation failed - No files selected');
         setError('Please select at least one video file');
         return;
       }
 
+      // Initialize upload status for all files
+      const initialStatus = {} as Record<string, 'pending' | 'uploading' | 'success' | 'error'>;
+      newProject.videoFiles.forEach(file => {
+        initialStatus[file.name] = 'pending';
+      });
+      console.log(`[${getTimeStamp()}] Initializing upload status:`, initialStatus);
+      setUploadStatus(initialStatus);
+
       // Variable to store project ID for subsequent uploads
       let projectId: string | undefined;
+      let hasError = false;
 
       // Create project metadata
       const projectMetadata = {
@@ -131,22 +172,48 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         filePaths: [] as string[]
       };
 
+      console.log('Project metadata created:', projectMetadata);
+
       // Create parent folder name
       const parentFolder = projectMetadata.databaseName;
 
-      // Upload files one at a time
-      for (let i = 0; i < newProject.videoFiles.length; i++) {
-        const file = newProject.videoFiles[i];
-        const formData = new FormData();
-
-        // Get file name without extension for collection name
+      // Prepare all files metadata first
+      newProject.videoFiles.forEach((file, index) => {
         const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
         const filePath = `${parentFolder}/${collectionName}/${file.name}`;
-        
         projectMetadata.collections.push(collectionName);
         projectMetadata.filePaths.push(filePath);
+      });
 
-        // Add required fields at the root level
+      // Upload files in parallel with a concurrency limit of 3
+      const concurrencyLimit = 3;
+      const files = [...newProject.videoFiles];
+      const uploadPromises: Promise<any>[] = [];
+      let completedUploads = 0;
+
+      const uploadFile = async (file: File, index: number) => {
+        const fileStartTime = Date.now();
+        console.log(`[${getTimeStamp()}] Starting upload for file ${index + 1}/${newProject.videoFiles.length}:`, {
+          fileName: file.name,
+          fileSize: formatBytes(file.size),
+          fileType: file.type
+        });
+
+        setUploadProgress(prev => ({
+          ...prev,
+          [file.name]: {
+            loaded: 0,
+            total: file.size,
+            phase: 'uploading',
+            message: 'Preparing upload...'
+          }
+        }));
+
+        const formData = new FormData();
+        const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const filePath = `${parentFolder}/${collectionName}/${file.name}`;
+
+        // Add required fields
         formData.append('title', newProject.title);
         formData.append('description', newProject.description);
         formData.append('sourceLanguage', newProject.sourceLanguage);
@@ -155,29 +222,28 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         formData.append('status', newProject.status);
         formData.append('parentFolder', parentFolder);
 
-        // Add additional metadata
-        formData.append('metadata', JSON.stringify({
+        const fileMetadata = {
           databaseName: projectMetadata.databaseName,
           collections: projectMetadata.collections,
           filePaths: projectMetadata.filePaths,
           parentFolder: parentFolder,
           currentFile: {
-            index: i,
+            index,
             total: newProject.videoFiles.length,
-            isFirst: i === 0,
-            isLast: i === newProject.videoFiles.length - 1,
-            projectId: projectId // Will be undefined for first file
+            isFirst: index === 0,
+            isLast: index === newProject.videoFiles.length - 1,
+            projectId: projectId
           }
-        }));
+        };
 
-        // Add the file
+        formData.append('metadata', JSON.stringify(fileMetadata));
         formData.append('video', file);
 
         try {
-          // If not the first file, add a small delay to ensure previous upload is complete
-          if (i > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+          console.log(`[${getTimeStamp()}] Initiating upload request for file:`, file.name);
+          let lastProgressUpdate = Date.now();
+          let uploadStartTime = Date.now();
+          let uploadSpeed = 0;
 
           const response = await axios.post('/api/admin/projects', formData, {
             headers: {
@@ -187,67 +253,146 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             maxBodyLength: Infinity,
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
+                const currentTime = Date.now();
+                const timeSinceLastUpdate = (currentTime - lastProgressUpdate) / 1000;
+                const bytesSinceLastUpdate = progressEvent.loaded - (uploadProgress[file.name]?.loaded || 0);
+                uploadSpeed = bytesSinceLastUpdate / timeSinceLastUpdate;
+
+                const remainingBytes = progressEvent.total - progressEvent.loaded;
+                const estimatedTimeRemaining = remainingBytes / uploadSpeed;
+
                 const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                console.log(`[${getTimeStamp()}] Upload progress for ${file.name}: ${progress}%`, {
+                  loaded: formatBytes(progressEvent.loaded),
+                  total: formatBytes(progressEvent.total),
+                  speed: `${formatBytes(uploadSpeed)}/s`,
+                  timeElapsed: `${((currentTime - uploadStartTime) / 1000).toFixed(1)}s`,
+                  estimatedTimeRemaining: `${estimatedTimeRemaining.toFixed(1)}s`
+                });
+                
+                const newProgressData: UploadProgressData = {
+                  loaded: progressEvent.loaded,
+                  total: progressEvent.total,
+                  phase: 'uploading',
+                  message: `Uploading: ${formatBytes(uploadSpeed)}/s • ${estimatedTimeRemaining.toFixed(1)}s remaining`
+                };
+                
                 setUploadProgress(prev => ({
                   ...prev,
-                  [file.name]: progress
+                  [file.name]: newProgressData
                 }));
+
+                lastProgressUpdate = currentTime;
               }
             }
           });
-
-          console.log(`File ${i + 1} upload response:`, response.data);
 
           if (!response.data.success) {
             throw new Error(response.data.message || `Failed to upload file ${file.name}`);
           }
 
-          // Store the project ID from the first upload to use for subsequent uploads
-          if (i === 0) {
+          // Store the project ID from the first upload
+          if (index === 0) {
             projectId = response.data.data._id;
           }
 
-          setUploadStatus(prev => ({
+          completedUploads++;
+          const uploadDuration = (Date.now() - fileStartTime) / 1000;
+          console.log(`[${getTimeStamp()}] Upload completed for ${file.name}:`, {
+            duration: `${uploadDuration.toFixed(1)}s`,
+            averageSpeed: `${formatBytes(file.size / uploadDuration)}/s`,
+            completedUploads,
+            totalFiles: newProject.videoFiles.length
+          });
+
+          setUploadProgress(prev => ({
             ...prev,
-            [file.name]: 'success'
+            [file.name]: {
+              ...prev[file.name],
+              phase: 'success',
+              message: `Completed • Collection: ${collectionName}`
+            }
           }));
 
+          return response;
         } catch (error: any) {
-          console.error(`Error uploading file ${file.name}:`, error);
-          console.error('Error response:', error.response?.data);
-          console.error('Error status:', error.response?.status);
-          console.error('Error headers:', error.response?.headers);
-          
-          setUploadStatus(prev => ({
+          hasError = true;
+          setUploadProgress(prev => ({
             ...prev,
-            [file.name]: 'error'
+            [file.name]: {
+              ...prev[file.name],
+              phase: 'error',
+              message: error.message
+            }
           }));
           throw error;
         }
+      };
+
+      // Process files in parallel with concurrency limit
+      while (files.length > 0 || uploadPromises.length > 0) {
+        while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
+          const file = files.shift();
+          if (file) {
+            const index = newProject.videoFiles.indexOf(file);
+            uploadPromises.push(uploadFile(file, index));
+          }
+        }
+
+        if (uploadPromises.length > 0) {
+          await Promise.race(uploadPromises.map((p, i) => 
+            p.catch(e => ({ error: e, index: i }))
+          ));
+          
+          // Remove completed promises
+          uploadPromises.forEach((promise, index) => {
+            Promise.resolve(promise).then(
+              () => {
+                uploadPromises.splice(index, 1);
+              },
+              () => {
+                uploadPromises.splice(index, 1);
+              }
+            );
+          });
+        }
       }
 
-      setIsCreating(false);
-      setNewProject({
-        title: '',
-        description: '',
-        sourceLanguage: '',
-        targetLanguage: '',
-        status: 'pending',
-        videoFiles: []
+      const totalDuration = (Date.now() - startTime) / 1000;
+      console.log(`[${getTimeStamp()}] All files uploaded successfully:`, {
+        totalDuration: `${totalDuration.toFixed(1)}s`,
+        averageSpeed: `${formatBytes(newProject.videoFiles.reduce((acc, file) => acc + file.size, 0) / totalDuration)}/s`
       });
-      
-      if (typeof refetchProjects === 'function') {
-        await refetchProjects();
+
+      if (!hasError) {
+        console.log('All files uploaded successfully, cleaning up...');
+        setIsCreating(false);
+        setNewProject({
+          title: '',
+          description: '',
+          sourceLanguage: '',
+          targetLanguage: '',
+          status: 'pending',
+          videoFiles: []
+        });
+        
+        if (typeof refetchProjects === 'function') {
+          console.log('Refetching projects list...');
+          await refetchProjects();
+        }
+        
+        setSuccess('Project created successfully');
+        setTimeout(() => setSuccess(''), 3000);
       }
       
-      setSuccess('Project created successfully');
-      setTimeout(() => setSuccess(''), 3000);
-      
     } catch (err: any) {
-      console.error('Project creation error:', err);
+      const failureTime = (Date.now() - startTime) / 1000;
+      console.error(`[${getTimeStamp()}] Project creation failed after ${failureTime.toFixed(1)}s:`, {
+        error: err.message,
+        response: err.response?.data,
+        stack: err.stack
+      });
       const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
-      console.error('Error details:', errorMessage);
-      console.error('Full error response:', err.response?.data);
       setError(errorMessage);
       setTimeout(() => setError(''), 3000);
     }
@@ -370,6 +515,89 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       setError('Failed to remove user');
       setTimeout(() => setError(''), 3000);
     }
+  };
+
+  const renderProjectDetails = (project: Project) => {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">{project.title}</h3>
+          <div className="flex gap-2">
+            {/* Existing action buttons */}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{project.description}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status]}`}>
+                {project.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Episodes</label>
+            <select
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              value={selectedEpisode?.name || ''}
+              onChange={(e) => {
+                const episode = project.episodes.find(ep => ep.name === e.target.value);
+                setSelectedEpisode(episode || null);
+              }}
+            >
+              <option value="">Select an episode</option>
+              {project.episodes.map((episode) => (
+                <option key={episode.name} value={episode.name}>
+                  {episode.name} ({episode.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedEpisode && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Episode Details</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Name</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.name}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.status}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Collection Name</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.collectionName}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Uploaded At</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">
+                    {new Date(selectedEpisode.uploadedAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <a
+                  href={selectedEpisode.videoPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  View Video
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -593,13 +821,23 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">
-                              Collection: {project.dialogue_collection}
-                            </span>
+                            <div className="relative">
+                              <select 
+                                className="block w-full px-3 py-1 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {project.episodes?.map((episode, index) => (
+                                  <option key={index} value={episode.name}>
+                                    Episode: {episode.name}
+                                  </option>
+                                )) || (
+                                  <option value="">No episodes available</option>
+                                )}
+                              </select>
+                            </div>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
-                              Folder Path: {project.folderPath}
+                              Folder Path: {project.parentFolder}
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
@@ -802,7 +1040,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             const newProgress = { ...uploadProgress };
                             const newStatus = { ...uploadStatus };
                             files.forEach(file => {
-                              newProgress[file.name] = 0;
+                              newProgress[file.name] = { 
+                                loaded: 0, 
+                                total: file.size,
+                                phase: 'pending',
+                                message: 'Waiting to start'
+                              };
                               newStatus[file.name] = 'pending';
                             });
                             setUploadProgress(newProgress);
@@ -818,7 +1061,33 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           {newProject.videoFiles.map((file, index) => (
                             <div key={index} className="space-y-1">
                               <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-600 dark:text-gray-300 truncate pr-2">{file.name}</span>
+                                <span className="text-gray-600 dark:text-gray-300 truncate pr-2">
+                                  {file.name}
+                                  {uploadProgress[file.name] && (
+                                    <span 
+                                      data-file-name={file.name}
+                                      className={`ml-2 text-xs ${
+                                        uploadProgress[file.name].phase === 'success' ? 'text-green-500' :
+                                        uploadProgress[file.name].phase === 'error' ? 'text-red-500' :
+                                        uploadProgress[file.name].phase === 'creating-collection' ? 'text-yellow-500' :
+                                        uploadProgress[file.name].phase === 'processing' ? 'text-purple-500' :
+                                        uploadProgress[file.name].phase === 'uploading' ? 'text-blue-500' :
+                                        'text-gray-500'
+                                      }`}
+                                    >
+                                      {uploadProgress[file.name].phase === 'uploading' && (
+                                        ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(uploadProgress[file.name].total)})`
+                                      )}
+                                      {(uploadProgress[file.name].phase === 'pending' || 
+                                        uploadProgress[file.name].phase === 'creating-collection' || 
+                                        uploadProgress[file.name].phase === 'processing' || 
+                                        uploadProgress[file.name].phase === 'success' || 
+                                        uploadProgress[file.name].phase === 'error') && (
+                                        ` • ${uploadProgress[file.name].message}`
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -827,7 +1096,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                       videoFiles: prev.videoFiles.filter((_, i) => i !== index)
                                     }));
                                     
-                                    // Remove progress and status for the file
                                     const newProgress = { ...uploadProgress };
                                     const newStatus = { ...uploadStatus };
                                     delete newProgress[file.name];
@@ -836,15 +1104,30 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                     setUploadStatus(newStatus);
                                   }}
                                   className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                  disabled={uploadProgress[file.name]?.phase === 'uploading' || 
+                                           uploadProgress[file.name]?.phase === 'creating-collection' ||
+                                           uploadProgress[file.name]?.phase === 'processing'}
                                 >
                                   Remove
                                 </button>
                               </div>
-                              {uploadProgress[file.name] > 0 && (
+                              {uploadProgress[file.name] && uploadProgress[file.name].phase !== 'error' && (
                                 <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                                   <div 
-                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${uploadProgress[file.name]}%` }}
+                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                      uploadProgress[file.name].phase === 'success' ? 'bg-green-600' :
+                                      uploadProgress[file.name].phase === 'creating-collection' ? 'bg-yellow-600' :
+                                      uploadProgress[file.name].phase === 'processing' ? 'bg-purple-600' :
+                                      uploadProgress[file.name].phase === 'uploading' ? 'bg-blue-600' :
+                                      'bg-gray-600'
+                                    }`}
+                                    style={{ 
+                                      width: uploadProgress[file.name].phase === 'uploading' ?
+                                        `${(uploadProgress[file.name].loaded / uploadProgress[file.name].total) * 100}%` :
+                                        uploadProgress[file.name].phase === 'creating-collection' ? '60%' :
+                                        uploadProgress[file.name].phase === 'processing' ? '80%' :
+                                        uploadProgress[file.name].phase === 'success' ? '100%' : '0%'
+                                    }}
                                   ></div>
                                 </div>
                               )}

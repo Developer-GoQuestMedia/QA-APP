@@ -1,3 +1,48 @@
+export interface CharacterProfile {
+  age?: string;
+  occupation?: string;
+  accents?: string[];
+  otherNotes?: string;
+}
+
+export interface WordDetail {
+  characterName: string;
+  wordSequenceNumber: number;
+  word: string;
+  wordTimestamp: string;
+  dialogNumber: number;
+  dialogStartTimestamp: string;
+  dialogEndTimestamp: string;
+  dialogVocalFile?: string;
+  characterProfile?: CharacterProfile;
+  numberOfLipMovementsForThisWord?: number;
+}
+
+export interface DialogueText {
+  original: string;
+  translated: string;
+  adapted: string;
+}
+
+export interface Emotions {
+  primary: {
+    emotion?: string;
+    intensity?: number;
+  };
+  secondary?: {
+    emotion?: string;
+    intensity?: number;
+  };
+}
+
+export interface Scenario {
+  name?: string;
+  description?: string;
+  location?: string;
+  timeOfDay?: string;
+  otherScenarioNotes?: string;
+}
+
 export interface Dialogue {
   _id: string;
   index: number;
@@ -5,21 +50,8 @@ export interface Dialogue {
   timeEnd: string;
   character: string;
   videoUrl: string;
-  dialogue: {
-    original: string;
-    translated: string;
-    adapted: string;
-  };
-  emotions?: {
-    primary: {
-      emotion: string;
-      intensity: number;
-    };
-    secondary?: {
-      emotion: string;
-      intensity: number;
-    };
-  };
+  dialogue: DialogueText;
+  emotions?: Emotions;
   direction?: string;
   lipMovements?: string;
   sceneContext?: string;
@@ -33,4 +65,7 @@ export interface Dialogue {
   projectId?: string;
   updatedAt?: string;
   updatedBy?: string;
+  words?: WordDetail[];
+  scenario?: Scenario;
+  deleteVoiceOver?: boolean;
 } 

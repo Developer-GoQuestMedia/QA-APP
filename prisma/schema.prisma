@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  transcriber
+  translator
+  voiceOver
+  director
+  admin
+}
+
+enum ProjectStatus {
+  pending
+  in_progress
+  completed
+  on_hold
+}
+
+enum EpisodeStatus {
+  uploaded
+  processing
+  error
+}
+
+model User {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  username        String      @unique
+  email           String      @unique
+  password        String?
+  role            UserRole
+  lastLogin       DateTime?
+  lastLogout      DateTime?
+  sessionsLog     Json[]
+  assignedProjects String[]
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Project {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  description      String
+  sourceLanguage   String
+  targetLanguage   String
+  status           ProjectStatus
+  assignedTo       Json[]        // Array of AssignedUser objects
+  parentFolder     String
+  databaseName     String
+  uploadStatus     Json          // Object containing upload status
+  episodes         Episode[]
+  dialogues        Dialogue[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Episode {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  collectionName  String
+  videoPath       String
+  videoKey        String
+  status          EpisodeStatus
+  uploadedAt      DateTime
+  project         Project       @relation(fields: [projectId], references: [id])
+  projectId       String        @db.ObjectId
+}
+
+model Dialogue {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  index           Int
+  timeStart       String
+  timeEnd         String
+  character       String
+  videoUrl        String
+  dialogue        Json      // Contains original, translated, adapted
+  emotions        Json?     // Contains primary and secondary emotions
+  direction       String?
+  lipMovements    String?
+  sceneContext    String?
+  technicalNotes  String?
+  culturalNotes   String?
+  status          String
+  voiceOverUrl    String?
+  voiceOverNotes  String?
+  directorNotes   String?
+  recordingStatus String?
+  words           Json?     // Array of WordDetail objects
+  scenario        Json?     // Scenario object
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?
+  project         Project   @relation(fields: [projectId], references: [id])
+  projectId       String    @db.ObjectId
+}

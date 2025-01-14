@@ -7,27 +7,36 @@ interface AssignedUser {
   role: string;
 }
 
+export interface Episode {
+  _id: string;
+  name: string;
+  collectionName: string;
+  videoPath: string;
+  videoKey: string;
+  status: 'uploaded' | 'processing' | 'error';
+  uploadedAt: Date;
+}
+
 export interface Project {
+  dialogue_collection: any;
   _id: string;
   title: string;
   description: string;
   sourceLanguage: string;
   targetLanguage: string;
   status: ProjectStatus;
-  videoPath?: string;
-  folderPath?: string;
-  dialogue_collection: string;
   assignedTo: AssignedUser[];
   updatedAt: string | Date;
   createdAt?: string | Date;
-  
-  // Episode specific fields
-  episodeNumber: number;
-  seasonNumber?: number;
-  seriesTitle?: string;
-  duration?: number; // in minutes
-  originalAirDate?: string | Date;
-  subtitleDeadline?: string | Date;
+  parentFolder: string;
+  databaseName: string;
+  episodes: Episode[];
+  uploadStatus: {
+    totalFiles: number;
+    completedFiles: number;
+    currentFile: number;
+    status: string;
+  };
 }
 
 // Import and re-export the UserRole type from types/user

@@ -1,3 +1,271 @@
+Below is a deep and detailed architecture-level flow and data flow explanation of the QA App, based on the repository's folder structure and file contents. This walkthrough will give you a comprehensive understanding of:
+
+How the project is organized
+Where each type of data is handled
+How the server-side (API) and client-side (React) pieces communicate
+How user roles (RBAC) flow through the application
+The lifecycle of data from database to UI
+1. High-Level Overview
+This application is built with Next.js (14+) as its core framework. It uses:
+
+App Router structure (in /app directory) for server components, client components, and API routes.
+API Endpoints for server-side logic and data fetching (mostly in /app/api/*).
+MongoDB (via mongoose/native Mongo driver usage in lib/mongodb.ts) as the primary database.
+Prisma for some parts (like /app/api/episodes) referencing a prisma client (possibly for more advanced querying or optional usage).
+NextAuth for authentication (/app/api/auth/[...nextauth] + auth.config.ts).
+Role-Based Access Control (RBAC) enforced in middleware.ts and in the server routes themselves.
+React Query (@tanstack/react-query) on the client side for data fetching and caching.
+At a high-level, the user flow is:
+
+User logs in
+
+NextAuth checks credentials.
+User's session is created with a role (admin, director, transcriber, translator, voiceOver).
+Middleware verifies the session / user role**
+
+If not authenticated, it redirects to /login.
+If user is authenticated, it checks if the requested route is allowed by the user’s role.
+Otherwise, it redirects to the correct dashboard or denies access.
+User lands on their dashboard (e.g., /allDashboards/admin or /allDashboards/director, etc.).
+
+The relevant data (projects, dialogues, users, etc.) is fetched from the server via React Query + the Next.js API routes.
+User performs actions (CRUD operations on projects, dialogues, uploading voice-over audio, etc.).
+
+These are handled by the various /api/* endpoints.
+The server updates the database and returns updated data.
+The React Query cache is invalidated or updated to keep the UI in sync.
+Data is stored in MongoDB. Some calls (like /app/api/episodes) use Prisma with the same Mongo DB, presumably for more complex or schema-driven operations.
+
+Below is a more granular breakdown of the core flow and architecture.
+
+2. Directory/Module-by-Module Explanation
+2.1. /app/ (Next.js App Router)
+2.1.1. Route Groupings
+/app/allDashboards/:
+
+Houses dashboards for each role:
+admin/
+director/
+transcriber/
+translator/
+voice-over/
+These pages fetch data relevant to each role’s tasks (like listing projects assigned to them).
+Data Flow:
+A user visits allDashboards/[role].
+The page checks session (via next-auth/react hooks).
+The page uses React Query hooks (useProjects, etc.) to fetch data from /api/projects, /api/dialogues, etc.
+/app/admin/project/[projectId]
+
+Sub-routes for specialized Admin views (e.g. progress).
+Data Flow:
+Admin user visits /admin/project/[projectId]/progress.
+Frontend calls /api/admin/projects/[projectId]/progress to get the project’s progress stats (transcribed, translated, voice-over, etc.).
+The server queries MongoDB to aggregate dialogue statuses and returns a JSON response.
+/app/api/:
+
+Where all Next.js API routes live in the new App Router paradigm.
+Subfolders:
+admin/ – Admin-only endpoints for managing projects and users.
+auth/ – NextAuth config and endpoints.
+dialogues/ – CRUD endpoints for dialogues.
+projects/ – Non-admin project endpoints.
+upload-* – Endpoints for uploading audio files to S3-compatible storage.
+users/ – Endpoints for user data (e.g., me route).
+voice-over/upload – Another audio upload endpoint specialized for voice-over usage.
+2.1.2. API Calls and Their Flows
+Below are the key subfolders in /app/api/ and their roles:
+
+/app/api/admin/projects
+
+route.ts:
+Handles GET (list all projects), POST (create a new project & handle video file uploads), DELETE (delete entire project, drop DB, remove from S3).
+This is for admin usage only.
+[projectId]/assign/route.ts:
+Assign or remove users from a project.
+[projectId]/progress/route.ts:
+Returns the % of dialogues transcribed, translated, etc.
+[projectId]/route.ts:
+Get single project, update project, or delete.
+/app/api/admin/users
+
+Manage user creation, listing, or single user GET/PATCH/DELETE.
+Admin-only usage.
+/app/api/auth
+
+[...nextauth] + auth.config.ts – NextAuth configuration.
+login/route.ts – A simpler login endpoint returning a JWT token if needed.
+/app/api/dialogues
+
+route.ts: GET all dialogues for a project (and optionally filter by collection or episodeId).
+[id]/route.ts: GET, PUT, PATCH, DELETE single dialogue.
+/app/api/projects
+
+GET all projects, or POST create.
+Another route for assign/route.ts.
+/app/api/episodes/route.ts
+
+Uses prisma to get episodes for a project.
+Possibly is bridging from a historical approach or for advanced queries.
+/app/api/upload-audio/ and /app/api/upload-voice-over/
+
+Handle uploading audio to R2/S3, then update dialogues in the DB with the resulting audio URLs.
+2.1.3. Front-End Pages Within /app/
+page.tsx (root): redirects to /allDashboards.
+
+login/page.tsx:
+
+The login screen.
+Uses signIn('credentials', ...).
+On success, user is redirected to their appropriate dashboard.
+layout.tsx: The root layout that sets up HTML skeleton, global <Providers>, etc.
+
+globals.css + Tailwind config: Project-wide styles.
+
+2.2. /components/
+2.2.1. Shared UI Components
+Button.tsx / Card.tsx / ThemeToggle.tsx:
+Basic, reusable UI elements or “atoms.”
+Also exist in the /app/components/ path (some duplication or transitional refactor is visible in the repo).
+2.2.2. Role-Specific Views
+These are the more complex screens or “feature components,” each tailored to a user role or workflow:
+
+AdminView.tsx:
+
+A React component that lists projects, handles creating new projects, editing, assigning users, etc.
+Data fetched with React Query from /api/admin/* routes.
+The UI manipulates the DB by calling admin endpoints.
+TranscriberView.tsx, TranslatorView.tsx, DirectorView.tsx, VoiceOverView.tsx
+
+Each shows a list of “assigned” projects for that role.
+Clicking a project navigates to [projectId]/page.tsx with a specialized dialogue interface (e.g., for transcription or translation).
+TranscriberDialogueView.tsx, TranslatorDialogueView.tsx, DirectorDialogueView.tsx, VoiceOverDialogueView.tsx
+
+Each is a more specialized UI for handling dialogues: transcribing text, adding translations, listening to the video, uploading or recording audio, etc.
+They rely heavily on React Query + custom hooks (useDialogues, useEpisodes, useAudioRecording) to manage the data + interactions with /api/dialogues routes.
+2.2.3. Other Utility Components
+DashboardLayout.tsx: A layout with a top nav bar, signOut button, etc., specifically used in some older approach (possibly replaced by Next.js layout?).
+AudioVisualizer.tsx: Visualizes real-time audio waveforms from a MediaStream.
+RecordingTimer.tsx: A small bar + time tracker that shows how long you’ve been recording audio.
+2.3. /hooks/
+useAudioRecording.ts:
+
+A custom React hook that handles the complexities of accessing the user’s microphone, streaming audio, storing it into a Blob, stopping/starting recording, and giving you a final audio file.
+This hook is used in the VoiceOverDialogueView.tsx and other places that let you record audio.
+useDialogues.ts, useEpisodes.ts, useProject.ts, useProjects.ts:
+
+A set of “React Query hooks” that fetch data from the relevant endpoints.
+For instance, useProjects calls /api/projects and caches them. useDialogues calls /api/dialogues?projectId=....
+2.4. /lib/
+mongodb.ts:
+
+Sets up a MongoClient with a global promise in dev mode to avoid re-initializing the client on every call.
+This is used by server (API) code for direct queries via client.db().
+auth.ts and auth.config.ts:
+
+NextAuth options or credentials-based approach.
+e.g., hashing passwords with bcrypt and verifying them in the DB.
+prisma.ts:
+
+Instantiates a Prisma client for the same DB.
+Some code in /app/api/episodes/route.ts uses this.
+seed.ts: Basic seeds for local dev or test.
+
+2.5. /types/
+dialogue.ts, project.ts, user.ts:
+
+TypeScript type definitions for dialogues, projects, and users.
+Typically used on both the server side (for typed DB results) and on the client side (for typed React props and state).
+next-auth.d.ts:
+
+Extended type definitions for NextAuth to include role, username, etc. in the session and JWT.
+2.6. /utils/
+audio.ts: Contains code that creates a WAV blob from raw Float32 PCM data, plus a custom Worklet for capturing audio chunks.
+formatters.ts: Parsing times (like 00:01:31:480) into numeric seconds, etc.
+cn.ts: Merges Tailwind classes with clsx + tailwind-merge.
+2.7. middleware.ts (RBAC & Auth Enforcement)
+This file is crucial in Next.js 13+ for server-side path protection:
+
+Checks if user is authenticated (inspects JWT from NextAuth).
+Enforces route restrictions based on the user’s role:
+E.g., if a user with role “transcriber” tries to access /allDashboards/director/..., it redirects them to /allDashboards/transcriber.
+Redirects to /login if no token (unauthenticated).
+The role -> path relationships are defined in ROLE_ROUTES.
+Effectively, the “front door” to all pages like /allDashboards/director/ is locked if your token role doesn’t match.
+
+3. Detailed Data Flow
+Here’s an example end-to-end flow for an Admin user:
+
+Login:
+
+Admin visits /login, enters username, password.
+NextAuth calls the credentials authorize function (lib/auth.ts or auth.config.ts).
+If correct, NextAuth sets a JWT in cookies and re-directs to allDashboards/admin.
+Middleware (middleware.ts) checks:
+
+It sees the token, sees role=admin, and allows /allDashboards/admin route.
+Admin Dashboard (/app/allDashboards/admin/page.tsx):
+
+The React component uses React Query’s useProjects() -> calls /api/projects -> GET returns all projects from db.collection('projects').
+The Admin sees the list of projects, can click on one, or can create a new project.
+Creating a Project:
+
+AdminView has a form, user selects some video files, etc.
+This calls /api/admin/projects via POST with a FormData that includes the video file.
+The route:
+Checks if user is admin.
+Creates DB records in projects collection.
+Uploads the file to R2 / S3.
+Returns success JSON.
+Admin can Assign a User to a Project:
+
+Calls /api/admin/projects/[projectId]/assign via POST with { usernames: ["transcriber1"] }.
+The server finds the user doc in users collection, updates projects collection’s assignedTo array with their role.
+The assigned user now sees that project in their dashboard because the front-end filters for “my assigned projects.”
+
+4. Role-Specific Use Cases
+Transcriber logs in, sees only projects assigned to them with role=transcriber.
+
+They open a project’s dialogues screen (/allDashboards/transcriber/[projectId]).
+That calls useDialogues(projectId) -> /api/dialogues?projectId=xyz.
+They transcribe text, and upon saving, the front-end calls PATCH /api/dialogues/[dialogueId] with { status: 'transcribed', dialogue: {...} }.
+Translator does a similar flow but updates status to translated and sets dialogue.translated field.
+
+Director can approve or request revision on the dialogue. Also can leave directorNotes.
+
+VoiceOver user can record audio via useAudioRecording, then calls /api/upload-voice-over to store the WAV file. Finally sets the dialogue.voiceOverUrl in the DB.
+
+Admin is basically “God mode”—manages all data, including user creation, project creation, assignment, deletion.
+
+5. Conclusion
+Overall, the QA App:
+
+Uses Next.js as a unified environment for both frontend and backend (API routes).
+MongoDB as the main data store, with partial usage of Prisma in certain endpoints.
+NextAuth for authentication, with role-based checks stored in the JWT.
+Middleware for role-based route protection.
+React Query on the client side for data fetching and caching, hooking into the /app/api/* routes.
+Audio workflows (for transcription, translation, voice-over) revolve around the dialogues collection—each dialogue row has fields for “transcribed text,” “translated text,” “voiceOverUrl,” “directorNotes,” etc.
+Multiple specialized UI components in the components/ folder handle each role’s tasks in a step-by-step workflow.
+This architecture cleanly separates roles, data (projects, dialogues, etc.), and functionality (API routes for each operation), providing a robust structure for multi-step media workflows.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # QA Application Documentation
 
 ## Overview

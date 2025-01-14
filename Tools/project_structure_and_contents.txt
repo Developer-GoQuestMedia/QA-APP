@@ -41,6 +41,7 @@
         📁 [projectId]/
           📁 assign/
             📄 route.ts
+          📁 episode/
           📁 progress/
             📄 route.ts
           📄 route.ts
@@ -54,10 +55,13 @@
         📄 route.ts
       📁 [...nextauth]/
         📄 route.ts
+    📁 cleanup/
     📁 dialogues/
       📄 route.ts
       📁 [id]/
         📄 route.ts
+    📁 episodes/
+      📄 route.ts
     📁 projects/
       📄 route.ts
       📁 [id]/
@@ -103,6 +107,7 @@
   📄 DirectorView.tsx
   📁 layout/
   📄 RecordingTimer.tsx
+  📄 SystemInit.tsx
   📄 TranscriberDialogueView.tsx
   📄 TranscriberView.tsx
   📄 TranslatorDialogueView.tsx
@@ -116,6 +121,8 @@
 📁 hooks/
   📄 useAudioRecording.ts
   📄 useDialogues.ts
+  📄 useEpisodeDialogues.ts
+  📄 useEpisodes.ts
   📄 useProject.ts
   📄 useProjects.ts
 📄 jest.config.ts
@@ -123,17 +130,24 @@
 📁 lib/
   📄 auth.ts
   📄 mongodb.ts
+  📄 prisma.ts
   📄 seed.ts
   📄 utils.ts
 📄 middleware.ts
 📄 next.config.mjs
 📄 package.json
 📄 postcss.config.mjs
+📁 prisma/
+  📄 schema.prisma
 📁 scripts/
   📄 build-success.js
+  📄 dialougeSample.json
+  📄 migrate-dialogues.ts
+  📄 migrate-roles.ts
   📄 seed-users.ts
   📄 seed.ts
   📄 start-app.js
+  📄 test-db-creation.ts
 📁 src/
   📁 types/
     📄 dialogue.ts
@@ -150,14 +164,7 @@
   📄 audio.ts
   📄 cn.ts
   📄 formatters.ts
-📁 __tests__/
-  📁 components/
-    📄 TranscriberDialogueView.test.tsx
-    📄 TranscriberView.test.tsx
-    📄 VoiceOverDialogueView.test.tsx
-    📄 VoiceOverView.test.tsx
-  📄 login.test.tsx
-  📄 mongodb.test.ts
+📄 vercel.json
 
 
 # File Contents
@@ -168,38 +175,23 @@
 {
   "extends": [
     "next/core-web-vitals",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:jest/recommended",
-    "plugin:testing-library/react"
+    "plugin:@typescript-eslint/recommended"
   ],
   "plugins": [
-    "@typescript-eslint",
-    "jest",
-    "testing-library"
+    "@typescript-eslint"
   ],
-  "env": {
-    "jest": true,
-    "browser": true,
-    "node": true
-  },
   "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^(rotate|opacity|scale|animControls|autoResizeTextArea|checkMediaSupport|mediaRecorderRef|playbackRate|handleNext|handlePrevious|rewindFiveSeconds|changePlaybackRate|isLoadingUsers)$"
+      }
+    ],
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": ["warn", {
-      "varsIgnorePattern": "^(rotate|opacity|scale|animControls|autoResizeTextArea|checkMediaSupport|mediaRecorderRef|playbackRate|handleNext|handlePrevious|rewindFiveSeconds|changePlaybackRate)$",
-      "argsIgnorePattern": "^_"
-    }],
-    "jest/no-disabled-tests": "warn",
-    "jest/no-focused-tests": "error",
-    "jest/no-identical-title": "error",
-    "jest/prefer-to-have-length": "warn",
-    "jest/valid-expect": "error"
-  },
-  "overrides": [
-    {
-      "files": ["**/__tests__/**/*.[jt]s?(x)", "**/?(*.)+(spec|test).[jt]s?(x)"],
-      "extends": ["plugin:testing-library/react"]
-    }
-  ]
+    "react/no-unescaped-entities": "off",
+    "react-hooks/exhaustive-deps": "warn"
+  }
 }
 
 ```
@@ -735,30 +727,76 @@ export default function Page() {
 
   const fetchProjects = async () => {
     try {
-      console.log('Fetching projects...');
+      console.log('Admin dashboard: Fetching projects...', {
+        timestamp: new Date().toISOString(),
+        userId: session?.user?.id,
+        userRole: session?.user?.role
+      })
+
       const { data } = await axios.get('/api/projects')
       const projectsWithDates = data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
         updatedAt: string;
         createdAt?: string;
+        _id: string;
       }) => ({
         ...project,
         updatedAt: new Date(project.updatedAt),
         createdAt: project.createdAt ? new Date(project.createdAt) : undefined
       }))
-      console.log('Projects fetched successfully:', projectsWithDates.length);
+
+      console.log('Admin dashboard: Projects fetched successfully:', {
+        timestamp: new Date().toISOString(),
+        projectCount: projectsWithDates.length,
+        projectIds: projectsWithDates.map((p: { _id: string }) => p._id),
+        userRole: session?.user?.role
+      })
+
       setProjects(projectsWithDates)
     } catch (error) {
-      console.error('Error fetching projects:', error)
+      console.error('Admin dashboard: Error fetching projects:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        userId: session?.user?.id,
+        userRole: session?.user?.role
+      })
     }
   }
 
   useEffect(() => {
-    fetchProjects()
-  }, [])
+    console.log('Admin dashboard: Component mounted', {
+      timestamp: new Date().toISOString(),
+      sessionStatus: status,
+      userRole: session?.user?.role,
+      userId: session?.user?.id
+    })
+
+    if (status === 'authenticated') {
+      fetchProjects()
+    }
+  }, [status, session])
 
   if (status === 'loading') {
+    console.log('Admin dashboard: Loading state', {
+      timestamp: new Date().toISOString(),
+      sessionStatus: status
+    })
     return <div>Loading...</div>
   }
+
+  if (status === 'unauthenticated') {
+    console.log('Admin dashboard: Unauthenticated access attempt', {
+      timestamp: new Date().toISOString(),
+      pathname: window.location.pathname
+    })
+    return null
+  }
+
+  console.log('Admin dashboard: Rendering dashboard', {
+    timestamp: new Date().toISOString(),
+    projectCount: projects.length,
+    userRole: session?.user?.role,
+    userId: session?.user?.id
+  })
 
   return (
     <DashboardLayout title="Admin Dashboard">
@@ -772,15 +810,13 @@ export default function Page() {
 ```tsx
 'use client'
 
-import { useSession } from 'next-auth/react'
 import DirectorView from '@/components/DirectorView'
 import { useProjects } from '@/hooks/useProjects'
 
 export default function DirectorDashboard() {
-  const { data: session, status } = useSession()
   const { data: projects, isLoading: isLoadingProjects } = useProjects()
 
-  if (status === 'loading' || isLoadingProjects) {
+  if (isLoadingProjects) {
     return <div>Loading...</div>
   }
 
@@ -887,6 +923,7 @@ export default function TranscriberDashboard() {
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialogues } from '@/hooks/useDialogues'
+import { useEpisodes } from '@/hooks/useEpisodes'
 import TranscriberDialogueView from '../../../../components/TranscriberDialogueView'
 
 export default function TranscriberProjectPage({
@@ -896,9 +933,10 @@ export default function TranscriberProjectPage({
 }) {
   const { status } = useSession()
   const router = useRouter()
-  const { data: dialogues, isLoading } = useDialogues(params.projectId)
+  const { data: dialogues, isLoading: isLoadingDialogues } = useDialogues(params.projectId)
+  const { data: episodes, isLoading: isLoadingEpisodes } = useEpisodes(params.projectId)
 
-  if (status === 'loading' || isLoading) {
+  if (status === 'loading' || isLoadingDialogues || isLoadingEpisodes) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
@@ -920,7 +958,11 @@ export default function TranscriberProjectPage({
             ← Back to Projects
           </button>
         </div>
-        <TranscriberDialogueView dialogues={dialogues || []} projectId={params.projectId} />
+        <TranscriberDialogueView 
+          dialogues={dialogues || []} 
+          projectId={params.projectId} 
+          episodes={episodes || []}
+        />
       </div>
     </div>
   )
@@ -1010,9 +1052,26 @@ export default function VoiceOverDashboard() {
   const { data: session, status } = useSession()
   const { data: projects, isLoading: isLoadingProjects } = useProjects()
 
+  console.log('VoiceOver Dashboard Render:', {
+    sessionStatus: status,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    projectsLoaded: !!projects,
+    projectCount: projects?.length
+  })
+
   if (status === 'loading' || isLoadingProjects) {
+    console.log('Dashboard loading state:', {
+      sessionLoading: status === 'loading',
+      projectsLoading: isLoadingProjects
+    })
     return <div>Loading...</div>
   }
+
+  console.log('Dashboard ready to render:', {
+    authenticated: !!session,
+    role: session?.user?.role
+  })
 
   return (
     <div className="min-h-screen bg-background">
@@ -1071,99 +1130,604 @@ export default function VoiceOverProjectPage({
 
 ## File: app\api\admin\projects\route.ts
 ```ts
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { connectToDatabase } from '@/lib/mongodb';
+import { ObjectId, WithId, ClientSession } from 'mongodb';
 
-// GET all projects
-export async function GET() {
+// Route Segment Config
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Maximum allowed for hobby plan
+export const runtime = 'nodejs';
+
+// Initialize S3 client for R2
+const s3Client = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_BUCKET_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+  },
+});
+
+const BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
+
+// Helper function to delete folder and its contents from R2
+async function deleteR2Folder(folderPath: string) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    // Check if user is authenticated and is an admin
-    if (!session || session.user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized access' },
-        { status: 401 }
-      );
+    // List all objects in the folder
+    const listCommand = new ListObjectsV2Command({
+      Bucket: BUCKET_NAME,
+      Prefix: folderPath,
+    });
+
+    const listedObjects = await s3Client.send(listCommand);
+
+    if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+      return;
     }
 
-    const { db } = await connectToDatabase();
-    const projects = await db.collection('projects')
-      .find({})
-      .sort({ updatedAt: -1 })
-      .toArray();
-
-    return NextResponse.json({ success: true, data: projects });
+    // Delete all objects in the folder
+    await Promise.all(
+      listedObjects.Contents.map(async (object) => {
+        if (object.Key) {
+          const deleteCommand = new DeleteObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: object.Key,
+          });
+          await s3Client.send(deleteCommand);
+        }
+      })
+    );
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    console.error('Error deleting R2 folder:', error);
+    throw error;
+  }
+}
+
+interface Episode {
+  name: string;
+  collectionName: string;
+  videoPath: string;
+  videoKey: string;
+  status: 'uploaded' | 'processing' | 'error';
+  uploadedAt: Date;
+}
+
+interface ProjectDocument {
+  title: string;
+  description: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  dialogue_collection?: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  assignedTo: any[];
+  parentFolder: string;
+  databaseName: string;
+  episodes: Episode[];
+  uploadStatus: {
+    totalFiles: number;
+    completedFiles: number;
+    currentFile: number;
+    status: string;
+  };
+}
+
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  let videoFile: File | null = null;
+  let uploadedFiles: Array<{
+    name: string;
+    videoPath: string;
+    videoKey: string;
+    collectionName: string;
+  }> = [];
+
+  try {
+    // Step 0: Authorization check
+    const authSession = await getServerSession(authOptions);
+    if (!authSession || !authSession.user || authSession.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const formData = await request.formData();
+    videoFile = formData.get('video') as File;
+
+    // Extract project data
+    const projectData = {
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      sourceLanguage: formData.get('sourceLanguage') as string,
+      targetLanguage: formData.get('targetLanguage') as string,
+      status: 'initializing' as const
+    };
+
+    // Get metadata
+    const metadata = JSON.parse(formData.get('metadata') as string);
+    const { currentFile, collections, filePaths } = metadata;
+    const { isFirst, isLast, projectId, index } = currentFile;
+
+    // Only proceed with initialization steps if this is the first file
+    if (isFirst) {
+      console.log(`[${new Date().toISOString()}] Starting new project initialization:`, {
+        title: projectData.title,
+        totalFiles: collections.length
+      });
+
+      // Step 1: Create parent folder name (sanitize title for folder name)
+      const parentFolder = projectData.title.replace(/[^a-zA-Z0-9-_]/g, '_');
+      console.log(`[${new Date().toISOString()}] Step 1: Created parent folder name: ${parentFolder}`);
+
+      // Step 2: Create project document in MongoDB
+      const { db, client } = await connectToDatabase();
+      const mongoSession = await client.startSession();
+
+      try {
+        await mongoSession.withTransaction(async () => {
+          // Check if project already exists
+          const existingProject = await db.collection('projects').findOne({
+            title: projectData.title,
+            parentFolder: parentFolder
+          });
+
+          if (existingProject) {
+            throw new Error('Project with this title already exists');
+          }
+
+          // Create initial project document
+          const result = await db.collection<ProjectDocument>('projects').insertOne({
+            ...projectData,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            assignedTo: [],
+            parentFolder: parentFolder,
+            databaseName: parentFolder,
+            episodes: [],
+            uploadStatus: {
+              totalFiles: collections.length,
+              completedFiles: 0,
+              currentFile: -1,
+              status: 'initializing'
+            }
+          }, { session: mongoSession });
+
+          console.log(`[${new Date().toISOString()}] Step 2: Created project document:`, {
+            projectId: result.insertedId,
+            title: projectData.title
+          });
+
+          // Step 3: Create database
+          if (!/^[a-zA-Z0-9_-]+$/.test(parentFolder)) {
+            throw new Error('Invalid database name. Use only letters, numbers, underscores, and hyphens');
+          }
+
+          const newDb = client.db(parentFolder);
+          console.log(`[${new Date().toISOString()}] Step 3: Created database: ${parentFolder}`);
+
+          // Update project status to ready for upload
+          await db.collection<ProjectDocument>('projects').updateOne(
+            { _id: result.insertedId },
+            { $set: { status: 'uploading' } },
+            { session: mongoSession }
+          );
+        });
+      } finally {
+        await mongoSession.endSession();
+      }
+    }
+
+    // Step 4: Upload file to R2 and create folder
+    if (videoFile) {
+      console.log(`[${new Date().toISOString()}] Step 4: Processing file ${index + 1}/${collections.length}:`, {
+        fileName: videoFile.name
+      });
+
+      try {
+        // Generate folder path using parent folder structure
+        const collectionName = videoFile.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const parentFolder = projectData.title.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const folderPath = `${parentFolder}/${collectionName}/`;
+        const key = `${folderPath}${videoFile.name}`;
+
+        // Upload to R2
+        const arrayBuffer = await videoFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        const putCommand = new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          Body: buffer,
+          ContentType: videoFile.type,
+        });
+
+        await s3Client.send(putCommand);
+        console.log(`[${new Date().toISOString()}] Uploaded file to R2:`, { key });
+
+        // Generate signed URL
+        const getCommand = new GetObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+        });
+
+        const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+        
+        uploadedFiles.push({
+          name: videoFile.name,
+          videoPath: signedUrl,
+          videoKey: key,
+          collectionName
+        });
+
+      } catch (uploadError: any) {
+        console.error(`[${new Date().toISOString()}] R2 upload error:`, uploadError);
+        throw uploadError;
+      }
+    }
+
+    // Step 5: Update project and create collections if last file
+    const { db, client } = await connectToDatabase();
+    const mongoSession = await client.startSession();
+
+    try {
+      let transactionResult;
+      await mongoSession.withTransaction(async () => {
+        // Find the project
+        const project = await db.collection<ProjectDocument>('projects').findOne({
+          title: projectData.title,
+          parentFolder: projectData.title.replace(/[^a-zA-Z0-9-_]/g, '_')
+        });
+
+        if (!project) {
+          throw new Error('Project not found');
+        }
+
+        // Update project with new episode
+        const result = await db.collection<ProjectDocument>('projects').findOneAndUpdate(
+          { _id: project._id },
+          {
+            $push: {
+              episodes: {
+                $each: uploadedFiles.map(file => ({
+                  name: file.name,
+                  collectionName: file.collectionName,
+                  videoPath: file.videoPath,
+                  videoKey: file.videoKey,
+                  status: 'uploaded',
+                  uploadedAt: new Date()
+                }))
+              }
+            },
+            $set: {
+              updatedAt: new Date(),
+              uploadStatus: {
+                totalFiles: collections.length,
+                completedFiles: index + 1,
+                currentFile: index,
+                status: isLast ? 'completed' : 'uploading'
+              },
+              status: isLast ? 'pending' : 'uploading'
+            }
+          },
+          { 
+            returnDocument: 'after',
+            session: mongoSession 
+          }
+        );
+
+        if (!result) {
+          throw new Error('Failed to update project');
+        }
+
+        transactionResult = result;
+
+        // If this is the last file, create collections for all episodes
+        if (isLast) {
+          console.log(`[${new Date().toISOString()}] Creating collections for all episodes`);
+          const allEpisodes = result.episodes || [];
+          
+          for (const episode of allEpisodes) {
+            const collectionName = episode.collectionName;
+            const newCollection = client.db(project.databaseName).collection(collectionName);
+            console.log(`[${new Date().toISOString()}] Created collection: ${collectionName}`);
+          }
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: transactionResult
+      });
+    } catch (error: any) {
+      console.error(`[${new Date().toISOString()}] Operation error:`, {
+        error: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      throw error;
+    } finally {
+      await mongoSession.endSession();
+    }
+  } catch (error: any) {
+    console.error(`[${new Date().toISOString()}] Error processing request after ${((Date.now() - startTime) / 1000).toFixed(1)}s:`, {
+      error: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { 
+        error: 'Failed to process request',
+        details: error.message,
+        code: error.code,
+        file: videoFile?.name || 'unknown'
+      },
       { status: 500 }
     );
   }
 }
 
-// POST create new project
-export async function POST(request: Request) {
+export async function DELETE(request: NextRequest) {
+  const startTime = new Date().toISOString();
+  const logContext = {
+    timestamp: startTime,
+    endpoint: 'DELETE /api/admin/projects'
+  };
+
   try {
+    console.log('Starting project deletion process...', {
+      ...logContext,
+      step: 'initialization'
+    });
+    
     const session = await getServerSession(authOptions);
-    
-    if (!session || session.user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized access' },
-        { status: 401 }
-      );
+    if (!session || !session.user || session.user.role !== 'admin') {
+      console.log('Unauthorized deletion attempt:', {
+        ...logContext,
+        step: 'authorization',
+        user: session?.user,
+        status: 'rejected'
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { title, description, sourceLanguage, targetLanguage, dialogue_collection } = body;
+    // Add user info to log context
+    Object.assign(logContext, {
+      userId: session.user.id,
+      userRole: session.user.role
+    });
 
-    // Validate required fields
-    if (!title || !description || !sourceLanguage || !targetLanguage || !dialogue_collection) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    // Get project ID from the URL
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get('id');
+
+    if (!projectId) {
+      console.log('Missing project ID in delete request', {
+        ...logContext,
+        step: 'validation',
+        status: 'rejected'
+      });
+      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    const { db } = await connectToDatabase();
-    
-    // Create a new collection for dialogues
-    try {
-      await db.createCollection(dialogue_collection);
-      console.log(`Created new collection: ${dialogue_collection}`);
-    } catch (error: any) {
-      // If collection already exists, continue
-      if (error.code !== 48) { // 48 is MongoDB's error code for "collection already exists"
-        throw error;
+    Object.assign(logContext, { projectId });
+
+    console.log('Connecting to database...', {
+      ...logContext,
+      step: 'database_connection'
+    });
+    const { db, client } = await connectToDatabase();
+
+    // Get project details before deletion
+    console.log('Fetching project details...', {
+      ...logContext,
+      step: 'project_lookup'
+    });
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+
+    if (!project) {
+      console.log('Project not found', {
+        ...logContext,
+        step: 'project_lookup',
+        status: 'not_found'
+      });
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Add project info to log context
+    Object.assign(logContext, {
+      projectTitle: project.title,
+      databaseName: project.databaseName,
+      fileCount: project.filePaths?.length || 0
+    });
+
+    console.log('Project found', {
+      ...logContext,
+      step: 'project_lookup',
+      status: 'success',
+      project: {
+        title: project.title,
+        databaseName: project.databaseName,
+        collections: project.collections,
+        parentFolder: project.parentFolder,
+        fileCount: project.filePaths?.length || 0
+      }
+    });
+
+    // Drop the project's database if it exists
+    if (project.databaseName) {
+      try {
+        console.log('Dropping database...', {
+          ...logContext,
+          step: 'database_deletion',
+          databaseName: project.databaseName
+        });
+        await client.db(project.databaseName).dropDatabase();
+        console.log('Database dropped successfully', {
+          ...logContext,
+          step: 'database_deletion',
+          status: 'success'
+        });
+      } catch (error: any) {
+        console.error('Error dropping database', {
+          ...logContext,
+          step: 'database_deletion',
+          status: 'error',
+          error: {
+            message: error.message,
+            code: error.code
+          }
+        });
+        if (error.code !== 26) {
+          throw error;
+        }
+        console.log('Database not found, continuing deletion', {
+          ...logContext,
+          step: 'database_deletion',
+          status: 'skipped'
+        });
       }
     }
-    
-    const newProject = {
-      title,
-      description,
-      sourceLanguage,
-      targetLanguage,
-      dialogue_collection,
-      status: 'pending',
-      assignedTo: [],
-      videoPath: `${title}/videos/`,  // Default video path structure
-      updatedAt: new Date(),
-      createdAt: new Date()
-    };
 
-    const result = await db.collection('projects').insertOne(newProject);
+    // Delete the project's specific files from R2
+    if (project.filePaths && project.filePaths.length > 0) {
+      try {
+        console.log('Starting R2 file deletion...', {
+          ...logContext,
+          step: 'file_deletion',
+          fileCount: project.filePaths.length
+        });
+
+        const deleteObjects = project.filePaths.map((filePath: string) => ({ Key: filePath }));
+        
+        const deleteCommand = new DeleteObjectsCommand({
+          Bucket: BUCKET_NAME,
+          Delete: { Objects: deleteObjects }
+        });
+        
+        const deleteResult = await s3Client.send(deleteCommand);
+        console.log('R2 deletion completed', {
+          ...logContext,
+          step: 'file_deletion',
+          status: 'success',
+          result: {
+            deletedCount: deleteResult.Deleted?.length || 0,
+            errorCount: deleteResult.Errors?.length || 0,
+            errors: deleteResult.Errors
+          }
+        });
+      } catch (error: any) {
+        console.error('R2 deletion failed', {
+          ...logContext,
+          step: 'file_deletion',
+          status: 'error',
+          error: {
+            message: error.message,
+            code: error.code
+          }
+        });
+        throw error;
+      }
+    } else {
+      console.log('No files to delete', {
+        ...logContext,
+        step: 'file_deletion',
+        status: 'skipped'
+      });
+    }
+
+    // Delete the project from MongoDB
+    console.log('Deleting project document...', {
+      ...logContext,
+      step: 'project_deletion'
+    });
+    const deleteResult = await db.collection('projects').deleteOne({ _id: new ObjectId(projectId) });
+    console.log('Project document deleted', {
+      ...logContext,
+      step: 'project_deletion',
+      status: 'success',
+      result: {
+        acknowledged: deleteResult.acknowledged,
+        deletedCount: deleteResult.deletedCount
+      }
+    });
+
+    const endTime = new Date().toISOString();
+    const duration = new Date(endTime).getTime() - new Date(startTime).getTime();
+
+    console.log('Project deletion completed', {
+      ...logContext,
+      step: 'completion',
+      status: 'success',
+      duration: `${duration}ms`,
+      endTime
+    });
 
     return NextResponse.json({
       success: true,
-      data: { ...newProject, _id: result.insertedId }
+      message: 'Project, database, and associated files deleted successfully',
+      details: {
+        projectId,
+        title: project.title,
+        databaseDropped: true,
+        filesDeleted: project.filePaths?.length || 0,
+        duration: `${duration}ms`
+      }
     });
-  } catch (error) {
-    console.error('Error creating project:', error);
+
+  } catch (error: any) {
+    const endTime = new Date().toISOString();
+    const duration = new Date(endTime).getTime() - new Date(startTime).getTime();
+
+    console.error('Project deletion failed', {
+      ...logContext,
+      step: 'error',
+      status: 'failed',
+      error: {
+        message: error.message,
+        code: error.code,
+        type: error.constructor.name,
+        stack: error.stack
+      },
+      duration: `${duration}ms`,
+      endTime
+    });
+
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { 
+        error: 'Failed to delete project',
+        details: error.message,
+        code: error.code,
+        type: error.constructor.name
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { db } = await connectToDatabase();
+    const projects = await db.collection('projects').find({}).toArray();
+
+    return NextResponse.json({
+      success: true,
+      data: projects,
+    });
+
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch projects' },
       { status: 500 }
     );
   }
@@ -1672,6 +2236,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ObjectId } from 'mongodb';
+import bcrypt from 'bcrypt';
 
 // GET single user
 export async function GET(
@@ -1741,10 +2306,10 @@ export async function PATCH(
     };
 
     // Remove password if it's empty
-    if (updateData.password === '') {
+    if (!updateData.password) {
       delete updateData.password;
     } else if (updateData.password) {
-      updateData.password = await hash(updateData.password, 12);
+      updateData.password = await bcrypt.hash(updateData.password, 12);
     }
 
     const { db } = await connectToDatabase();
@@ -1790,10 +2355,16 @@ export async function DELETE(
 
     const { db } = await connectToDatabase();
     
-    // Remove user from all assigned projects
+    // Remove user from all projects they were assigned to
     await db.collection('projects').updateMany(
       { 'assignedTo._id': params.userId },
-      { $pull: { assignedTo: { _id: params.userId } } }
+      { 
+        $pull: { 
+          assignedTo: { 
+            _id: new ObjectId(params.userId) 
+          } 
+        } 
+      } as any // Type assertion needed due to MongoDB types limitation
     );
 
     // Delete the user
@@ -2009,7 +2580,7 @@ export async function POST(req: Request) {
 ## File: app\api\auth\[...nextauth]\route.ts
 ```ts
 import NextAuth from 'next-auth'
-import { authOptions } from '../auth.config'
+import { authOptions } from '@/lib/auth'
 
 const handler = NextAuth(authOptions)
 
@@ -2378,7 +2949,7 @@ export async function PUT(
       'assignedTo': {
         $elemMatch: {
           username: session.user.username,
-          role: { $in: ['transcriber', 'voice-over'] }
+          role: { $in: ['transcriber', 'voiceOver'] }
         }
       }
     })
@@ -2656,6 +3227,56 @@ export async function DELETE(
     console.error('Error deleting dialogue:', error)
     return NextResponse.json(
       { error: 'Failed to delete dialogue' },
+      { status: 500 }
+    )
+  }
+} 
+```
+
+## File: app\api\episodes\route.ts
+```ts
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const projectId = searchParams.get('projectId')
+
+    if (!projectId) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Project ID is required' }),
+        { status: 400 }
+      )
+    }
+
+    const episodes = await prisma.episode.findMany({
+      where: {
+        projectId: projectId,
+      },
+      orderBy: {
+        uploadedAt: 'desc',
+      },
+    })
+
+    return new NextResponse(
+      JSON.stringify({ data: episodes }),
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error('Episodes fetch error:', error)
+    return new NextResponse(
+      JSON.stringify({ error: 'Internal Server Error' }),
       { status: 500 }
     )
   }
@@ -3493,7 +4114,14 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import { SpeedInsights } from "@vercel/speed-insights/next"
+import dynamic from 'next/dynamic'
+import SystemInit from '@/components/SystemInit'
+
+const SpeedInsights = dynamic(() => 
+  process.env.NODE_ENV === 'production'
+    ? import('@vercel/speed-insights/next').then(mod => mod.SpeedInsights)
+    : Promise.resolve(() => null)
+, { ssr: false })
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -3527,6 +4155,7 @@ export default function RootLayout({
           }}
         />
         <Providers>
+          <SystemInit />
           {children}
         </Providers>
         <SpeedInsights />
@@ -3547,31 +4176,61 @@ import { signIn } from 'next-auth/react'
 import ThemeToggle from '../components/ThemeToggle'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Login attempt initiated:', { 
+      username,
+      timestamp: new Date().toISOString(),
+      userAgent: window.navigator.userAgent
+    })
     setIsLoading(true)
     setError('')
 
     try {
+      console.log('Calling NextAuth signIn with credentials')
       const result = await signIn('credentials', {
-        email,
+        username,
         password,
         redirect: true,
         callbackUrl: '/allDashboards'
       })
 
+      console.log('SignIn result:', {
+        timestamp: new Date().toISOString(),
+        success: !result?.error,
+        hasError: !!result?.error,
+        error: result?.error,
+        callbackUrl: '/allDashboards'
+      })
+
       if (result?.error) {
+        console.error('Login error from NextAuth:', {
+          error: result.error,
+          timestamp: new Date().toISOString()
+        })
         setError(result.error)
+      } else {
+        console.log('Login successful, redirecting to dashboard')
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('Unexpected login error:', {
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+        type: err instanceof Error ? err.constructor.name : typeof err
+      })
       setError('An error occurred during login')
-      console.error('Login error:', err)
     } finally {
+      console.log('Login attempt completed:', {
+        timestamp: new Date().toISOString(),
+        success: !error,
+        username
+      })
       setIsLoading(false)
     }
   }
@@ -3586,14 +4245,14 @@ export default function Login() {
         <h1 className="text-2xl font-bold text-center mb-6 text-foreground">Login</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
-              Email
+            <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
+              Username
             </label>
             <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full p-2 rounded-md border bg-background text-foreground"
               required
             />
@@ -3612,16 +4271,20 @@ export default function Login() {
             />
           </div>
           {error && (
-            <div className="text-destructive text-sm">{error}</div>
+            <div className="text-red-500 text-sm text-center">
+              {error}
+            </div>
           )}
           <button
             type="submit"
-            className={`w-full bg-primary text-primary-foreground p-2 rounded-md hover:bg-primary/90 transition-colors ${
-              isLoading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
             disabled={isLoading}
+            className={`w-full py-2 rounded-md text-white transition-colors ${
+              isLoading
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-primary hover:bg-primary/90'
+            }`}
           >
-            {isLoading ? 'Logging in...' : 'Log In'}
+            {isLoading ? 'Logging in...' : 'Login'}
           </button>
         </form>
       </div>
@@ -3881,7 +4544,7 @@ export const logThemeUsage = (component: string, styles: Record<string, unknown>
 
 ## File: components\AdminView.tsx
 ```tsx
-import { Project, ProjectStatus } from '@/types/project'
+import { Project, ProjectStatus, Episode } from '@/types/project'
 import { User, UserRole } from '@/types/user'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -3894,6 +4557,13 @@ interface AdminViewProps {
   refetchProjects: () => Promise<any>;
 }
 
+interface UploadProgressData {
+  loaded: number;
+  total: number;
+  phase: 'pending' | 'uploading' | 'creating-collection' | 'processing' | 'success' | 'error';
+  message?: string;
+}
+
 const STATUS_COLORS = {
   'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
   'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -3902,6 +4572,19 @@ const STATUS_COLORS = {
 } as const;
 
 type Tab = 'projects' | 'users';
+
+const formatBytes = (bytes: number, decimals: number = 2) => {
+  if (bytes === 0) return '0 MB';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+const getTimeStamp = () => {
+  return new Date().toISOString();
+};
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projects');
@@ -3922,8 +4605,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     description: '',
     sourceLanguage: '',
     targetLanguage: '',
-    dialogue_collection: '',
-    status: 'pending' as ProjectStatus
+    status: 'pending' as ProjectStatus,
+    videoFiles: [] as File[]
   });
 
   const [newUser, setNewUser] = useState({
@@ -3940,6 +4623,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const queryClient = useQueryClient();
   const [isAssigning, setIsAssigning] = useState(false);
   const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
+
+  const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressData>>({});
+  const [uploadStatus, setUploadStatus] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
+
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
     queryKey: ['users'],
@@ -3977,55 +4665,280 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    const startTime = Date.now();
     try {
-      console.log('Creating project with payload:', newProject);
+      console.log(`[${getTimeStamp()}] Starting project creation with payload:`, {
+        title: newProject.title,
+        description: newProject.description,
+        sourceLanguage: newProject.sourceLanguage,
+        targetLanguage: newProject.targetLanguage,
+        totalFiles: newProject.videoFiles.length,
+        fileNames: newProject.videoFiles.map(f => f.name),
+        totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0)
+      });
       
       // Validate required fields
-      const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage', 'dialogue_collection'];
+      const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
       const missingFields = requiredFields.filter(field => !newProject[field as keyof typeof newProject]);
       
       if (missingFields.length > 0) {
-        console.error('Missing required fields:', missingFields);
+        console.error('Validation failed - Missing required fields:', missingFields);
         setError(`Missing required fields: ${missingFields.join(', ')}`);
         return;
       }
 
-      const response = await axios.post('/api/admin/projects', newProject);
-      console.log('Project creation response:', response.data);
+      // Validate if files are selected
+      if (newProject.videoFiles.length === 0) {
+        console.error('Validation failed - No files selected');
+        setError('Please select at least one video file');
+        return;
+      }
 
-      if (response.data.success) {
-        console.log('Project created successfully:', response.data);
+      // Initialize upload status for all files
+      const initialStatus = {} as Record<string, 'pending' | 'uploading' | 'success' | 'error'>;
+      newProject.videoFiles.forEach(file => {
+        initialStatus[file.name] = 'pending';
+      });
+      console.log(`[${getTimeStamp()}] Initializing upload status:`, initialStatus);
+      setUploadStatus(initialStatus);
+
+      // Variable to store project ID for subsequent uploads
+      let projectId: string | undefined;
+      let hasError = false;
+
+      // Create project metadata
+      const projectMetadata = {
+        title: newProject.title,
+        description: newProject.description,
+        sourceLanguage: newProject.sourceLanguage,
+        targetLanguage: newProject.targetLanguage,
+        status: newProject.status,
+        databaseName: newProject.title.replace(/[^a-zA-Z0-9-_]/g, '_'),
+        collections: [] as string[],
+        filePaths: [] as string[]
+      };
+
+      console.log('Project metadata created:', projectMetadata);
+
+      // Create parent folder name
+      const parentFolder = projectMetadata.databaseName;
+
+      // Prepare all files metadata first
+      newProject.videoFiles.forEach((file, index) => {
+        const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const filePath = `${parentFolder}/${collectionName}/${file.name}`;
+        projectMetadata.collections.push(collectionName);
+        projectMetadata.filePaths.push(filePath);
+      });
+
+      // Upload files in parallel with a concurrency limit of 3
+      const concurrencyLimit = 3;
+      const files = [...newProject.videoFiles];
+      const uploadPromises: Promise<any>[] = [];
+      let completedUploads = 0;
+
+      const uploadFile = async (file: File, index: number) => {
+        const fileStartTime = Date.now();
+        console.log(`[${getTimeStamp()}] Starting upload for file ${index + 1}/${newProject.videoFiles.length}:`, {
+          fileName: file.name,
+          fileSize: formatBytes(file.size),
+          fileType: file.type
+        });
+
+        setUploadProgress(prev => ({
+          ...prev,
+          [file.name]: {
+            loaded: 0,
+            total: file.size,
+            phase: 'uploading',
+            message: 'Preparing upload...'
+          }
+        }));
+
+        const formData = new FormData();
+        const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const filePath = `${parentFolder}/${collectionName}/${file.name}`;
+
+        // Add required fields
+        formData.append('title', newProject.title);
+        formData.append('description', newProject.description);
+        formData.append('sourceLanguage', newProject.sourceLanguage);
+        formData.append('targetLanguage', newProject.targetLanguage);
+        formData.append('dialogue_collection', collectionName);
+        formData.append('status', newProject.status);
+        formData.append('parentFolder', parentFolder);
+
+        const fileMetadata = {
+          databaseName: projectMetadata.databaseName,
+          collections: projectMetadata.collections,
+          filePaths: projectMetadata.filePaths,
+          parentFolder: parentFolder,
+          currentFile: {
+            index,
+            total: newProject.videoFiles.length,
+            isFirst: index === 0,
+            isLast: index === newProject.videoFiles.length - 1,
+            projectId: projectId
+          }
+        };
+
+        formData.append('metadata', JSON.stringify(fileMetadata));
+        formData.append('video', file);
+
+        try {
+          console.log(`[${getTimeStamp()}] Initiating upload request for file:`, file.name);
+          let lastProgressUpdate = Date.now();
+          let uploadStartTime = Date.now();
+          let uploadSpeed = 0;
+
+          const response = await axios.post('/api/admin/projects', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const currentTime = Date.now();
+                const timeSinceLastUpdate = (currentTime - lastProgressUpdate) / 1000;
+                const bytesSinceLastUpdate = progressEvent.loaded - (uploadProgress[file.name]?.loaded || 0);
+                uploadSpeed = bytesSinceLastUpdate / timeSinceLastUpdate;
+
+                const remainingBytes = progressEvent.total - progressEvent.loaded;
+                const estimatedTimeRemaining = remainingBytes / uploadSpeed;
+
+                const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                console.log(`[${getTimeStamp()}] Upload progress for ${file.name}: ${progress}%`, {
+                  loaded: formatBytes(progressEvent.loaded),
+                  total: formatBytes(progressEvent.total),
+                  speed: `${formatBytes(uploadSpeed)}/s`,
+                  timeElapsed: `${((currentTime - uploadStartTime) / 1000).toFixed(1)}s`,
+                  estimatedTimeRemaining: `${estimatedTimeRemaining.toFixed(1)}s`
+                });
+                
+                const newProgressData: UploadProgressData = {
+                  loaded: progressEvent.loaded,
+                  total: progressEvent.total,
+                  phase: 'uploading',
+                  message: `Uploading: ${formatBytes(uploadSpeed)}/s • ${estimatedTimeRemaining.toFixed(1)}s remaining`
+                };
+                
+                setUploadProgress(prev => ({
+                  ...prev,
+                  [file.name]: newProgressData
+                }));
+
+                lastProgressUpdate = currentTime;
+              }
+            }
+          });
+
+          if (!response.data.success) {
+            throw new Error(response.data.message || `Failed to upload file ${file.name}`);
+          }
+
+          // Store the project ID from the first upload
+          if (index === 0) {
+            projectId = response.data.data._id;
+          }
+
+          completedUploads++;
+          const uploadDuration = (Date.now() - fileStartTime) / 1000;
+          console.log(`[${getTimeStamp()}] Upload completed for ${file.name}:`, {
+            duration: `${uploadDuration.toFixed(1)}s`,
+            averageSpeed: `${formatBytes(file.size / uploadDuration)}/s`,
+            completedUploads,
+            totalFiles: newProject.videoFiles.length
+          });
+
+          setUploadProgress(prev => ({
+            ...prev,
+            [file.name]: {
+              ...prev[file.name],
+              phase: 'success',
+              message: `Completed • Collection: ${collectionName}`
+            }
+          }));
+
+          return response;
+        } catch (error: any) {
+          hasError = true;
+          setUploadProgress(prev => ({
+            ...prev,
+            [file.name]: {
+              ...prev[file.name],
+              phase: 'error',
+              message: error.message
+            }
+          }));
+          throw error;
+        }
+      };
+
+      // Process files in parallel with concurrency limit
+      while (files.length > 0 || uploadPromises.length > 0) {
+        while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
+          const file = files.shift();
+          if (file) {
+            const index = newProject.videoFiles.indexOf(file);
+            uploadPromises.push(uploadFile(file, index));
+          }
+        }
+
+        if (uploadPromises.length > 0) {
+          await Promise.race(uploadPromises.map((p, i) => 
+            p.catch(e => ({ error: e, index: i }))
+          ));
+          
+          // Remove completed promises
+          uploadPromises.forEach((promise, index) => {
+            Promise.resolve(promise).then(
+              () => {
+                uploadPromises.splice(index, 1);
+              },
+              () => {
+                uploadPromises.splice(index, 1);
+              }
+            );
+          });
+        }
+      }
+
+      const totalDuration = (Date.now() - startTime) / 1000;
+      console.log(`[${getTimeStamp()}] All files uploaded successfully:`, {
+        totalDuration: `${totalDuration.toFixed(1)}s`,
+        averageSpeed: `${formatBytes(newProject.videoFiles.reduce((acc, file) => acc + file.size, 0) / totalDuration)}/s`
+      });
+
+      if (!hasError) {
+        console.log('All files uploaded successfully, cleaning up...');
         setIsCreating(false);
         setNewProject({
           title: '',
           description: '',
           sourceLanguage: '',
           targetLanguage: '',
-          dialogue_collection: '',
-          status: 'pending'
+          status: 'pending',
+          videoFiles: []
         });
         
         if (typeof refetchProjects === 'function') {
-          try {
-            await refetchProjects();
-          } catch (refetchError) {
-            console.error('Error refetching projects:', refetchError);
-          }
-        } else {
-          console.warn('refetchProjects is not available, projects list may be stale');
+          console.log('Refetching projects list...');
+          await refetchProjects();
         }
         
         setSuccess('Project created successfully');
         setTimeout(() => setSuccess(''), 3000);
-      } else {
-        console.error('Project creation failed:', response.data);
-        setError(response.data.message || 'Failed to create project');
-        setTimeout(() => setError(''), 3000);
       }
+      
     } catch (err: any) {
-      console.error('Project creation error:', err);
+      const failureTime = (Date.now() - startTime) / 1000;
+      console.error(`[${getTimeStamp()}] Project creation failed after ${failureTime.toFixed(1)}s:`, {
+        error: err.message,
+        response: err.response?.data,
+        stack: err.stack
+      });
       const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
-      console.error('Error details:', errorMessage);
       setError(errorMessage);
       setTimeout(() => setError(''), 3000);
     }
@@ -4070,13 +4983,13 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await axios.delete(`/api/admin/projects/${projectId}`);
+      await axios.delete(`/api/admin/projects?id=${projectId}`);
       if (typeof refetchProjects === 'function') {
         await refetchProjects();
       }
       setShowDeleteConfirm(false);
       setSelectedProject(null);
-      setSuccess('Project deleted successfully');
+      setSuccess('Project and associated files deleted successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Delete project error:', err);
@@ -4148,6 +5061,89 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       setError('Failed to remove user');
       setTimeout(() => setError(''), 3000);
     }
+  };
+
+  const renderProjectDetails = (project: Project) => {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">{project.title}</h3>
+          <div className="flex gap-2">
+            {/* Existing action buttons */}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{project.description}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status]}`}>
+                {project.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Episodes</label>
+            <select
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              value={selectedEpisode?.name || ''}
+              onChange={(e) => {
+                const episode = project.episodes.find(ep => ep.name === e.target.value);
+                setSelectedEpisode(episode || null);
+              }}
+            >
+              <option value="">Select an episode</option>
+              {project.episodes.map((episode) => (
+                <option key={episode.name} value={episode.name}>
+                  {episode.name} ({episode.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedEpisode && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Episode Details</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Name</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.name}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.status}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Collection Name</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.collectionName}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Uploaded At</label>
+                  <p className="mt-1 text-gray-900 dark:text-gray-100">
+                    {new Date(selectedEpisode.uploadedAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <a
+                  href={selectedEpisode.videoPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  View Video
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -4371,17 +5367,25 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
+                            <div className="relative">
+                              <select 
+                                className="block w-full px-3 py-1 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {project.episodes?.map((episode, index) => (
+                                  <option key={index} value={episode.name}>
+                                    Episode: {episode.name}
+                                  </option>
+                                )) || (
+                                  <option value="">No episodes available</option>
+                                )}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
-                              Collection: {project.dialogue_collection}
+                              Folder Path: {project.parentFolder}
                             </span>
                           </div>
-                          {project.videoPath && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500 dark:text-gray-400">
-                                Video Path: {project.videoPath}
-                              </span>
-                            </div>
-                          )}
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
                               Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
@@ -4399,7 +5403,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                 user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                                 user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                                user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                                user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                                 user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                                 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                               }`}
@@ -4457,7 +5461,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                         user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                        user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                        user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                         user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                         'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
@@ -4503,73 +5507,195 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
       {/* Create Project Modal */}
       {isCreating && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-lg mx-auto my-8">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New Project</h2>
             <form onSubmit={handleCreateProject} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
-                <input
-                  type="text"
-                  value={newProject.title}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
-                <textarea
-                  value={newProject.description}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
                   <input
                     type="text"
-                    value={newProject.sourceLanguage}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, sourceLanguage: e.target.value }))}
+                    value={newProject.title}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
-                  <input
-                    type="text"
-                    value={newProject.targetLanguage}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, targetLanguage: e.target.value }))}
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
+                  <textarea
+                    value={newProject.description}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    rows={3}
                     required
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                    <input
+                      type="text"
+                      value={newProject.sourceLanguage}
+                      onChange={(e) => setNewProject(prev => ({ ...prev, sourceLanguage: e.target.value }))}
+                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
+                    <input
+                      type="text"
+                      value={newProject.targetLanguage}
+                      onChange={(e) => setNewProject(prev => ({ ...prev, targetLanguage: e.target.value }))}
+                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Video Upload</label>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center w-full">
+                      <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="text-sm">
+                            Click or drag to upload videos
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Multiple files allowed • No size limit
+                          </p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="video/*"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setNewProject(prev => ({
+                              ...prev,
+                              videoFiles: [...prev.videoFiles, ...files]
+                            }));
+                            
+                            // Initialize progress and status for new files
+                            const newProgress = { ...uploadProgress };
+                            const newStatus = { ...uploadStatus };
+                            files.forEach(file => {
+                              newProgress[file.name] = { 
+                                loaded: 0, 
+                                total: file.size,
+                                phase: 'pending',
+                                message: 'Waiting to start'
+                              };
+                              newStatus[file.name] = 'pending';
+                            });
+                            setUploadProgress(newProgress);
+                            setUploadStatus(newStatus);
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {newProject.videoFiles.length > 0 && (
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4">
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Files:</h4>
+                        <div className="space-y-3 max-h-48 overflow-y-auto">
+                          {newProject.videoFiles.map((file, index) => (
+                            <div key={index} className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-300 truncate pr-2">
+                                  {file.name}
+                                  {uploadProgress[file.name] && (
+                                    <span 
+                                      data-file-name={file.name}
+                                      className={`ml-2 text-xs ${
+                                        uploadProgress[file.name].phase === 'success' ? 'text-green-500' :
+                                        uploadProgress[file.name].phase === 'error' ? 'text-red-500' :
+                                        uploadProgress[file.name].phase === 'creating-collection' ? 'text-yellow-500' :
+                                        uploadProgress[file.name].phase === 'processing' ? 'text-purple-500' :
+                                        uploadProgress[file.name].phase === 'uploading' ? 'text-blue-500' :
+                                        'text-gray-500'
+                                      }`}
+                                    >
+                                      {uploadProgress[file.name].phase === 'uploading' && (
+                                        ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(uploadProgress[file.name].total)})`
+                                      )}
+                                      {(uploadProgress[file.name].phase === 'pending' || 
+                                        uploadProgress[file.name].phase === 'creating-collection' || 
+                                        uploadProgress[file.name].phase === 'processing' || 
+                                        uploadProgress[file.name].phase === 'success' || 
+                                        uploadProgress[file.name].phase === 'error') && (
+                                        ` • ${uploadProgress[file.name].message}`
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNewProject(prev => ({
+                                      ...prev,
+                                      videoFiles: prev.videoFiles.filter((_, i) => i !== index)
+                                    }));
+                                    
+                                    const newProgress = { ...uploadProgress };
+                                    const newStatus = { ...uploadStatus };
+                                    delete newProgress[file.name];
+                                    delete newStatus[file.name];
+                                    setUploadProgress(newProgress);
+                                    setUploadStatus(newStatus);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                  disabled={uploadProgress[file.name]?.phase === 'uploading' || 
+                                           uploadProgress[file.name]?.phase === 'creating-collection' ||
+                                           uploadProgress[file.name]?.phase === 'processing'}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              {uploadProgress[file.name] && uploadProgress[file.name].phase !== 'error' && (
+                                <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                      uploadProgress[file.name].phase === 'success' ? 'bg-green-600' :
+                                      uploadProgress[file.name].phase === 'creating-collection' ? 'bg-yellow-600' :
+                                      uploadProgress[file.name].phase === 'processing' ? 'bg-purple-600' :
+                                      uploadProgress[file.name].phase === 'uploading' ? 'bg-blue-600' :
+                                      'bg-gray-600'
+                                    }`}
+                                    style={{ 
+                                      width: uploadProgress[file.name].phase === 'uploading' ?
+                                        `${(uploadProgress[file.name].loaded / uploadProgress[file.name].total) * 100}%` :
+                                        uploadProgress[file.name].phase === 'creating-collection' ? '60%' :
+                                        uploadProgress[file.name].phase === 'processing' ? '80%' :
+                                        uploadProgress[file.name].phase === 'success' ? '100%' : '0%'
+                                    }}
+                                  ></div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Collection Name</label>
-                <input
-                  type="text"
-                  value={newProject.dialogue_collection}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, dialogue_collection: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                 <button
                   type="button"
                   onClick={() => setIsCreating(false)}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                 >
                   Create Project
                 </button>
@@ -4625,7 +5751,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 >
                   <option value="transcriber">Transcriber</option>
                   <option value="translator">Translator</option>
-                  <option value="voice-over">Voice Over</option>
+                  <option value="voiceOver">Voice Over</option>
                   <option value="director">Director</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -4695,7 +5821,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     className={`flex items-center gap-2 px-3 py-1 rounded-full ${
                       user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
                       user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                      user.role === 'voice-over' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                      user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
                       user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
                       'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                     }`}
@@ -4903,6 +6029,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     </div>
   );
 }
+
+
 
 
 ```
@@ -5759,12 +6887,62 @@ const RecordingTimer: React.FC<RecordingTimerProps> = ({ isRecording, maxDuratio
 export default RecordingTimer; 
 ```
 
+## File: components\SystemInit.tsx
+```tsx
+'use client'
+
+import { useEffect } from 'react'
+import { signOut, useSession } from 'next-auth/react'
+
+export default function SystemInit() {
+  const { data: session, status } = useSession()
+
+  useEffect(() => {
+    const initSystem = async () => {
+      console.log('System initialization started:', {
+        timestamp: new Date().toISOString(),
+        sessionStatus: status
+      })
+
+      try {
+        // Clear any existing auth tokens from localStorage
+        localStorage.removeItem('next-auth.session-token')
+        localStorage.removeItem('next-auth.callback-url')
+        localStorage.removeItem('next-auth.csrf-token')
+        
+        // Clear any existing session if user is not authenticated
+        if (status === 'unauthenticated') {
+          await signOut({ redirect: false })
+          console.log('Previous session cleared')
+        }
+
+        console.log('System initialization completed:', {
+          timestamp: new Date().toISOString(),
+          success: true
+        })
+      } catch (error) {
+        console.error('System initialization error:', {
+          error,
+          timestamp: new Date().toISOString()
+        })
+      }
+    }
+
+    initSystem()
+  }, [status])
+
+  return null
+} 
+```
+
 ## File: components\TranscriberDialogueView.tsx
 ```tsx
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import { useSearchParams, useRouter } from 'next/navigation'
 import axios from 'axios'
+import { useEpisodeDialogues } from '@/hooks/useEpisodeDialogues'
 
 interface Dialogue {
   _id: string
@@ -5774,6 +6952,7 @@ interface Dialogue {
   character: string
   videoUrl: string
   projectId?: string
+  episodeId?: string
   dialogue: {
     original: string
     translated: string
@@ -5782,9 +6961,21 @@ interface Dialogue {
   status: string
 }
 
+interface Episode {
+  _id: string
+  name: string
+  collectionName: string
+  videoPath: string
+  videoKey: string
+  status: string
+  uploadedAt: Date
+}
+
 interface DialogueViewProps {
   dialogues: Dialogue[]
   projectId: string
+  episodes: Episode[]
+  currentEpisodeId?: string
 }
 
 type QueryData = {
@@ -5793,8 +6984,38 @@ type QueryData = {
   timestamp: number;
 };
 
-export default function TranscriberDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
-  const [dialoguesList, setDialoguesList] = useState(initialDialogues);
+export default function TranscriberDialogueView({ 
+  dialogues: initialDialogues, 
+  projectId,
+  episodes,
+  currentEpisodeId 
+}: DialogueViewProps) {
+  const router = useRouter();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+
+  // Episode state management
+  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | undefined>(() => {
+    // Get episodeId from URL or use currentEpisodeId or first episode if only one exists
+    const urlEpisodeId = searchParams.get('episodeId');
+    if (urlEpisodeId && episodes.some(ep => ep._id === urlEpisodeId)) {
+      return urlEpisodeId;
+    }
+    if (currentEpisodeId && episodes.some(ep => ep._id === currentEpisodeId)) {
+      return currentEpisodeId;
+    }
+    return episodes.length === 1 ? episodes[0]._id : undefined;
+  });
+
+  const selectedEpisode = episodes.find(ep => ep._id === selectedEpisodeId);
+
+  // Fetch dialogues for the selected episode
+  const { data: dialoguesForEpisode, isLoading: isLoadingDialogues } = useEpisodeDialogues(
+    projectId,
+    selectedEpisodeId
+  );
+
+  const [dialoguesList, setDialoguesList] = useState<Dialogue[]>(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
@@ -5806,11 +7027,52 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
   const [timeEnd, setTimeEnd] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const queryClient = useQueryClient();
   const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
   const [currentTimestamp, setCurrentTimestamp] = useState('00:00.000');
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+
+  // Update dialoguesList when episode dialogues change
+  useEffect(() => {
+    if (dialoguesForEpisode) {
+      setDialoguesList(dialoguesForEpisode);
+      setCurrentDialogueIndex(0);
+    }
+  }, [dialoguesForEpisode]);
+
+  // Update URL when episode changes
+  useEffect(() => {
+    if (selectedEpisodeId) {
+      router.replace(`?episodeId=${selectedEpisodeId}`);
+    }
+  }, [selectedEpisodeId, router]);
+
+  // Early return for no episodes
+  if (episodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-4 text-foreground">
+        <p>No episodes found for this project.</p>
+      </div>
+    );
+  }
+
+  // Early return for loading state
+  if (isLoadingDialogues) {
+    return (
+      <div className="flex items-center justify-center p-4 text-foreground">
+        <p>Loading dialogues...</p>
+      </div>
+    );
+  }
+
+  // Early return for no dialogues
+  if (!dialoguesList || dialoguesList.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-4 text-foreground">
+        <p>No dialogues available for {episodes.length === 1 ? 'this episode' : selectedEpisode?.name || 'the selected episode'}.</p>
+      </div>
+    );
+  }
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -6140,12 +7402,42 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     }
   }, []);
 
-  if (!currentDialogue) {
-    return <div className="text-center p-4">No dialogues available.</div>
-  }
+  // Episode selection handler
+  const handleEpisodeChange = (episodeId: string) => {
+    setSelectedEpisodeId(episodeId);
+  };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
+    <div className="flex flex-col space-y-4 p-4">
+      {/* Episode Selection UI - Only show for multiple episodes */}
+      {episodes.length > 1 && (
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="episode-select" className="text-sm font-medium text-foreground">
+            Select Episode
+          </label>
+          <select
+            id="episode-select"
+            value={selectedEpisodeId}
+            onChange={(e) => handleEpisodeChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2"
+          >
+            <option value="">Select an episode...</option>
+            {episodes.map((episode) => (
+              <option key={episode._id} value={episode._id}>
+                {episode.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Current Episode Indicator */}
+      {selectedEpisode && (
+        <h2 className="text-xl font-semibold text-foreground">
+          {episodes.length > 1 ? `Episode: ${selectedEpisode.name}` : selectedEpisode.name}
+        </h2>
+      )}
+
       {/* Video Player Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
         <div className="relative">
@@ -8286,16 +9578,37 @@ export default function VoiceOverView({ projects }: { projects: Project[] }) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
+  console.log('VoiceOverView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: projects.length
+  })
+
   // Filter projects assigned to current user as voice-over
   const assignedProjects = projects.filter(project => 
-    project.assignedTo.some(assignment => 
-      assignment.username === session?.user?.username && 
-      assignment.role === 'voice-over'
-    )
+    project.assignedTo.some(assignment => {
+      const matches = assignment.username === session?.user?.username && 
+                     assignment.role === 'voiceOver'
+      console.log('Project assignment check:', {
+        projectTitle: project.title,
+        assignmentUsername: assignment.username,
+        assignmentRole: assignment.role,
+        userUsername: session?.user?.username,
+        matches
+      })
+      return matches
+    })
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map(p => p.title)
+  })
 
   const handleLogout = async () => {
     try {
+      console.log('Initiating logout')
       setIsLoggingOut(true)
       // Clear any client-side session data
       if (typeof window !== 'undefined') {
@@ -8340,7 +9653,13 @@ export default function VoiceOverView({ projects }: { projects: Project[] }) {
             {assignedProjects.map((project) => (
               <div
                 key={project._id}
-                onClick={() => router.push(`/allDashboards/voice-over/${project._id}`)}
+                onClick={() => {
+                  console.log('Navigating to project:', {
+                    projectId: project._id,
+                    projectTitle: project.title
+                  })
+                  router.push(`/allDashboards/voice-over/${project._id}`)
+                }}
                 className="bg-card rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
               >
                 <h2 className="text-xl font-semibold mb-2">{project.title}</h2>
@@ -8869,6 +10188,56 @@ export function useDialogues(projectId: string) {
 } 
 ```
 
+## File: hooks\useEpisodeDialogues.ts
+```ts
+import { useQuery } from '@tanstack/react-query'
+import { type Dialogue } from '@/types/dialogue'
+import axios from 'axios'
+
+async function fetchEpisodeDialogues(projectId: string, episodeId: string): Promise<Dialogue[]> {
+  try {
+    const { data } = await axios.get(`/api/dialogues?projectId=${projectId}&episodeId=${episodeId}`);
+    return data.data || [];
+  } catch (error) {
+    console.error('Fetch episode dialogues error:', error);
+    throw error;
+  }
+}
+
+export function useEpisodeDialogues(projectId: string, episodeId: string | undefined) {
+  return useQuery({
+    queryKey: ['dialogues', projectId, episodeId],
+    queryFn: () => fetchEpisodeDialogues(projectId, episodeId!),
+    enabled: !!projectId && !!episodeId,
+  })
+} 
+```
+
+## File: hooks\useEpisodes.ts
+```ts
+import { useQuery } from '@tanstack/react-query'
+import { type Episode } from '@/types/project'
+import axios from 'axios'
+
+async function fetchEpisodes(projectId: string): Promise<Episode[]> {
+  try {
+    const { data } = await axios.get(`/api/episodes?projectId=${projectId}`);
+    return data.data || [];
+  } catch (error) {
+    console.error('Fetch episodes error:', error);
+    throw error;
+  }
+}
+
+export function useEpisodes(projectId: string) {
+  return useQuery({
+    queryKey: ['episodes', projectId],
+    queryFn: () => fetchEpisodes(projectId),
+    enabled: !!projectId,
+  })
+} 
+```
+
 ## File: hooks\useProject.ts
 ```ts
 import { useQuery } from '@tanstack/react-query'
@@ -9091,6 +10460,11 @@ import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { connectToDatabase } from './mongodb'
 import bcrypt from 'bcryptjs'
+import { UserRole } from '@/types/user'
+
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error('Please define the NEXTAUTH_SECRET environment variable')
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -9100,29 +10474,81 @@ export const authOptions: NextAuthOptions = {
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.username || !credentials?.password) {
-          throw new Error('Missing credentials')
+          throw new Error('Please enter your username and password')
         }
 
-        const { db } = await connectToDatabase()
-        const user = await db.collection('users').findOne({ username: credentials.username })
+        try {
+          const { db } = await connectToDatabase()
+          const user = await db.collection('users').findOne({ username: credentials.username })
 
-        if (!user) {
-          throw new Error('User not found')
-        }
+          console.log('User lookup result:', {
+            found: !!user,
+            role: user?.role,
+            username: user?.username,
+            timestamp: new Date().toISOString()
+          })
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+          if (!user) {
+            console.log('Authentication failed: User not found', {
+              attemptedUsername: credentials.username,
+              timestamp: new Date().toISOString()
+            })
+            throw new Error('Invalid username or password')
+          }
 
-        if (!isPasswordValid) {
-          throw new Error('Invalid password')
-        }
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+          console.log('Password validation:', { 
+            isValid: isPasswordValid,
+            username: user.username,
+            timestamp: new Date().toISOString()
+          })
 
-        return {
-          id: user._id.toString(),
-          username: user.username,
-          role: user.role,
-          email: user.email
+          if (!isPasswordValid) {
+            console.log('Authentication failed: Invalid password', {
+              username: user.username,
+              timestamp: new Date().toISOString()
+            })
+            throw new Error('Invalid username or password')
+          }
+
+          // Ensure role is in the correct format
+          const role = user.role as UserRole
+          console.log('Role validation:', {
+            role,
+            username: user.username,
+            timestamp: new Date().toISOString()
+          })
+
+          // Update last login
+          await db.collection('users').updateOne(
+            { _id: user._id },
+            { $set: { lastLogin: new Date() } }
+          )
+
+          const userData = {
+            id: user._id.toString(),
+            username: user.username,
+            role: role,
+            email: user.email
+          }
+
+          console.log('Authentication successful:', {
+            username: userData.username,
+            role: userData.role,
+            timestamp: new Date().toISOString()
+          })
+
+          return userData
+        } catch (error) {
+          console.error('Authentication error:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            type: error instanceof Error ? error.constructor.name : typeof error,
+            timestamp: new Date().toISOString(),
+            username: credentials.username
+          })
+          throw error
         }
       }
     })
@@ -9130,17 +10556,31 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        console.log('JWT generation:', {
+          username: user.username,
+          role: user.role,
+          timestamp: new Date().toISOString()
+        })
+        token.id = user.id
         token.username = user.username
         token.role = user.role
+        token.email = user.email
       }
       return token
     },
     async session({ session, token }) {
       if (token) {
+        console.log('Session creation:', {
+          username: token.username,
+          role: token.role,
+          timestamp: new Date().toISOString()
+        })
         session.user = {
           ...session.user,
+          id: token.id as string,
           username: token.username as string,
-          role: token.role as string
+          role: token.role as string,
+          email: token.email as string
         }
       }
       return session
@@ -9153,7 +10593,9 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60 // 30 days
-  }
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development'
 } 
 ```
 
@@ -9215,6 +10657,19 @@ export async function connectToDatabase() {
 
 ```
 
+## File: lib\prisma.ts
+```ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+```
+
 ## File: lib\seed.ts
 ```ts
 import 'dotenv/config';
@@ -9253,7 +10708,7 @@ const seed = async () => {
       username: 'voiceover1',
       email: 'voiceover1@email.com',
       password: await bcrypt.hash('voice123', 10),
-      role: 'voice-over',
+      role: 'voiceOver',
       lastLogin: null,
       lastLogout: null,
       sessionsLog: [],
@@ -9304,24 +10759,65 @@ export function cn(...inputs: ClassValue[]) {
 import { getToken } from 'next-auth/jwt'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import type { UserRole } from '@/types/project'
+import type { UserRole } from '@/types/user'
 
 // Define role-based route mappings with proper typing
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin: ['/allDashboards/admin', '/api/admin'],
   director: ['/allDashboards/director'],
-  voiceOver: ['/allDashboards/voice-over'],  // URL still uses kebab-case
+  voiceOver: ['/allDashboards/voice-over'],
   transcriber: ['/allDashboards/transcriber'],
   translator: ['/allDashboards/translator']
 }
 
-// Helper function to convert role to URL format
+// Helper function to convert role to URL path
 const roleToUrlPath = (role: UserRole): string => {
-  return role === 'voiceOver' ? 'voice-over' : role
+  console.log('Converting role to URL path:', { 
+    role,
+    timestamp: new Date().toISOString()
+  })
+  switch (role) {
+    case 'voiceOver':
+      return 'voice-over'
+    default:
+      return role
+  }
 }
 
 export async function middleware(request: NextRequest) {
+  const startTime: number = Date.now()
+  
+  // Add protection against infinite redirects
+  const redirectCount = parseInt(request.headers.get('x-redirect-count') || '0')
+  if (redirectCount > 10) {
+    console.error('Infinite redirect detected:', {
+      pathname: request.nextUrl.pathname,
+      redirectCount,
+      timestamp: new Date().toISOString()
+    })
+    return new NextResponse('Too many redirects', { status: 508 })
+  }
+
+  console.log('Middleware processing started:', {
+    pathname: request.nextUrl.pathname,
+    method: request.method,
+    timestamp: new Date().toISOString(),
+    headers: {
+      userAgent: request.headers.get('user-agent'),
+      referer: request.headers.get('referer'),
+      redirectCount
+    }
+  })
+
   const token = await getToken({ req: request })
+  console.log('Token validation:', {
+    hasToken: !!token,
+    role: token?.role,
+    username: token?.username,
+    timestamp: new Date().toISOString(),
+    tokenExpiry: token?.exp ? new Date(Number(token.exp) * 1000).toISOString() : null
+  })
+
   const { pathname } = request.nextUrl
 
   // Public paths that don't require authentication
@@ -9329,38 +10825,137 @@ export async function middleware(request: NextRequest) {
     if (token) {
       // Redirect to role-specific dashboard if already authenticated
       const userRole = token.role as UserRole
-      const roleRoute = ROLE_ROUTES[userRole]?.[0] || '/allDashboards'
-      return NextResponse.redirect(new URL(roleRoute, request.url))
+      const roleRoute = ROLE_ROUTES[userRole]?.[0]
+      if (!roleRoute) {
+        console.error('Invalid role mapping:', {
+          userRole,
+          availableRoles: Object.keys(ROLE_ROUTES),
+          timestamp: new Date().toISOString()
+        })
+        return new NextResponse('Invalid role configuration', { status: 500 })
+      }
+      
+      console.log('Authenticated user accessing login page:', {
+        userRole,
+        roleRoute,
+        timestamp: new Date().toISOString(),
+        action: 'redirecting_to_dashboard'
+      })
+      
+      const response = NextResponse.redirect(new URL(roleRoute, request.url))
+      response.headers.set('x-redirect-count', (redirectCount + 1).toString())
+      return response
     }
+    console.log('Unauthenticated user accessing login page:', {
+      timestamp: new Date().toISOString(),
+      action: 'allowing_access'
+    })
     return NextResponse.next()
   }
 
   // Protected routes
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    console.log('Unauthorized access attempt:', {
+      pathname,
+      timestamp: new Date().toISOString(),
+      action: 'redirecting_to_login'
+    })
+    const response = NextResponse.redirect(new URL('/login', request.url))
+    response.headers.set('x-redirect-count', (redirectCount + 1).toString())
+    return response
   }
 
   // Handle root dashboard route
   if (pathname === '/allDashboards') {
     const userRole = token.role as UserRole
-    const roleRoute = ROLE_ROUTES[userRole]?.[0] || '/allDashboards'
-    return NextResponse.redirect(new URL(roleRoute, request.url))
+    const roleRoute = ROLE_ROUTES[userRole]?.[0]
+    if (!roleRoute) {
+      console.error('Invalid role mapping for dashboard:', {
+        userRole,
+        availableRoles: Object.keys(ROLE_ROUTES),
+        timestamp: new Date().toISOString()
+      })
+      return new NextResponse('Invalid role configuration', { status: 500 })
+    }
+
+    console.log('Dashboard route resolution:', {
+      userRole,
+      roleRoute,
+      timestamp: new Date().toISOString(),
+      action: 'redirecting_to_role_dashboard'
+    })
+    
+    const response = NextResponse.redirect(new URL(roleRoute, request.url))
+    response.headers.set('x-redirect-count', (redirectCount + 1).toString())
+    return response
   }
 
   // Role-based access control for both dashboard and project detail pages
   const userRole = token.role as UserRole
+  if (!ROLE_ROUTES[userRole]) {
+    console.error('Unknown user role:', {
+      userRole,
+      availableRoles: Object.keys(ROLE_ROUTES),
+      timestamp: new Date().toISOString()
+    })
+    return new NextResponse('Invalid role configuration', { status: 500 })
+  }
+
+  console.log('Role-based access check:', {
+    userRole,
+    pathname,
+    availableRoutes: ROLE_ROUTES[userRole],
+    timestamp: new Date().toISOString()
+  })
+
   for (const [role, paths] of Object.entries(ROLE_ROUTES)) {
     const isRoleRoute = paths.some(path => {
       // Check both the dashboard route and any project detail pages under it
-      return pathname.startsWith(path) || pathname.match(new RegExp(`${path}/[^/]+`))
+      const matches = pathname.startsWith(path) || pathname.match(new RegExp(`${path}/[^/]+`))
+      console.log('Route permission check:', {
+        role,
+        path,
+        pathname,
+        matches,
+        timestamp: new Date().toISOString()
+      })
+      return matches
     })
+
     if (isRoleRoute && role !== userRole) {
       // Redirect to user's dashboard if trying to access unauthorized role-based route
-      const correctPath = ROLE_ROUTES[userRole]?.[0] || '/allDashboards'
-      return NextResponse.redirect(new URL(correctPath, request.url))
+      const correctPath = ROLE_ROUTES[userRole]?.[0]
+      if (!correctPath) {
+        console.error('Invalid role mapping for redirect:', {
+          userRole,
+          availableRoles: Object.keys(ROLE_ROUTES),
+          timestamp: new Date().toISOString()
+        })
+        return new NextResponse('Invalid role configuration', { status: 500 })
+      }
+
+      console.log('Unauthorized role access attempt:', {
+        attemptedRole: role,
+        userRole,
+        correctPath,
+        timestamp: new Date().toISOString(),
+        action: 'redirecting_to_authorized_route'
+      })
+      
+      const response = NextResponse.redirect(new URL(correctPath, request.url))
+      response.headers.set('x-redirect-count', (redirectCount + 1).toString())
+      return response
     }
   }
 
+  const processingTime = Date.now() - startTime
+  console.log('Middleware processing completed:', {
+    userRole,
+    pathname,
+    processingTimeMs: processingTime,
+    timestamp: new Date().toISOString(),
+    action: 'access_granted'
+  })
   return NextResponse.next()
 }
 
@@ -9420,17 +11015,23 @@ export default nextConfig;
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
     "seed:users": "tsx scripts/seed-users.ts",
+    "migrate:roles": "tsx scripts/migrate-roles.ts",
     "test": "cross-env NODE_ENV=test jest",
     "test:watch": "cross-env NODE_ENV=test jest --watch",
-    "build:start": "cross-env NODE_ENV=production npm run build"
+    "build:start": "cross-env NODE_ENV=production npm run build",
+    "migrate-dialogues": "tsx scripts/migrate-dialogues.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.709.0",
+    "@aws-sdk/client-s3": "^3.723.0",
+    "@aws-sdk/s3-request-presigner": "^3.723.0",
+    "@prisma/client": "^6.2.1",
     "@tanstack/react-query": "^5.62.7",
+    "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.7",
+    "@types/mongoose": "^5.11.96",
     "@vercel/blob": "^0.27.0",
-    "@vercel/speed-insights": "^1.1.0",
     "axios": "^1.7.9",
+    "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -9440,6 +11041,7 @@ export default nextConfig;
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.468.0",
     "mongodb": "^6.11.0",
+    "mongoose": "^8.9.4",
     "next": "^14.2.23",
     "next-auth": "^4.24.11",
     "react": "^18",
@@ -9457,8 +11059,9 @@ export default nextConfig;
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@typescript-eslint/eslint-plugin": "^8.18.0",
-    "@typescript-eslint/parser": "^8.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "@vercel/speed-insights": "^1.1.0",
     "chalk": "^5.3.0",
     "cross-env": "^7.0.3",
     "eslint": "^8",
@@ -9469,6 +11072,7 @@ export default nextConfig;
     "jest-environment-jsdom": "^29.7.0",
     "mongodb-memory-server": "^9.5.0",
     "postcss": "^8",
+    "prisma": "^6.2.1",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
@@ -9489,6 +11093,117 @@ const config = {
 };
 
 export default config;
+
+```
+
+## File: prisma\schema.prisma
+```prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  transcriber
+  translator
+  voiceOver
+  director
+  admin
+}
+
+enum ProjectStatus {
+  pending
+  in_progress
+  completed
+  on_hold
+}
+
+enum EpisodeStatus {
+  uploaded
+  processing
+  error
+}
+
+model User {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  username        String      @unique
+  email           String      @unique
+  password        String?
+  role            UserRole
+  lastLogin       DateTime?
+  lastLogout      DateTime?
+  sessionsLog     Json[]
+  assignedProjects String[]
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Project {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  description      String
+  sourceLanguage   String
+  targetLanguage   String
+  status           ProjectStatus
+  assignedTo       Json[]        // Array of AssignedUser objects
+  parentFolder     String
+  databaseName     String
+  uploadStatus     Json          // Object containing upload status
+  episodes         Episode[]
+  dialogues        Dialogue[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Episode {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  collectionName  String
+  videoPath       String
+  videoKey        String
+  status          EpisodeStatus
+  uploadedAt      DateTime
+  project         Project       @relation(fields: [projectId], references: [id])
+  projectId       String        @db.ObjectId
+}
+
+model Dialogue {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  index           Int
+  timeStart       String
+  timeEnd         String
+  character       String
+  videoUrl        String
+  dialogue        Json      // Contains original, translated, adapted
+  emotions        Json?     // Contains primary and secondary emotions
+  direction       String?
+  lipMovements    String?
+  sceneContext    String?
+  technicalNotes  String?
+  culturalNotes   String?
+  status          String
+  voiceOverUrl    String?
+  voiceOverNotes  String?
+  directorNotes   String?
+  recordingStatus String?
+  words           Json?     // Array of WordDetail objects
+  scenario        Json?     // Scenario object
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?
+  project         Project   @relation(fields: [projectId], references: [id])
+  projectId       String    @db.ObjectId
+}
 
 ```
 
@@ -9533,6 +11248,913 @@ const main = async () => {
 };
 
 main(); 
+```
+
+## File: scripts\dialougeSample.json
+```json
+{
+    "_id": {
+        "$oid": "6757fdbf79542727d6b72e28"
+    },
+    "index": {
+        "$numberInt": "34"
+    },
+    "timeStart": "00:01:31:480",
+    "timeEnd": "00:01:36:160",
+    "character": "Character Name",
+    "videoUrl": "https://pub-ca2dd6ef0390446c8dda16e228d97cf6.r2.dev/Kuma%20Ep%2001/videos/Kuma%20Ep%2001_Clip_34.mp4",
+    "dialogue": {
+        "original": "Annemize saygılı davranır, babamıza da bir evlat olarak görevimizi yaparız.",
+        "translated": "I respect our mother, and do our duty to our father as his sons.",
+        "adapted": "मैं अपनी मां का सम्मान करता हूं और अपने पिता के प्रति उनके पुत्र होने के नाते अपना कर्तव्य निभाता हूं।"
+    },
+    "emotions": {
+        "primary": {
+            "emotion": "Neutral",
+            "intensity": {
+                "$numberInt": "1"
+            }
+        },
+        "secondary": {
+            "emotion": "Neutral",
+            "intensity": {
+                "$numberInt": "1"
+            }
+        }
+    },
+    "direction": "Normal tone",
+    "lipMovements": "0",
+    "sceneContext": "Character speaking",
+    "technicalNotes": "Neutral tone",
+    "culturalNotes": "General conversation",
+    "status": "recorded",
+    "recordingStatus": "pending",
+    "projectId": {
+        "$oid": "123456789123456789123456"
+    },
+    "words": [
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "1"
+            },
+            "word": "Annemize",
+            "wordTimestamp": "00:01:31:480",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "4"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "2"
+            },
+            "word": "saygılı",
+            "wordTimestamp": "00:01:31:948",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "3"
+            },
+            "word": "davranır",
+            "wordTimestamp": "00:01:32:416",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "4"
+            },
+            "word": "babamıza",
+            "wordTimestamp": "00:01:32:884",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "3"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "5"
+            },
+            "word": "da",
+            "wordTimestamp": "00:01:33:352",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "6"
+            },
+            "word": "bir",
+            "wordTimestamp": "00:01:33:820",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "7"
+            },
+            "word": "evlat",
+            "wordTimestamp": "00:01:34:288",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "8"
+            },
+            "word": "olarak",
+            "wordTimestamp": "00:01:34:756",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "3"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "9"
+            },
+            "word": "görevimizi",
+            "wordTimestamp": "00:01:35:224",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "4"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "10"
+            },
+            "word": "yaparız",
+            "wordTimestamp": "00:01:35:692",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        }
+    ],
+    "scenario": {
+        "name": "",
+        "description": "",
+        "location": "",
+        "timeOfDay": "",
+        "otherScenarioNotes": ""
+    },
+    "voiceOverNotes": "",
+    "directorNotes": "",
+    "updatedAt": "2025-01-13T11:23:40.646Z",
+    "updatedBy": "",
+    "deleteVoiceOver": false
+}
+```
+
+## File: scripts\migrate-dialogues.ts
+```ts
+import mongoose from 'mongoose';
+import { config } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
+import { WordDetail, CharacterProfile } from '../types/dialogue';
+import { Collection } from 'mongodb';
+
+// Setup __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables from the root .env file
+const envPath = path.resolve(__dirname, '../.env');
+console.log('Loading .env from:', envPath);
+config({ path: envPath });
+
+// Debug: Check if env vars are loaded
+console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
+
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vivekkumarsingh:dGeuK817ItxjmUb4@cluster0.vir7o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+
+async function generateAndUpdateWords(dialoguesCollection: Collection) {
+  console.log('\nStarting word generation preview...');
+  
+  // Get a sample document with non-empty dialogue
+  const sampleDoc = await dialoguesCollection.findOne({
+    'dialogue.original': { $exists: true, $ne: '' }
+  });
+
+  if (!sampleDoc) {
+    // If no document with non-empty dialogue found, try to find any document
+    const anyDoc = await dialoguesCollection.findOne({});
+    console.log('No documents found with non-empty dialogue. Sample document:', 
+      JSON.stringify(anyDoc?.dialogue || {}, null, 2));
+    return;
+  }
+
+  // Update index normalization
+  const normalizedIndex = await normalizeIndex(sampleDoc);
+  if (normalizedIndex === null) {
+    console.log('Warning: Could not normalize index for sample document');
+  }
+
+  // Generate sample words for preview
+  const originalText = sampleDoc.dialogue?.original || '';
+  if (!originalText.trim()) {
+    console.log('Sample document has empty dialogue text');
+    return;
+  }
+
+  const wordList = originalText
+    .trim()
+    .split(/\s+/)
+    .filter((word: string) => word.length > 0);
+
+  const sampleWordObjects: WordDetail[] = wordList.map((word: string, index: number) => ({
+    characterName: sampleDoc.character,
+    wordSequenceNumber: index + 1,
+    word: word,
+    wordTimestamp: sampleDoc.timeStart,
+    dialogNumber: sampleDoc.index,
+    dialogStartTimestamp: sampleDoc.timeStart,
+    dialogEndTimestamp: sampleDoc.timeEnd,
+    dialogVocalFile: sampleDoc.voiceOverUrl || '',
+    characterProfile: {
+      age: '',
+      occupation: '',
+      accents: [],
+      otherNotes: ''
+    } as CharacterProfile,
+    numberOfLipMovementsForThisWord: 0
+  }));
+
+  console.log('\nSample document:');
+  console.log('Original text:', originalText);
+  console.log('\nGenerated words array (first 3 items):', JSON.stringify(sampleWordObjects.slice(0, 3), null, 2));
+
+  // Ask for confirmation
+  console.log('\nWould you like to proceed with updating all documents? (y/n)');
+  const response = await new Promise(resolve => {
+    process.stdin.once('data', data => {
+      resolve(data.toString().trim().toLowerCase());
+    });
+  });
+
+  if (response !== 'y') {
+    console.log('Operation cancelled by user');
+    return;
+  }
+
+  // Proceed with full update
+  const allDocs = await dialoguesCollection.find({
+    'dialogue.original': { $exists: true, $ne: '' }
+  }).toArray();
+  
+  console.log(`\nProceeding to update ${allDocs.length} documents...`);
+  let updatedCount = 0;
+
+  for (const doc of allDocs) {
+    if (doc.words && doc.words.length > 0) {
+      console.log(`Skipping document ${doc._id} - already has words`);
+      continue;
+    }
+
+    const wordObjects = generateWordsForDoc(doc);
+    await dialoguesCollection.updateOne(
+      { _id: doc._id },
+      { $set: { words: wordObjects } }
+    );
+    updatedCount++;
+    
+    if (updatedCount % 10 === 0) {
+      console.log(`Progress: ${updatedCount}/${allDocs.length} documents updated`);
+    }
+  }
+
+  console.log(`\nWord generation completed. Updated ${updatedCount} documents`);
+}
+
+function generateWordsForDoc(doc: any): WordDetail[] {
+  const originalText = doc.dialogue?.original || '';
+  if (!originalText.trim()) {
+    console.log(`Document ${doc._id} has empty dialogue text`);
+    return [];
+  }
+
+  // Enhanced text cleaning
+  const cleanText = originalText
+    .trim()  // Remove leading/trailing whitespace and newlines
+    .replace(/\.{3,}/g, ' ')  // Replace ellipsis with space
+    .replace(/[.,!?।॥…\n\r]+/g, ' ')  // Replace punctuation and newlines with space
+    .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+    .trim();  // Final trim
+
+  // Split into words and filter
+  const wordList = cleanText
+    .split(' ')
+    .filter((word: string) => {
+      const cleaned = word.trim();
+      return cleaned.length > 0 && 
+             !/^[.,!?।॥…]+$/.test(cleaned) &&  // Not just punctuation
+             !/^\d+$/.test(cleaned);           // Not just numbers
+    });
+
+  if (wordList.length === 0) {
+    console.log(`Document ${doc._id} has no valid words after cleaning`);
+    return [];
+  }
+
+  // Calculate time distribution
+  const startTime = doc.timeStart || '';
+  const endTime = doc.timeEnd || '';
+  const timePerWord = calculateTimePerWord(startTime, endTime, wordList.length);
+
+  // Preview for debugging
+  if (process.env.DEBUG) {
+    console.log(`\nDocument ${doc._id} text processing:
+    Original: "${originalText}"
+    Cleaned: "${cleanText}"
+    Words: ${JSON.stringify(wordList)}
+    Time per word: ${timePerWord}ms`);
+  }
+
+  return wordList.map((word: string, index: number) => {
+    const cleanWord = word.trim();
+    const lipMovements = calculateLipMovements(cleanWord);
+    const wordTimestamp = calculateWordTimestamp(startTime, timePerWord, index);
+
+    return {
+      characterName: doc.character || '',
+      wordSequenceNumber: index + 1,
+      word: cleanWord,
+      wordTimestamp,
+      dialogNumber: normalizeIndex(doc),
+      dialogStartTimestamp: startTime,
+      dialogEndTimestamp: endTime,
+      dialogVocalFile: doc.voiceOverUrl || '',
+      characterProfile: {
+        age: doc.characterProfile?.age || '',
+        occupation: doc.characterProfile?.occupation || '',
+        accents: doc.characterProfile?.accents || [],
+        otherNotes: doc.characterProfile?.otherNotes || ''
+      } as CharacterProfile,
+      numberOfLipMovementsForThisWord: lipMovements
+    };
+  });
+}
+
+// Helper function to calculate time per word
+function calculateTimePerWord(startTime: string, endTime: string, wordCount: number): number {
+  try {
+    const [startHours, startMinutes, startSeconds, startMillis] = startTime.split(':').map(Number);
+    const [endHours, endMinutes, endSeconds, endMillis] = endTime.split(':').map(Number);
+    
+    const startTotalMillis = (startHours * 3600000) + (startMinutes * 60000) + (startSeconds * 1000) + startMillis;
+    const endTotalMillis = (endHours * 3600000) + (endMinutes * 60000) + (endSeconds * 1000) + endMillis;
+    
+    return Math.floor((endTotalMillis - startTotalMillis) / wordCount);
+  } catch (error) {
+    console.warn('Error calculating time per word, using default spacing');
+    return 500; // Default 500ms per word
+  }
+}
+
+// Helper function to calculate word timestamp
+function calculateWordTimestamp(startTime: string, timePerWord: number, wordIndex: number): string {
+  try {
+    const [hours, minutes, seconds, millis] = startTime.split(':').map(Number);
+    const startTotalMillis = (hours * 3600000) + (minutes * 60000) + (seconds * 1000) + millis;
+    const wordTimeMillis = startTotalMillis + (timePerWord * wordIndex);
+    
+    const newHours = Math.floor(wordTimeMillis / 3600000);
+    const newMinutes = Math.floor((wordTimeMillis % 3600000) / 60000);
+    const newSeconds = Math.floor((wordTimeMillis % 60000) / 1000);
+    const newMillis = wordTimeMillis % 1000;
+    
+    return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}:${newSeconds.toString().padStart(2, '0')}:${newMillis.toString().padStart(3, '0')}`;
+  } catch (error) {
+    console.warn('Error calculating word timestamp, using start time');
+    return startTime;
+  }
+}
+
+// Enhanced lip movement calculation
+function calculateLipMovements(word: string): number {
+  // Handle Devanagari text
+  if (/[\u0900-\u097F]/.test(word)) {
+    return calculateDevanagariLipMovements(word);
+  }
+  
+  // Handle English/Latin text
+  return calculateEnglishLipMovements(word);
+}
+
+function calculateDevanagariLipMovements(word: string): number {
+  // Count matras (vowel marks) and explicit vowels
+  const matraCount = (word.match(/[\u093E-\u094D\u0955-\u0963]/g) || []).length;
+  const vowelCount = (word.match(/[\u0904-\u0914]/g) || []).length;
+  const halfLetterCount = (word.match(/्[कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]/g) || []).length;
+  
+  // Basic syllable count: matras + explicit vowels + half letters
+  const syllables = matraCount + vowelCount + halfLetterCount;
+  return Math.max(1, syllables);
+}
+
+function calculateEnglishLipMovements(word: string): number {
+  const syllableRegex = /[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi;
+  const matches = word.match(syllableRegex);
+  return matches ? matches.length : 1;
+}
+
+// Add debug preview function
+async function previewWordGeneration(doc: Record<string, any>): Promise<WordDetail[]> {
+  console.log('\nSample document:');
+  console.log('Original text:', JSON.stringify(doc.dialogue?.original));
+  
+  const words = generateWordsForDoc(doc);
+  console.log('\nGenerated words:', JSON.stringify(words, null, 2));
+  
+  // Additional debug info
+  if (words.length > 0) {
+    console.log('\nWord timing distribution:');
+    words.forEach(w => {
+      console.log(`"${w.word}": ${w.wordTimestamp} (${w.numberOfLipMovementsForThisWord} lip movements)`);
+    });
+  }
+  
+  return words;
+}
+
+async function normalizeIndex(doc: any): Promise<number> {
+  if (!doc.index) return 0;
+  
+  try {
+    if (typeof doc.index === 'object') {
+      if (doc.index.$numberInt) {
+        return parseInt(doc.index.$numberInt, 10);
+      }
+      return 0;
+    }
+    
+    if (typeof doc.index === 'string') {
+      // Handle string indices like "04"
+      return parseInt(doc.index, 10);
+    }
+    
+    if (typeof doc.index === 'number') {
+      return doc.index;
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error(`Error normalizing index for document ${doc._id}:`, error);
+    return 0;
+  }
+}
+
+async function verifyDocument(doc: any) {
+  const issues: string[] = [];
+  
+  // Check index specifically
+  const normalizedIndex = await normalizeIndex(doc);
+  if (normalizedIndex === 0 && doc.index !== 0) {
+    issues.push(`Invalid index: ${JSON.stringify(doc.index)}`);
+  }
+  
+  // Check required fields
+  if (!doc.index || typeof doc.index !== 'number') issues.push('Invalid index');
+  if (!doc.timeStart || typeof doc.timeStart !== 'string') issues.push('Invalid timeStart');
+  if (!doc.timeEnd || typeof doc.timeEnd !== 'string') issues.push('Invalid timeEnd');
+  if (!doc.character || typeof doc.character !== 'string') issues.push('Invalid character');
+  if (typeof doc.videoUrl !== 'string') issues.push('Invalid videoUrl');
+  if (!doc.status || typeof doc.status !== 'string') issues.push('Invalid status');
+  
+  // Check dialogue structure
+  if (!doc.dialogue || 
+      typeof doc.dialogue.original !== 'string' ||
+      typeof doc.dialogue.translated !== 'string' ||
+      typeof doc.dialogue.adapted !== 'string') {
+    issues.push('Invalid dialogue structure');
+  }
+  
+  // Check emotions structure
+  if (!doc.emotions?.primary ||
+      typeof doc.emotions.primary.emotion !== 'string' ||
+      typeof doc.emotions.primary.intensity !== 'number' ||
+      doc.emotions.primary.intensity < 0 ||
+      doc.emotions.primary.intensity > 100) {
+    issues.push('Invalid emotions structure');
+  }
+  
+  // Check words array if it exists
+  if (doc.words) {
+    if (!Array.isArray(doc.words)) {
+      issues.push('Invalid words array');
+    } else {
+      const invalidWords = doc.words.some((word: any) => 
+        !word.word || 
+        typeof word.word !== 'string' ||
+        !word.wordSequenceNumber ||
+        typeof word.wordSequenceNumber !== 'number'
+      );
+      if (invalidWords) issues.push('Invalid word objects in words array');
+    }
+  }
+  
+  // Check scenario object
+  if (!doc.scenario || 
+      typeof doc.scenario !== 'object' ||
+      typeof doc.scenario.name !== 'string' ||
+      typeof doc.scenario.description !== 'string' ||
+      typeof doc.scenario.location !== 'string' ||
+      typeof doc.scenario.timeOfDay !== 'string') {
+    issues.push('Invalid scenario object');
+  }
+  
+  return issues.length ? issues : 'No issues found';
+}
+
+async function migrationScript() {
+  let connection: typeof mongoose | null = null;
+  try {
+    // Connect to MongoDB
+    if (!MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
+    }
+    
+    console.log('Attempting to connect to MongoDB...');
+    connection = await mongoose.connect(MONGODB_URI);
+    console.log('Connected to MongoDB successfully');
+
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Failed to get database instance');
+    }
+    console.log('Got database instance');
+    console.log('Database name:', db.databaseName);
+
+    const dialoguesCollection = db.collection('demo_S1_E1');
+    console.log('Accessing dialogues collection...');
+    
+    // Check if collection exists and has documents
+    const count = await dialoguesCollection.countDocuments();
+    console.log('Total documents in collection:', count);
+
+    // Add this: Check structure of first document
+    const sampleDoc = await dialoguesCollection.findOne({});
+    console.log('Sample document structure:', JSON.stringify(sampleDoc, null, 2));
+
+    // After getting sample document, add this check
+    console.log('\nChecking index patterns...');
+    const indexPatterns = await dialoguesCollection.distinct('index');
+    console.log('Unique indices:', indexPatterns.sort((a, b) => a - b));
+
+    // Also check index distribution
+    const indexCounts = await dialoguesCollection.aggregate([
+      { $group: { _id: "$index", count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    
+    console.log('\nIndex distribution:');
+    console.log(JSON.stringify(indexCounts, null, 2));
+
+    // After index distribution check and before main update
+    console.log('\nStarting word generation...');
+    await generateAndUpdateWords(dialoguesCollection);
+
+    // Then continue with the main update
+    console.log('Starting update operation...');
+    const result = await dialoguesCollection.updateMany(
+      {},  // Match all documents
+      [    // Use aggregation pipeline for complex transformations
+        {
+          $set: {
+            // Normalize index first
+            index: {
+              $convert: {
+                input: {
+                  $cond: {
+                    if: { $eq: [{ $type: "$index" }, "object"] },
+                    then: { $toInt: "$index.numberInt" },
+                    else: {
+                      $cond: {
+                        if: { $eq: [{ $type: "$index" }, "string"] },
+                        then: { $toInt: "$index" },
+                        else: { $ifNull: ["$index", 0] }
+                      }
+                    }
+                  }
+                },
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }
+            },
+            // Convert lipMovements to string using $toInt and $toString
+            lipMovements: {
+              $let: {
+                vars: {
+                  numValue: {
+                    $cond: {
+                      if: { $eq: [{ $type: "$lipMovements" }, "object"] },
+                      then: { $toInt: "$lipMovements.numberInt" },
+                      else: { $toInt: { $ifNull: ["$lipMovements", "0"] } }
+                    }
+                  }
+                },
+                in: { $toString: "$$numValue" }
+              }
+            },
+
+            // Ensure required fields exist with default values if missing
+            timeStart: { $ifNull: ["$timeStart", ""] },
+            timeEnd: { $ifNull: ["$timeEnd", ""] },
+            character: { $ifNull: ["$character", ""] },
+            videoUrl: { $ifNull: ["$videoUrl", ""] },
+            status: { $ifNull: ["$status", "pending"] },
+
+            // Ensure dialogue structure
+            dialogue: {
+              $ifNull: ["$dialogue", {
+                original: "",
+                translated: "",
+                adapted: ""
+              }]
+            },
+
+            // Fix emotions structure and types
+            emotions: {
+              $ifNull: ["$emotions", {
+                primary: {
+                  emotion: "",
+                  intensity: 0
+                }
+              }]
+            },
+
+            // Add missing arrays/objects if not present
+            words: { $ifNull: ["$words", []] },  // Just set empty array if missing
+            scenario: { 
+              $ifNull: ["$scenario", {
+                name: "",
+                description: "",
+                location: "",
+                timeOfDay: "",
+                otherScenarioNotes: ""
+              }]
+            },
+
+            // Optional fields with proper types
+            direction: { $ifNull: ["$direction", ""] },
+            sceneContext: { $ifNull: ["$sceneContext", ""] },
+            technicalNotes: { $ifNull: ["$technicalNotes", ""] },
+            culturalNotes: { $ifNull: ["$culturalNotes", ""] },
+            voiceOverNotes: { $ifNull: ["$voiceOverNotes", ""] },
+            directorNotes: { $ifNull: ["$directorNotes", ""] },
+            recordingStatus: { $ifNull: ["$recordingStatus", ""] },
+            projectId: { $ifNull: ["$projectId", ""] },
+            updatedAt: { $ifNull: ["$updatedAt", new Date().toISOString()] },
+            updatedBy: { $ifNull: ["$updatedBy", ""] },
+
+            // Handle voiceOverUrl and deleteVoiceOver
+            voiceOverUrl: { $ifNull: ["$voiceOverUrl", "$audioUrl"] },
+            deleteVoiceOver: { $ifNull: ["$deleteVoiceOver", false] }
+          }
+        },
+        {
+          $unset: ["audioUrl"]  // Remove redundant audioUrl field
+        }
+      ]
+    );
+
+    console.log(`Migration completed. Modified ${result.modifiedCount} documents`);
+
+    console.log('Verifying updated documents...');
+    
+    // Sample verification of a few documents
+    const verifiedDocs = await dialoguesCollection.find({}).limit(10).toArray();
+    const verificationResults = await Promise.all(verifiedDocs.map(async doc => ({
+      _id: doc._id,
+      index: doc.index,
+      issues: await verifyDocument(doc)
+    })));
+    
+    console.log('\nVerification Results:');
+    console.log(JSON.stringify(verificationResults, null, 2));
+    
+    // Count documents with specific fields to verify
+    const stats = {
+      total: await dialoguesCollection.countDocuments(),
+      withWords: await dialoguesCollection.countDocuments({ words: { $exists: true } }),
+      withScenario: await dialoguesCollection.countDocuments({ scenario: { $exists: true } }),
+      withEmotions: await dialoguesCollection.countDocuments({ emotions: { $exists: true } }),
+      withLipMovements: await dialoguesCollection.countDocuments({ lipMovements: { $exists: true } })
+    };
+    
+    console.log('\nCollection Statistics:');
+    console.log(JSON.stringify(stats, null, 2));
+
+  } catch (error) {
+    console.error('Migration failed:', error instanceof Error ? error.message : error);
+    if (error instanceof Error && error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
+    process.exit(1);
+  } finally {
+    if (connection) {
+      try {
+        await connection.disconnect();
+        console.log('Disconnected from MongoDB');
+      } catch (error) {
+        console.error('Error during disconnect:', error);
+      }
+    }
+  }
+}
+
+// Add process error handlers
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// Run the migration
+migrationScript(); 
+```
+
+## File: scripts\migrate-roles.ts
+```ts
+import { MongoClient } from 'mongodb'
+import * as dotenv from 'dotenv'
+import { resolve } from 'path'
+
+// Load environment variables from .env.local if it exists, otherwise from .env
+dotenv.config({ path: resolve(process.cwd(), '.env.local') })
+dotenv.config({ path: resolve(process.cwd(), '.env') })
+
+const MONGODB_URI = process.env.MONGODB_URI
+const MONGODB_DB = process.env.MONGODB_DB
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable')
+}
+
+if (!MONGODB_DB) {
+  throw new Error('Please define the MONGODB_DB environment variable')
+}
+
+async function migrateRoles() {
+  console.log('Starting role migration...')
+  console.log('Using database:', MONGODB_DB)
+  
+  const client = new MongoClient(MONGODB_URI as string)
+
+  try {
+    await client.connect()
+    console.log('Connected to MongoDB Atlas')
+    
+    const db = client.db(MONGODB_DB)
+
+    // Update project assignments
+    const result = await db.collection('projects').updateMany(
+      { 'assignedTo.role': 'voiceOver' },
+      { $set: { 'assignedTo.$[elem].role': 'voiceOver' } },
+      { arrayFilters: [{ 'elem.role': 'voiceOver' }] }
+    )
+
+    console.log(`Updated ${result.modifiedCount} project assignments`)
+
+  } catch (error) {
+    console.error('Error migrating roles:', error)
+    throw error
+  } finally {
+    await client.close()
+    console.log('Database connection closed')
+  }
+}
+
+// Run the migration function
+migrateRoles()
+  .then(() => {
+    console.log('Migration completed successfully')
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error('Migration failed:', error)
+    process.exit(1)
+  }) 
 ```
 
 ## File: scripts\seed-users.ts
@@ -9607,7 +12229,7 @@ async function seedUsers() {
         username: 'voiceover1',
         email: 'voiceover1@email.com',
         password: await bcrypt.hash('voice123', 10),
-        role: 'voice-over',
+        role: 'voiceOver',
         lastLogin: null,
         lastLogout: null,
         sessionsLog: [],
@@ -9853,6 +12475,100 @@ const main = async () => {
 main(); 
 ```
 
+## File: scripts\test-db-creation.ts
+```ts
+import { MongoClient } from 'mongodb';
+import { config } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
+
+// Setup __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables
+const envPath = path.resolve(__dirname, '../.env');
+config({ path: envPath });
+
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vivekkumarsingh:dGeuK817ItxjmUb4@cluster0.vir7o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+
+async function testDatabaseCreation() {
+  console.log('Starting database creation test...');
+  console.log('Using MongoDB URI:', MONGODB_URI);
+  
+  const client = new MongoClient(MONGODB_URI);
+
+  try {
+    await client.connect();
+    console.log('Connected to MongoDB');
+
+    // Create a demo database
+    const databaseName = 'demo_test_db';
+    const db = client.db(databaseName);
+    console.log(`Created database reference: ${databaseName}`);
+
+    // Create test collections
+    const collections = [
+      'demo_collection_1',
+      'demo_collection_2',
+      'demo_collection_3'
+    ];
+
+    for (const collectionName of collections) {
+      try {
+        await db.createCollection(collectionName);
+        console.log(`Created collection: ${collectionName}`);
+      } catch (error: any) {
+        if (error.code === 48) {
+          console.log(`Collection ${collectionName} already exists`);
+        } else {
+          console.error(`Error creating collection ${collectionName}:`, error);
+          throw error;
+        }
+      }
+    }
+
+    // List all collections to verify
+    const collectionsList = await db.listCollections().toArray();
+    console.log('\nVerifying collections:');
+    collectionsList.forEach(collection => {
+      console.log(`- ${collection.name}`);
+    });
+
+    // Insert a test document
+    const testCollection = db.collection('demo_collection_1');
+    await testCollection.insertOne({
+      test: true,
+      createdAt: new Date(),
+      message: 'Test document'
+    });
+    console.log('\nInserted test document');
+
+    // Verify document
+    const doc = await testCollection.findOne({ test: true });
+    console.log('Retrieved test document:', doc);
+
+  } catch (error) {
+    console.error('Test failed:', error);
+  } finally {
+    await client.close();
+    console.log('\nDatabase connection closed');
+  }
+}
+
+// Run the test
+testDatabaseCreation()
+  .then(() => {
+    console.log('Test completed successfully');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Test failed:', error);
+    process.exit(1);
+  }); 
+```
+
 ## File: src\types\dialogue.ts
 ```ts
 export interface Dialogue {
@@ -9979,7 +12695,7 @@ const __dirname = dirname(__filename);
 const gitignorePath = join(process.cwd(), '.gitignore');
 const ig = ignore();
 // Always ignore .git directory and README.md
-ig.add(['.git/**', 'README.md', 'package-lock.json', 'notes/**', '.cursorignore', '.cursorrules']);
+ig.add(['.git/**', ".__tests__/**", 'README.md', 'package-lock.json', 'notes/**', '.cursorignore', '.cursorrules']);
 try {
     const gitignoreContent = readFileSync(gitignorePath, 'utf8');
     ig.add(gitignoreContent);
@@ -10119,6 +12835,51 @@ generateFileStructureAndContents();
 
 ## File: types\dialogue.ts
 ```ts
+export interface CharacterProfile {
+  age?: string;
+  occupation?: string;
+  accents?: string[];
+  otherNotes?: string;
+}
+
+export interface WordDetail {
+  characterName: string;
+  wordSequenceNumber: number;
+  word: string;
+  wordTimestamp: string;
+  dialogNumber: number;
+  dialogStartTimestamp: string;
+  dialogEndTimestamp: string;
+  dialogVocalFile?: string;
+  characterProfile?: CharacterProfile;
+  numberOfLipMovementsForThisWord?: number;
+}
+
+export interface DialogueText {
+  original: string;
+  translated: string;
+  adapted: string;
+}
+
+export interface Emotions {
+  primary: {
+    emotion?: string;
+    intensity?: number;
+  };
+  secondary?: {
+    emotion?: string;
+    intensity?: number;
+  };
+}
+
+export interface Scenario {
+  name?: string;
+  description?: string;
+  location?: string;
+  timeOfDay?: string;
+  otherScenarioNotes?: string;
+}
+
 export interface Dialogue {
   _id: string;
   index: number;
@@ -10126,21 +12887,8 @@ export interface Dialogue {
   timeEnd: string;
   character: string;
   videoUrl: string;
-  dialogue: {
-    original: string;
-    translated: string;
-    adapted: string;
-  };
-  emotions?: {
-    primary: {
-      emotion: string;
-      intensity: number;
-    };
-    secondary?: {
-      emotion: string;
-      intensity: number;
-    };
-  };
+  dialogue: DialogueText;
+  emotions?: Emotions;
   direction?: string;
   lipMovements?: string;
   sceneContext?: string;
@@ -10154,6 +12902,9 @@ export interface Dialogue {
   projectId?: string;
   updatedAt?: string;
   updatedBy?: string;
+  words?: WordDetail[];
+  scenario?: Scenario;
+  deleteVoiceOver?: boolean;
 } 
 ```
 
@@ -10194,6 +12945,8 @@ declare module 'next-auth/jwt' {
 
 ## File: types\project.ts
 ```ts
+import { User } from './user';
+
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
 
 interface AssignedUser {
@@ -10201,39 +12954,45 @@ interface AssignedUser {
   role: string;
 }
 
+export interface Episode {
+  _id: string;
+  name: string;
+  collectionName: string;
+  videoPath: string;
+  videoKey: string;
+  status: 'uploaded' | 'processing' | 'error';
+  uploadedAt: Date;
+}
+
 export interface Project {
+  dialogue_collection: any;
   _id: string;
   title: string;
   description: string;
   sourceLanguage: string;
   targetLanguage: string;
   status: ProjectStatus;
-  videoPath?: string;
-  dialogue_collection: string;
   assignedTo: AssignedUser[];
   updatedAt: string | Date;
   createdAt?: string | Date;
-  
-  // Episode specific fields
-  episodeNumber: number;
-  seasonNumber?: number;
-  seriesTitle?: string;
-  duration?: number; // in minutes
-  originalAirDate?: string | Date;
-  subtitleDeadline?: string | Date;
-} 
+  parentFolder: string;
+  databaseName: string;
+  episodes: Episode[];
+  uploadStatus: {
+    totalFiles: number;
+    completedFiles: number;
+    currentFile: number;
+    status: string;
+  };
+}
 
-export type UserRole = 
-  | 'admin'
-  | 'director'
-  | 'voiceOver'
-  | 'transcriber'
-  | 'translator'; 
+// Import and re-export the UserRole type from types/user
+export type { UserRole } from './user'; 
 ```
 
 ## File: types\user.ts
 ```ts
-export type UserRole = 'transcriber' | 'translator' | 'voice-over' | 'director' | 'admin';
+export type UserRole = 'transcriber' | 'translator' | 'voiceOver' | 'director' | 'admin';
 
 interface SessionLog {
   loginTime: string | Date;
@@ -10499,1289 +13258,7 @@ export const calculateDuration = (timeStart: string, timeEnd: string): number =>
 }; 
 ```
 
-## File: __tests__\components\TranscriberDialogueView.test.tsx
-```tsx
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import TranscriberDialogueView from '@/components/TranscriberDialogueView'
-import { renderWithQuery } from '../testUtils'
-
-// Mock framer-motion
-jest.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, onDragEnd, ...props }) => (
-      <div data-testid="motion-div" onClick={() => onDragEnd?.({}, { offset: { x: -150 } })} {...props}>
-        {children}
-      </div>
-    )
-  },
-  useMotionValue: jest.fn(() => ({
-    set: jest.fn(),
-    get: jest.fn()
-  })),
-  useTransform: jest.fn(() => ({
-    set: jest.fn(),
-    get: jest.fn()
-  })),
-  useAnimation: jest.fn(() => ({
-    start: jest.fn()
-  }))
-}))
-
-const mockDialogues = [
-  {
-    _id: '1',
-    index: 0,
-    timeStart: '00:00.000',
-    timeEnd: '00:05.000',
-    character: 'Character 1',
-    videoUrl: 'http://example.com/video1.mp4',
-    dialogue: {
-      original: 'Original text 1',
-      translated: '',
-      adapted: '',
-    },
-    status: 'pending',
-  },
-  {
-    _id: '2',
-    index: 1,
-    timeStart: '00:05.000',
-    timeEnd: '00:10.000',
-    character: 'Character 2',
-    videoUrl: 'http://example.com/video1.mp4',
-    dialogue: {
-      original: 'Original text 2',
-      translated: '',
-      adapted: '',
-    },
-    status: 'pending',
-  },
-]
-
-// Mock fetch function
-global.fetch = jest.fn()
-
-describe('TranscriberDialogueView', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it('renders without crashing', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    expect(screen.getByText('Character')).toBeInTheDocument()
-  })
-
-  it('displays "No dialogues available" when dialogues array is empty', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={[]} projectId="123" />)
-    expect(screen.getByText('No dialogues available')).toBeInTheDocument()
-  })
-
-  it('displays the first dialogue by default', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    expect(screen.getByDisplayValue('Character 1')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('Original text 1')).toBeInTheDocument()
-  })
-
-  it('updates character input', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    const characterInput = screen.getByLabelText('Character')
-    fireEvent.change(characterInput, { target: { value: 'New Character' } })
-    expect(characterInput.value).toBe('New Character')
-  })
-
-  it('updates transcription text', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    const transcriptionArea = screen.getByLabelText('Transcription')
-    fireEvent.change(transcriptionArea, { target: { value: 'New transcription text' } })
-    expect(transcriptionArea.value).toBe('New transcription text')
-  })
-
-  it('shows confirmation modal when trying to navigate with unsaved changes', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    
-    // Make changes
-    const characterInput = screen.getByLabelText('Character')
-    fireEvent.change(characterInput, { target: { value: 'New Character' } })
-    
-    // Try to navigate using motion div
-    const motionDiv = screen.getByTestId('motion-div')
-    fireEvent.click(motionDiv)
-    
-    expect(screen.getByText('Unsaved Changes')).toBeInTheDocument()
-    expect(screen.getByText('You have unsaved changes. What would you like to do?')).toBeInTheDocument()
-  })
-
-  it('saves changes successfully', async () => {
-    // Mock successful API response
-    const mockResponse = {
-      ok: true,
-      json: () => Promise.resolve(mockDialogues[0]),
-    }
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse)
-
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    
-    // Make changes
-    const characterInput = screen.getByLabelText('Character')
-    fireEvent.change(characterInput, { target: { value: 'New Character' } })
-    
-    // Save changes
-    const saveButton = screen.getByText('Save Transcription')
-    fireEvent.click(saveButton)
-    
-    await waitFor(() => {
-      expect(screen.getByText('Transcription saved successfully!')).toBeInTheDocument()
-    })
-  })
-
-  it('handles save error gracefully', async () => {
-    // Mock failed API response
-    const mockResponse = {
-      ok: false,
-      json: () => Promise.resolve({ error: 'Failed to save' }),
-    }
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce(mockResponse)
-
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    
-    // Make changes
-    const characterInput = screen.getByLabelText('Character')
-    fireEvent.change(characterInput, { target: { value: 'New Character' } })
-    
-    // Try to save
-    const saveButton = screen.getByText('Save Transcription')
-    fireEvent.click(saveButton)
-    
-    await waitFor(() => {
-      expect(screen.getByText('Failed to save')).toBeInTheDocument()
-    })
-  })
-
-  it('handles video playback controls', () => {
-    renderWithQuery(<TranscriberDialogueView dialogues={mockDialogues} projectId="123" />)
-    
-    expect(screen.getByText('Play')).toBeInTheDocument()
-    expect(screen.getByText('-5s')).toBeInTheDocument()
-    expect(screen.getByText('Speed:')).toBeInTheDocument()
-    expect(screen.getByText('1x')).toBeInTheDocument()
-  })
-
-  it('displays time values correctly', () => {
-    const dialoguesWithTime = [{
-      ...mockDialogues[0],
-      timeStart: '00:30.500',
-      timeEnd: '00:35.750'
-    }]
-    
-    renderWithQuery(<TranscriberDialogueView dialogues={dialoguesWithTime} projectId="123" />)
-    
-    const startTime = screen.getByText('00:30.500')
-    const endTime = screen.getByText('00:35.750')
-    
-    expect(startTime).toBeInTheDocument()
-    expect(endTime).toBeInTheDocument()
-  })
-
-  it('displays default time format when times are not set', () => {
-    const dialoguesWithoutTime = [{
-      ...mockDialogues[0],
-      timeStart: '',
-      timeEnd: ''
-    }]
-    
-    renderWithQuery(<TranscriberDialogueView dialogues={dialoguesWithoutTime} projectId="123" />)
-    
-    const defaultTime = screen.getAllByText('00:00.000')
-    expect(defaultTime).toHaveLength(2) // Both start and end time show default
-  })
-}) 
-```
-
-## File: __tests__\components\TranscriberView.test.tsx
-```tsx
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import TranscriberView from '@/components/TranscriberView'
-import { Project } from '@/types/project'
-import '@testing-library/jest-dom'
-
-jest.mock('next-auth/react')
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(),
-}))
-
-describe('TranscriberView', () => {
-  const mockRouter = {
-    push: jest.fn(),
-    replace: jest.fn(),
-  }
-
-  const mockSession = {
-    data: {
-      user: { 
-        role: 'transcriber' as const,
-        username: 'testuser',
-      },
-    },
-    status: 'authenticated' as const,
-  }
-
-  const mockProjects: Project[] = [{
-    _id: 'project1',
-    title: 'Test Project 1',
-    description: 'Test Description 1',
-    sourceLanguage: 'English',
-    targetLanguage: 'Spanish',
-    status: 'active',
-    assignedTo: [{
-      username: 'testuser',
-      role: 'transcriber',
-    }],
-  }, {
-    _id: 'project2',
-    title: 'Test Project 2',
-    description: 'Test Description 2',
-    sourceLanguage: 'French',
-    targetLanguage: 'German',
-    status: 'pending',
-    assignedTo: [{
-      username: 'testuser',
-      role: 'transcriber',
-    }],
-  }]
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    ;(useSession as jest.Mock).mockReturnValue(mockSession)
-    ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
-    ;(signOut as jest.Mock).mockImplementation(() => Promise.resolve())
-    // Clear localStorage before each test
-    if (typeof window !== 'undefined') {
-      window.localStorage.clear()
-    }
-  })
-
-  describe('Rendering', () => {
-    it('renders project cards correctly', () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
-      expect(screen.getByText('Test Project 2')).toBeInTheDocument()
-      expect(screen.getByText('Source Language: English')).toBeInTheDocument()
-      expect(screen.getByText('Source Language: French')).toBeInTheDocument()
-    })
-
-    it('displays no projects message when user has no assignments', () => {
-      const projectWithoutAssignments = [{
-        ...mockProjects[0],
-        assignedTo: [{
-          username: 'otheruser',
-          role: 'transcriber',
-        }],
-      }]
-
-      render(<TranscriberView projects={projectWithoutAssignments} />)
-      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
-    })
-  })
-
-  describe('Navigation', () => {
-    it('navigates to project details when clicking a project card', async () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div')
-      expect(projectCard).toHaveAttribute('role', 'button')
-      
-      await act(async () => {
-        fireEvent.click(projectCard!)
-      })
-
-      await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/allDashboards/transcriber/project1')
-      })
-    })
-
-    it('prevents navigation when project card is disabled', async () => {
-      const disabledProjects = [{
-        ...mockProjects[0],
-        status: 'locked',
-      }]
-
-      render(<TranscriberView projects={disabledProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div')
-      expect(projectCard).toHaveAttribute('aria-disabled', 'true')
-      
-      await act(async () => {
-        fireEvent.click(projectCard!)
-      })
-      
-      expect(mockRouter.push).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('Authentication', () => {
-    it('handles logout correctly', async () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      
-      await act(async () => {
-        fireEvent.click(logoutButton)
-      })
-
-      await waitFor(() => {
-        expect(signOut).toHaveBeenCalledWith({ 
-          redirect: true, 
-          callbackUrl: '/login' 
-        })
-        expect(window.localStorage.length).toBe(0)
-      })
-    })
-
-    it('handles failed logout', async () => {
-      // Mock signOut to fail
-      const mockError = new Error('Logout failed')
-      ;(signOut as jest.Mock).mockRejectedValueOnce(mockError)
-
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      
-      await act(async () => {
-        fireEvent.click(logoutButton)
-      })
-
-      await waitFor(() => {
-        expect(mockRouter.replace).toHaveBeenCalledWith('/login')
-      })
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('handles projects with empty assignedTo array', () => {
-      const projectWithoutAssignedTo = [{
-        ...mockProjects[0],
-        assignedTo: [],
-      }]
-
-      render(<TranscriberView projects={projectWithoutAssignedTo} />)
-      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
-    })
-
-    it('handles empty projects array', () => {
-      render(<TranscriberView projects={[]} />)
-      expect(screen.getByText('No projects assigned to you as a transcriber.')).toBeInTheDocument()
-    })
-  })
-
-  describe('Accessibility', () => {
-    it('has accessible buttons and links', () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      expect(logoutButton).toHaveAttribute('aria-label', 'Logout')
-      
-      const projectCards = screen.getAllByRole('button')
-      expect(projectCards.length).toBeGreaterThan(0)
-      projectCards.forEach(card => {
-        expect(card).toHaveAttribute('aria-label')
-      })
-    })
-
-    it('provides proper keyboard navigation', () => {
-      render(<TranscriberView projects={mockProjects} />)
-      
-      const projectCards = screen.getAllByRole('button')
-      projectCards.forEach(card => {
-        expect(card).toHaveAttribute('tabIndex', '0')
-      })
-    })
-  })
-}) 
-```
-
-## File: __tests__\components\VoiceOverDialogueView.test.tsx
-```tsx
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import VoiceOverDialogueView from '@/components/VoiceOverDialogueView'
-import type { Dialogue } from '@/types/dialogue'
-import '@testing-library/jest-dom'
-
-// Mock framer-motion
-jest.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: { children: React.ReactNode; [key: string]: any }) => (
-      <div {...props}>{children}</div>
-    ),
-  },
-  useMotionValue: jest.fn(() => ({
-    set: jest.fn(),
-    get: jest.fn(),
-  })),
-  useTransform: jest.fn(),
-  useAnimation: jest.fn(() => ({
-    start: jest.fn(),
-  })),
-}))
-
-interface MockMediaStream {
-  getTracks: () => { stop: () => void }[];
-}
-
-interface MockMediaStreamSource {
-  connect: jest.Mock;
-  disconnect: jest.Mock;
-  mediaStream: MockMediaStream;
-}
-
-interface MockGainNode {
-  connect: jest.Mock;
-  gain: { value: number };
-}
-
-// Mock Audio Context and related APIs
-class MockAudioContext {
-  createMediaStreamSource = jest.fn((): MockMediaStreamSource => ({
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    mediaStream: {
-      getTracks: () => [{
-        stop: jest.fn(),
-      }],
-    },
-  }))
-
-  createGain = jest.fn((): MockGainNode => ({
-    connect: jest.fn(),
-    gain: { value: 1 },
-  }))
-
-  destination = {}
-  sampleRate = 44100
-  close = jest.fn()
-  audioWorklet = {
-    addModule: jest.fn().mockResolvedValue(undefined),
-  }
-
-  createBuffer = jest.fn(() => ({
-    duration: 2,
-    numberOfChannels: 2,
-    sampleRate: 44100,
-    getChannelData: jest.fn(() => new Float32Array([0, 0.1, -0.1])),
-  }))
-
-  createBufferSource = jest.fn(() => ({
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    start: jest.fn(),
-    stop: jest.fn(),
-    buffer: null,
-  }))
-}
-
-class MockAudioWorkletNode {
-  connect = jest.fn()
-  disconnect = jest.fn()
-  port = {
-    onmessage: jest.fn(),
-    postMessage: jest.fn(),
-  }
-}
-
-// Mock URL.createObjectURL
-global.URL.createObjectURL = jest.fn(() => 'mock-url')
-global.URL.revokeObjectURL = jest.fn()
-
-global.AudioContext = MockAudioContext as any
-global.AudioWorkletNode = MockAudioWorkletNode as any
-
-// Mock HTMLMediaElement methods
-Object.defineProperty(window.HTMLMediaElement.prototype, 'play', {
-  configurable: true,
-  value: jest.fn().mockResolvedValue(undefined),
-})
-
-Object.defineProperty(window.HTMLMediaElement.prototype, 'pause', {
-  configurable: true,
-  value: jest.fn(),
-})
-
-Object.defineProperty(window.HTMLMediaElement.prototype, 'load', {
-  configurable: true,
-  value: jest.fn(),
-})
-
-// Mock createWorker
-jest.mock('@/utils/audio', () => ({
-  createWorker: jest.fn().mockResolvedValue({
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    port: {
-      onmessage: jest.fn((event: (arg: { data: { audioData: Float32Array[] } }) => void) => {
-        event({
-          data: {
-            audioData: [new Float32Array([0, 0.1, -0.1]), new Float32Array([0, 0.2, -0.2])],
-          },
-        })
-      }),
-      postMessage: jest.fn(),
-    },
-  }),
-  createWavBlob: jest.fn().mockReturnValue(new Blob(['mock-audio-data'], { type: 'audio/wav' })),
-}))
-
-describe('VoiceOverDialogueView Component', () => {
-  const mockDialogues: Dialogue[] = [
-    {
-      _id: 'dialogue1',
-      index: 0,
-      timeStart: '00:00:00:000',
-      timeEnd: '00:00:02:000',
-      character: 'Character 1',
-      videoUrl: 'test-video-url-1',
-      dialogue: {
-        original: 'Original text 1',
-        translated: 'Translated text 1',
-        adapted: 'Adapted text 1',
-      },
-      emotions: {
-        primary: {
-          emotion: 'happy',
-          intensity: 5,
-        },
-        secondary: {
-          emotion: 'excited',
-          intensity: 3,
-        },
-      },
-      direction: 'Test direction',
-      lipMovements: 2,
-      sceneContext: 'Test scene context',
-      technicalNotes: 'Test technical notes',
-      culturalNotes: 'Test cultural notes',
-      status: 'pending',
-      recordingStatus: 'not-started',
-      projectId: 'project1',
-      updatedAt: '2024-01-01',
-      updatedBy: 'user1',
-      voiceOverUrl: undefined,
-    },
-    {
-      _id: 'dialogue2',
-      index: 1,
-      timeStart: '00:00:02:000',
-      timeEnd: '00:00:04:000',
-      character: 'Character 2',
-      videoUrl: 'test-video-url-2',
-      dialogue: {
-        original: 'Original text 2',
-        translated: 'Translated text 2',
-        adapted: 'Adapted text 2',
-      },
-      emotions: {
-        primary: {
-          emotion: 'sad',
-          intensity: 4,
-        },
-        secondary: {
-          emotion: 'worried',
-          intensity: 2,
-        },
-      },
-      direction: 'Test direction 2',
-      lipMovements: 3,
-      sceneContext: 'Test scene context 2',
-      technicalNotes: 'Test technical notes 2',
-      culturalNotes: 'Test cultural notes 2',
-      status: 'pending',
-      recordingStatus: 'not-started',
-      projectId: 'project1',
-      updatedAt: '2024-01-01',
-      updatedBy: 'user1',
-      voiceOverUrl: undefined,
-    },
-  ]
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
-
-  const renderComponent = () => {
-    return render(
-      <QueryClientProvider client={queryClient}>
-        <VoiceOverDialogueView dialogues={mockDialogues as Dialogue[]} projectId="project1" />
-      </QueryClientProvider>
-    )
-  }
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    jest.useFakeTimers()
-    // Mock getUserMedia
-    Object.defineProperty(global.navigator, 'mediaDevices', {
-      value: {
-        getUserMedia: jest.fn().mockResolvedValue({
-          getTracks: () => [{
-            stop: jest.fn(),
-          }],
-        }),
-      },
-      writable: true,
-    })
-
-    // Mock fetch
-    global.fetch = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ url: 'test-voice-over-url' }),
-      })
-    )
-
-    // Reset URL.createObjectURL mock
-    ;(global.URL.createObjectURL as jest.Mock).mockReset()
-    ;(global.URL.createObjectURL as jest.Mock).mockReturnValue('mock-url')
-
-    // Mock window.confirm
-    window.confirm = jest.fn(() => true)
-  })
-
-  afterEach(() => {
-    jest.clearAllMocks()
-    jest.useRealTimers()
-  })
-
-  it('renders initial dialogue correctly', async () => {
-    renderComponent()
-
-    await waitFor(() => {
-      expect(screen.getByText('Character 1')).toBeInTheDocument()
-      expect(screen.getByText('Original text 1')).toBeInTheDocument()
-      expect(screen.getByText('Translated text 1')).toBeInTheDocument()
-      expect(screen.getByText('Adapted text 1')).toBeInTheDocument()
-    })
-  })
-
-  it('handles recording start and stop', async () => {
-    renderComponent()
-
-    const startButton = screen.getByText('Start Recording')
-    await act(async () => {
-      fireEvent.click(startButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled()
-    })
-
-    // Wait for countdown
-    await act(async () => {
-      jest.advanceTimersByTime(4000)
-      await Promise.resolve()
-    })
-
-    const stopButton = screen.getByText('Stop Recording')
-    await act(async () => {
-      fireEvent.click(stopButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('Start Recording')).toBeInTheDocument()
-    })
-  })
-
-  it('handles navigation between dialogues', async () => {
-    renderComponent()
-
-    // Check initial dialogue
-    expect(screen.getByText('Character 1')).toBeInTheDocument()
-
-    // Navigate to next dialogue
-    const nextButton = screen.getByRole('button', { name: /next/i })
-    await act(async () => {
-      fireEvent.click(nextButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('Character 2')).toBeInTheDocument()
-      expect(screen.getByText('Original text 2')).toBeInTheDocument()
-    })
-
-    // Navigate back
-    const prevButton = screen.getByRole('button', { name: /previous/i })
-    await act(async () => {
-      fireEvent.click(prevButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('Character 1')).toBeInTheDocument()
-      expect(screen.getByText('Original text 1')).toBeInTheDocument()
-    })
-  })
-
-  it('shows confirmation dialog when navigating with unsaved changes', async () => {
-    renderComponent()
-
-    // Start and stop recording to create unsaved changes
-    const startButton = screen.getByText('Start Recording')
-    await act(async () => {
-      fireEvent.click(startButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Wait for countdown
-    await act(async () => {
-      jest.advanceTimersByTime(1000)
-      expect(screen.getByText('3')).toBeInTheDocument()
-      jest.advanceTimersByTime(1000)
-      expect(screen.getByText('2')).toBeInTheDocument()
-      jest.advanceTimersByTime(1000)
-      expect(screen.getByText('1')).toBeInTheDocument()
-      jest.advanceTimersByTime(1000)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    const stopButton = screen.getByText('Stop Recording')
-    await act(async () => {
-      fireEvent.click(stopButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Try to navigate
-    const nextButton = screen.getByText('Next')
-    await act(async () => {
-      fireEvent.click(nextButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Check for confirmation dialog
-    expect(window.confirm).toHaveBeenCalled()
-  })
-
-  it('handles video playback controls', async () => {
-    renderComponent()
-
-    const video = screen.getByTestId('dialogue-video') as HTMLVideoElement
-    
-    // Test play/pause
-    const playButton = screen.getByText('Play')
-    await act(async () => {
-      fireEvent.click(playButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-    expect(video.play).toHaveBeenCalled()
-
-    // Test rewind
-    const rewindButton = screen.getByText('Rewind')
-    await act(async () => {
-      fireEvent.click(rewindButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-    expect(video.currentTime).toBe(0)
-
-    // Test playback rate
-    const playbackRateButton = screen.getByText('1x')
-    await act(async () => {
-      fireEvent.click(playbackRateButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-    expect(video.playbackRate).toBe(1.5)
-  })
-
-  it('handles save functionality', async () => {
-    renderComponent()
-
-    // Create a recording
-    const startButton = screen.getByText('Start Recording')
-    await act(async () => {
-      fireEvent.click(startButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Wait for countdown
-    await act(async () => {
-      jest.advanceTimersByTime(4000)
-      await Promise.resolve()
-    })
-
-    const stopButton = screen.getByText('Stop Recording')
-    await act(async () => {
-      fireEvent.click(stopButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Wait for audio processing
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    // Try to save
-    const saveButton = screen.getByText('Add Voice-over')
-    await act(async () => {
-      fireEvent.click(saveButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/upload-voice-over', expect.any(Object))
-      expect(screen.getByText(/saved successfully/i)).toBeInTheDocument()
-    }, { timeout: 10000 })
-  })
-
-  it('handles recording errors', async () => {
-    // Mock getUserMedia to fail
-    Object.defineProperty(global.navigator, 'mediaDevices', {
-      value: {
-        getUserMedia: jest.fn().mockRejectedValue(new Error('Permission denied')),
-      },
-      writable: true,
-    })
-
-    renderComponent()
-
-    const startButton = screen.getByText('Start Recording')
-    await act(async () => {
-      fireEvent.click(startButton)
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText(/permission denied/i)).toBeInTheDocument()
-    })
-  })
-
-  it('handles save errors', async () => {
-    // Mock fetch to fail
-    global.fetch = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      })
-    )
-
-    renderComponent()
-
-    // Create a recording
-    const startButton = screen.getByText('Start Recording')
-    await act(async () => {
-      fireEvent.click(startButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Wait for countdown
-    await act(async () => {
-      jest.advanceTimersByTime(4000)
-      await Promise.resolve()
-    })
-
-    const stopButton = screen.getByText('Stop Recording')
-    await act(async () => {
-      fireEvent.click(stopButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    // Wait for audio processing
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    // Try to save
-    const saveButton = screen.getByText('Add Voice-over')
-    await act(async () => {
-      fireEvent.click(saveButton)
-      // Wait for async operations
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText(/failed to save/i)).toBeInTheDocument()
-    }, { timeout: 10000 })
-  })
-}) 
-```
-
-## File: __tests__\components\VoiceOverView.test.tsx
-```tsx
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import VoiceOverView from '@/components/VoiceOverView'
-import { Project } from '@/types/project'
-import '@testing-library/jest-dom'
-
-jest.mock('next-auth/react')
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(),
-}))
-
-describe('VoiceOverView', () => {
-  const mockRouter = {
-    push: jest.fn(),
-    replace: jest.fn(),
-  }
-
-  const mockSession = {
-    data: {
-      user: { 
-        role: 'voice-over' as const,
-        username: 'testuser',
-      },
-    },
-    status: 'authenticated' as const,
-  }
-
-  const mockProjects: Project[] = [{
-    _id: 'project1',
-    title: 'Test Project 1',
-    description: 'Test Description 1',
-    sourceLanguage: 'English',
-    targetLanguage: 'Spanish',
-    status: 'active',
-    assignedTo: [{
-      username: 'testuser',
-      role: 'voice-over',
-    }],
-  }, {
-    _id: 'project2',
-    title: 'Test Project 2',
-    description: 'Test Description 2',
-    sourceLanguage: 'French',
-    targetLanguage: 'German',
-    status: 'pending',
-    assignedTo: [{
-      username: 'testuser',
-      role: 'voice-over',
-    }],
-  }]
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    ;(useSession as jest.Mock).mockReturnValue(mockSession)
-    ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
-    ;(signOut as jest.Mock).mockImplementation(() => Promise.resolve())
-    
-    // Clear localStorage before each test
-    if (typeof window !== 'undefined') {
-      window.localStorage.clear()
-    }
-  })
-
-  describe('Rendering', () => {
-    it('renders project cards correctly', () => {
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      expect(screen.getByText('Test Project 1')).toBeInTheDocument()
-      expect(screen.getByText('Test Project 2')).toBeInTheDocument()
-      expect(screen.getByText('Source Language: English')).toBeInTheDocument()
-      expect(screen.getByText('Source Language: French')).toBeInTheDocument()
-    })
-
-    it('displays no projects message when user has no assignments', () => {
-      const projectWithoutAssignments = [{
-        ...mockProjects[0],
-        assignedTo: [{
-          username: 'otheruser',
-          role: 'voice-over',
-        }],
-      }]
-
-      render(<VoiceOverView projects={projectWithoutAssignments} />)
-      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
-    })
-  })
-
-  describe('Navigation', () => {
-    it('navigates to project details when clicking a project card', async () => {
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div')
-      expect(projectCard).toHaveAttribute('role', 'button')
-      
-      await act(async () => {
-        fireEvent.click(projectCard!)
-      })
-
-      await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/allDashboards/voice-over/project1')
-      })
-    })
-
-    it('prevents navigation when project card is disabled', async () => {
-      const disabledProjects = [{
-        ...mockProjects[0],
-        status: 'locked',
-      }]
-
-      render(<VoiceOverView projects={disabledProjects} />)
-      
-      const projectCard = screen.getByText('Test Project 1').closest('div')
-      expect(projectCard).toHaveAttribute('aria-disabled', 'true')
-      
-      await act(async () => {
-        fireEvent.click(projectCard!)
-      })
-      
-      expect(mockRouter.push).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('Authentication', () => {
-    it('handles logout correctly', async () => {
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      
-      await act(async () => {
-        fireEvent.click(logoutButton)
-      })
-
-      await waitFor(() => {
-        expect(signOut).toHaveBeenCalledWith({ 
-          redirect: true, 
-          callbackUrl: '/login' 
-        })
-        expect(window.localStorage.length).toBe(0)
-      })
-    })
-
-    it('handles failed logout', async () => {
-      // Mock signOut to fail
-      const mockError = new Error('Logout failed')
-      ;(signOut as jest.Mock).mockRejectedValueOnce(mockError)
-
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      
-      await act(async () => {
-        fireEvent.click(logoutButton)
-      })
-
-      await waitFor(() => {
-        expect(mockRouter.replace).toHaveBeenCalledWith('/login')
-      })
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('handles projects with empty assignedTo array', () => {
-      const projectWithoutAssignedTo = [{
-        ...mockProjects[0],
-        assignedTo: [],
-      }]
-
-      render(<VoiceOverView projects={projectWithoutAssignedTo} />)
-      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
-    })
-
-    it('handles empty projects array', () => {
-      render(<VoiceOverView projects={[]} />)
-      expect(screen.getByText('No projects assigned to you as a voice-over artist.')).toBeInTheDocument()
-    })
-  })
-
-  describe('Accessibility', () => {
-    it('has accessible buttons and links', () => {
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      const logoutButton = screen.getByRole('button', { name: /logout/i })
-      expect(logoutButton).toHaveAttribute('aria-label', 'Logout')
-      
-      const projectCards = screen.getAllByRole('button')
-      expect(projectCards.length).toBeGreaterThan(0)
-      projectCards.forEach(card => {
-        expect(card).toHaveAttribute('aria-label')
-      })
-    })
-
-    it('provides proper keyboard navigation', () => {
-      render(<VoiceOverView projects={mockProjects} />)
-      
-      const projectCards = screen.getAllByRole('button')
-      projectCards.forEach(card => {
-        expect(card).toHaveAttribute('tabIndex', '0')
-      })
-    })
-  })
-}) 
-```
-
-## File: __tests__\login.test.tsx
-```tsx
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import Login from '@/app/login/page'
-
-jest.mock('next-auth/react')
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn()
-}))
-
-describe('Login Page', () => {
-  const mockSignIn = signIn as jest.Mock
-  const mockPush = jest.fn()
-
-  beforeEach(() => {
-    mockSignIn.mockClear()
-    mockPush.mockClear()
-    ;(useRouter as jest.Mock).mockReturnValue({ push: mockPush })
-  })
-
-  it('renders login form', () => {
-    render(<Login />)
-    
-    expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument()
-  })
-
-  it('handles successful login', async () => {
-    mockSignIn.mockResolvedValueOnce({ error: null })
-    
-    render(<Login />)
-    
-    fireEvent.change(screen.getByLabelText(/username/i), {
-      target: { value: 'testuser' },
-    })
-    fireEvent.change(screen.getByLabelText(/password/i), {
-      target: { value: 'password123' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
-
-    await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('credentials', {
-        username: 'testuser',
-        password: 'password123',
-        redirect: false,
-      })
-      expect(mockPush).toHaveBeenCalledWith('/dashboard')
-    })
-  })
-
-  it('handles login error', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-    mockSignIn.mockResolvedValueOnce({ error: 'Invalid credentials' })
-    
-    render(<Login />)
-    
-    fireEvent.change(screen.getByLabelText(/username/i), {
-      target: { value: 'wronguser' },
-    })
-    fireEvent.change(screen.getByLabelText(/password/i), {
-      target: { value: 'wrongpass' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /log in/i }))
-
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Invalid credentials')
-      expect(mockPush).not.toHaveBeenCalled()
-    })
-
-    consoleErrorSpy.mockRestore()
-  })
-}) 
-```
-
-## File: __tests__\mongodb.test.ts
-```ts
-// Mock MongoDB module before importing anything else
-jest.mock('mongodb', () => ({
-    MongoClient: jest.fn()
-}));
-
-import { Db, MongoClient } from 'mongodb';
-import type { jest } from '@jest/globals';
-
-interface MockDbConnection {
-    client: MongoClient;
-    db: Db;
-}
-
-// Mock the mongodb.ts module
-jest.mock('../lib/mongodb', () => {
-    const mockCollection = {
-        find: jest.fn().mockReturnValue({
-            toArray: jest.fn().mockResolvedValue([])
-        }),
-        findOne: jest.fn()
-    };
-
-    const mockDb = {
-        collection: jest.fn().mockReturnValue(mockCollection)
-    } as unknown as Db;
-
-    const mockClient = {
-        connect: jest.fn(),
-        db: jest.fn()
-    } as unknown as MongoClient;
-
-    return {
-        connectToDatabase: jest.fn().mockResolvedValue({
-            client: mockClient,
-            db: mockDb
-        } as MockDbConnection),
-        getDb: jest.fn().mockReturnValue(mockDb)
-    };
-});
-
-import { connectToDatabase, getDb } from '../lib/mongodb';
-
-describe('MongoDB Connection and Data Fetching', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
-
-    describe('Database Connection', () => {
-        it('should successfully connect to the database', async () => {
-            const result = await connectToDatabase();
-            expect(result).toBeDefined();
-            expect(result.client).toBeDefined();
-            expect(result.db).toBeDefined();
-            expect(result.db.collection).toBeDefined();
-        });
-    });
-
-    describe('Database Access', () => {
-        it('should return the database instance', async () => {
-            const db = getDb();
-            expect(db).toBeDefined();
-            expect(db.collection).toBeDefined();
-        });
-
-        it('should allow collection access', async () => {
-            const db = getDb();
-            const collection = db.collection('test');
-            expect(collection).toBeDefined();
-            expect(collection.find).toBeDefined();
-            expect(collection.findOne).toBeDefined();
-        });
-    });
-}); 
+## File: vercel.json
+```json
+{} 
 ```

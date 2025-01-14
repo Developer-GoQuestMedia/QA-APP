@@ -11,6 +11,7 @@ interface Dialogue {
   character: string
   videoUrl: string
   projectId?: string
+  episodeId?: string
   dialogue: {
     original: string
     translated: string
@@ -19,9 +20,21 @@ interface Dialogue {
   status: string
 }
 
+interface Episode {
+  _id: string
+  name: string
+  collectionName: string
+  videoPath: string
+  videoKey: string
+  status: string
+  uploadedAt: Date
+}
+
 interface DialogueViewProps {
   dialogues: Dialogue[]
   projectId: string
+  episodes: Episode[]
+  currentEpisodeId?: string
 }
 
 type QueryData = {
@@ -30,7 +43,12 @@ type QueryData = {
   timestamp: number;
 };
 
-export default function TranscriberDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
+export default function TranscriberDialogueView({ 
+  dialogues: initialDialogues, 
+  projectId,
+  episodes,
+  currentEpisodeId 
+}: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,6 +66,23 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
   const [currentTimestamp, setCurrentTimestamp] = useState('00:00.000');
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(
+    currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
+  );
+
+  // Update dialoguesList when initialDialogues changes
+  useEffect(() => {
+    setDialoguesList(initialDialogues);
+  }, [initialDialogues]);
+
+  // Early return if no dialogues
+  if (!dialoguesList || dialoguesList.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-4 text-foreground">
+        <p>No dialogues available for this project.</p>
+      </div>
+    );
+  }
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
@@ -377,12 +412,61 @@ export default function TranscriberDialogueView({ dialogues: initialDialogues, p
     }
   }, []);
 
+  // Add episode selection handler
+  const handleEpisodeChange = async (episodeId: string) => {
+    const episode = episodes.find(ep => ep._id === episodeId);
+    if (!episode) return;
+
+    try {
+      // Fetch dialogues for the selected episode
+      const response = await axios.get(`/api/dialogues?projectId=${projectId}&episodeId=${episodeId}`);
+      setDialoguesList(response.data.data);
+      setCurrentDialogueIndex(0);
+      setSelectedEpisode(episode);
+    } catch (error) {
+      console.error('Failed to fetch dialogues for episode:', error);
+      setError('Failed to load dialogues for selected episode');
+    }
+  };
+
+  // Add episode info section to the UI
+  const EpisodeInfo = () => (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Current Episode
+          </label>
+          <select
+            value={selectedEpisode?._id || ''}
+            onChange={(e) => handleEpisodeChange(e.target.value)}
+            className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            {episodes.map((episode) => (
+              <option key={episode._id} value={episode._id}>
+                {episode.name} ({episode.status})
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedEpisode && (
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            <div>Collection: {selectedEpisode.collectionName}</div>
+            <div>Uploaded: {new Date(selectedEpisode.uploadedAt).toLocaleDateString()}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   if (!currentDialogue) {
     return <div className="text-center p-4">No dialogues available.</div>
   }
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
+      <EpisodeInfo />
+      
       {/* Video Player Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
         <div className="relative">

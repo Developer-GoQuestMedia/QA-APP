@@ -1,0 +1,265 @@
+{
+    "_id": {
+        "$oid": "6757fdbf79542727d6b72e28"
+    },
+    "index": {
+        "$numberInt": "34"
+    },
+    "timeStart": "00:01:31:480",
+    "timeEnd": "00:01:36:160",
+    "character": "Character Name",
+    "videoUrl": "https://pub-ca2dd6ef0390446c8dda16e228d97cf6.r2.dev/Kuma%20Ep%2001/videos/Kuma%20Ep%2001_Clip_34.mp4",
+    "dialogue": {
+        "original": "Annemize saygılı davranır, babamıza da bir evlat olarak görevimizi yaparız.",
+        "translated": "I respect our mother, and do our duty to our father as his sons.",
+        "adapted": "मैं अपनी मां का सम्मान करता हूं और अपने पिता के प्रति उनके पुत्र होने के नाते अपना कर्तव्य निभाता हूं।"
+    },
+    "emotions": {
+        "primary": {
+            "emotion": "Neutral",
+            "intensity": {
+                "$numberInt": "1"
+            }
+        },
+        "secondary": {
+            "emotion": "Neutral",
+            "intensity": {
+                "$numberInt": "1"
+            }
+        }
+    },
+    "direction": "Normal tone",
+    "lipMovements": "0",
+    "sceneContext": "Character speaking",
+    "technicalNotes": "Neutral tone",
+    "culturalNotes": "General conversation",
+    "status": "recorded",
+    "recordingStatus": "pending",
+    "projectId": {
+        "$oid": "123456789123456789123456"
+    },
+    "words": [
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "1"
+            },
+            "word": "Annemize",
+            "wordTimestamp": "00:01:31:480",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "4"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "2"
+            },
+            "word": "saygılı",
+            "wordTimestamp": "00:01:31:948",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "3"
+            },
+            "word": "davranır",
+            "wordTimestamp": "00:01:32:416",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "4"
+            },
+            "word": "babamıza",
+            "wordTimestamp": "00:01:32:884",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "3"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "5"
+            },
+            "word": "da",
+            "wordTimestamp": "00:01:33:352",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "6"
+            },
+            "word": "bir",
+            "wordTimestamp": "00:01:33:820",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "1"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "7"
+            },
+            "word": "evlat",
+            "wordTimestamp": "00:01:34:288",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "8"
+            },
+            "word": "olarak",
+            "wordTimestamp": "00:01:34:756",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "3"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "9"
+            },
+            "word": "görevimizi",
+            "wordTimestamp": "00:01:35:224",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "4"
+            }
+        },
+        {
+            "characterName": "Character Name",
+            "wordSequenceNumber": {
+                "$numberInt": "10"
+            },
+            "word": "yaparız",
+            "wordTimestamp": "00:01:35:692",
+            "dialogNumber": {},
+            "dialogStartTimestamp": "00:01:31:480",
+            "dialogEndTimestamp": "00:01:36:160",
+            "dialogVocalFile": "",
+            "characterProfile": {
+                "age": "",
+                "occupation": "",
+                "accents": [],
+                "otherNotes": ""
+            },
+            "numberOfLipMovementsForThisWord": {
+                "$numberInt": "2"
+            }
+        }
+    ],
+    "scenario": {
+        "name": "",
+        "description": "",
+        "location": "",
+        "timeOfDay": "",
+        "otherScenarioNotes": ""
+    },
+    "voiceOverNotes": "",
+    "directorNotes": "",
+    "updatedAt": "2025-01-13T11:23:40.646Z",
+    "updatedBy": "",
+    "deleteVoiceOver": false
+}

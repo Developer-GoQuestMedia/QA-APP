@@ -31,9 +31,9 @@ async function migrateRoles() {
 
     // Update project assignments
     const result = await db.collection('projects').updateMany(
-      { 'assignedTo.role': 'voice-over' },
+      { 'assignedTo.role': 'voiceOver' },
       { $set: { 'assignedTo.$[elem].role': 'voiceOver' } },
-      { arrayFilters: [{ 'elem.role': 'voice-over' }] }
+      { arrayFilters: [{ 'elem.role': 'voiceOver' }] }
     )
 
     console.log(`Updated ${result.modifiedCount} project assignments`)

@@ -70,18 +70,6 @@ export default function TranscriberDialogueView({
     currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
   );
 
-  const rotate = useMotionValue(0);
-  const scale = useTransform(rotate, [0, 270], [1, 0]);
-  const opacity = useTransform(rotate, [0, 270], [1, 0]);
-  const animControls = useAnimation();
-
-
-  // const x = useMotionValue(0)
-  // const rotate = useTransform(x, [-90, 90], [-10, 10])
-  // const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
-  // const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
-  // const animControls = useAnimation()
-
   // Update dialoguesList when initialDialogues changes
   useEffect(() => {
     setDialoguesList(initialDialogues);

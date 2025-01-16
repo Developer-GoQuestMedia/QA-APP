@@ -70,6 +70,12 @@ export default function TranscriberDialogueView({
     currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
   );
 
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-90, 90], [-10, 10]);
+  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5]);
+  const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8]);
+  const animControls = useAnimation();
+
   // Update dialoguesList when initialDialogues changes
   useEffect(() => {
     setDialoguesList(initialDialogues);
@@ -227,13 +233,6 @@ export default function TranscriberDialogueView({
       setIsSaving(false);
     }
   }, [currentDialogue, projectId, pendingOriginalText, character, timeStart, timeEnd, currentDialogueIndex, dialoguesList.length, queryClient]);
-
-  // Motion values for swipe animation
-  const x = useMotionValue(0)
-  const rotate = useTransform(x, [-90, 90], [-10, 10])
-  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
-  const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
-  const animControls = useAnimation()
 
   useEffect(() => {
     if (currentDialogue) {

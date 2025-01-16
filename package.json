@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:no-warnings": "node --no-warnings ./node_modules/.bin/next dev",
-    "build:next": "prisma generate && next build",
+    "build:next": "prisma generate && next build && prisma generate",
     "build": "cross-env NODE_ENV=production npm run build:next && node scripts/build-success.js && npm run start",
     "start": "next start",
     "start:port": "next start -p",

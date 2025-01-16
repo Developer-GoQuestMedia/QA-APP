@@ -89,7 +89,7 @@ interface ProjectDocument {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let videoFile: File | null = null;
-  let uploadedFiles: Array<{
+  const uploadedFiles: Array<{
     name: string;
     videoPath: string;
     videoKey: string;

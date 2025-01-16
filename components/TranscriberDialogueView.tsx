@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
@@ -70,6 +70,18 @@ export default function TranscriberDialogueView({
     currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
   );
 
+  const rotate = useMotionValue(0);
+  const scale = useTransform(rotate, [0, 270], [1, 0]);
+  const opacity = useTransform(rotate, [0, 270], [1, 0]);
+  const animControls = useAnimation();
+
+
+  // const x = useMotionValue(0)
+  // const rotate = useTransform(x, [-90, 90], [-10, 10])
+  // const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
+  // const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
+  // const animControls = useAnimation()
+
   // Update dialoguesList when initialDialogues changes
   useEffect(() => {
     setDialoguesList(initialDialogues);
@@ -87,7 +99,7 @@ export default function TranscriberDialogueView({
   const currentDialogue = dialoguesList[currentDialogueIndex];
 
   // Video control functions
-  const togglePlayPause = () => {
+  const togglePlayPause = useCallback(() => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -96,10 +108,10 @@ export default function TranscriberDialogueView({
       }
       setIsPlaying(!isPlaying);
     }
-  };
+  }, [isPlaying]);
 
   // Check for unsaved changes
-  const hasChanges = () => {
+  const hasChanges = useCallback(() => {
     if (!currentDialogue) return false;
     return (
       character !== currentDialogue.character ||
@@ -107,18 +119,18 @@ export default function TranscriberDialogueView({
       timeStart !== currentDialogue.timeStart ||
       timeEnd !== currentDialogue.timeEnd
     );
-  };
+  }, [currentDialogue, character, pendingOriginalText, timeStart, timeEnd]);
 
   // Navigation handlers
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (hasChanges()) {
       setShowConfirmation(true);
     } else if (currentDialogueIndex < dialoguesList.length - 1) {
       setCurrentDialogueIndex(prev => prev + 1);
     }
-  };
+  }, [hasChanges, currentDialogueIndex, dialoguesList.length]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (currentDialogueIndex > 0) {
       if (hasChanges()) {
         setShowConfirmation(true);
@@ -126,7 +138,7 @@ export default function TranscriberDialogueView({
         setCurrentDialogueIndex(prev => prev - 1);
       }
     }
-  };
+  }, [currentDialogueIndex, hasChanges]);
 
   // Reset changes and continue navigation
   const handleDiscardChanges = () => {
@@ -140,7 +152,7 @@ export default function TranscriberDialogueView({
   };
 
   // Save changes with approval
-  const handleApproveAndSave = async () => {
+  const handleApproveAndSave = useCallback(async () => {
     if (!currentDialogue) return;
     
     try {
@@ -226,7 +238,7 @@ export default function TranscriberDialogueView({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [currentDialogue, projectId, pendingOriginalText, character, timeStart, timeEnd, currentDialogueIndex, dialoguesList.length, queryClient]);
 
   // Motion values for swipe animation
   const x = useMotionValue(0)

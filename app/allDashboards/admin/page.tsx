@@ -61,6 +61,10 @@ export default function Page() {
     }
   }, [status, session])
 
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
   if (status === 'loading') {
     console.log('Admin dashboard: Loading state', {
       timestamp: new Date().toISOString(),

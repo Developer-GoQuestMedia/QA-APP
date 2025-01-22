@@ -261,6 +261,7 @@ export async function POST(request: NextRequest) {
             $push: {
               episodes: {
                 $each: uploadedFiles.map(file => ({
+                  _id: new ObjectId().toString(),
                   name: file.name,
                   collectionName: file.collectionName,
                   videoPath: file.videoPath,

@@ -1,10 +1,21 @@
 import { Project, ProjectStatus, Episode } from '@/types/project'
 import { User, UserRole } from '@/types/user'
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { Search, Plus, Filter, MoreVertical, Users, Settings, ChartBar, Trash2, Edit3, UserPlus, UserMinus } from 'lucide-react'
+import {
+  Search,
+  Plus,
+  MoreVertical,
+  Users,
+  Settings,
+  ChartBar,
+  Trash2,
+  Edit3,
+  UserPlus
+} from 'lucide-react'
+import EpisodeView from './EpisodeView'
 
 interface AdminViewProps {
   projects: Project[];
@@ -53,7 +64,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const [isEditing, setIsEditing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'title' | 'date' | 'status'>('date');
-  
+
   const [newProject, setNewProject] = useState({
     title: '',
     description: '',
@@ -70,7 +81,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     role: 'transcriber' as UserRole,
     isActive: true
   });
-  
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const router = useRouter();
@@ -81,43 +92,85 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressData>>({});
   const [uploadStatus, setUploadStatus] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
 
+  // ---------------------------------------
+  //  NEW STATES FOR EPISODE MODALS
+  // ---------------------------------------
+  // Separate modal to show the entire episode list
+  const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false);
+
+  // Separate modal to show a single episode's details
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+  const [isEpisodeDetailsOpen, setIsEpisodeDetailsOpen] = useState(false);
 
-  const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await axios.get('/api/admin/users');
-      return response.data.data;
-    }
-  });
-
-  // Filter and sort projects
-  const filteredProjects = projects
-    .filter((project: Project) => {
-      const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          project.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || project.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a: Project, b: Project) => {
-      switch (sortBy) {
-        case 'title':
-          return a.title.localeCompare(b.title);
-        case 'status':
-          return a.status.localeCompare(b.status);
-        case 'date':
-        default:
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      }
-    });
-
-  // Filter users
-  const filteredUsers = users.filter(user =>
-    user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  // Memoize query configuration for fetching users
+  const queryConfig = useMemo(
+    () => ({
+      queryKey: ['users'],
+      queryFn: async () => {
+        const response = await axios.get('/api/admin/users');
+        return response.data.data;
+      },
+      staleTime: 30000,
+      cacheTime: 3600000,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+      retry: 1
+    }),
+    []
   );
 
-  const handleCreateProject = async (e: React.FormEvent) => {
+  const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>(queryConfig);
+
+  // Only fetch on mount once if needed
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (!projects?.length) {
+        await refetchProjects();
+      }
+    };
+    fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --------------------------
+  //   FILTER & SORT PROJECTS
+  // --------------------------
+  const filteredProjects = useMemo(() => {
+    if (!projects) return [];
+    return projects
+      .filter(project => {
+        const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = filterStatus === 'all' || project.status === filterStatus;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'title':
+            return a.title.localeCompare(b.title);
+          case 'status':
+            return a.status.localeCompare(b.status);
+          case 'date':
+          default:
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+      });
+  }, [projects, searchTerm, filterStatus, sortBy]);
+
+  // ------------------------
+  //   FILTER USERS FOR TAB
+  // ------------------------
+  const filteredUsers = useMemo(() => {
+    return users.filter(user =>
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
+
+  // -------------------------------------
+  //  CREATE PROJECT HANDLER (UNCHANGED)
+  // -------------------------------------
+  const handleCreateProject = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const startTime = Date.now();
     try {
@@ -130,33 +183,28 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         fileNames: newProject.videoFiles.map(f => f.name),
         totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0)
       });
-      
+
       // Validate required fields
       const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
-      const missingFields = requiredFields.filter(field => !newProject[field as keyof typeof newProject]);
-      
+      const missingFields = requiredFields.filter(field => !(newProject as any)[field]);
       if (missingFields.length > 0) {
-        console.error('Validation failed - Missing required fields:', missingFields);
         setError(`Missing required fields: ${missingFields.join(', ')}`);
         return;
       }
 
       // Validate if files are selected
       if (newProject.videoFiles.length === 0) {
-        console.error('Validation failed - No files selected');
         setError('Please select at least one video file');
         return;
       }
 
       // Initialize upload status for all files
-      const initialStatus = {} as Record<string, 'pending' | 'uploading' | 'success' | 'error'>;
+      const initialStatus: Record<string, 'pending' | 'uploading' | 'success' | 'error'> = {};
       newProject.videoFiles.forEach(file => {
         initialStatus[file.name] = 'pending';
       });
-      console.log(`[${getTimeStamp()}] Initializing upload status:`, initialStatus);
       setUploadStatus(initialStatus);
 
-      // Variable to store project ID for subsequent uploads
       let projectId: string | undefined;
       let hasError = false;
 
@@ -172,20 +220,20 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         filePaths: [] as string[]
       };
 
-      console.log('Project metadata created:', projectMetadata);
-
-      // Create parent folder name
+      // Parent folder name
       const parentFolder = projectMetadata.databaseName;
 
-      // Prepare all files metadata first
-      newProject.videoFiles.forEach((file, index) => {
-        const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+      // Prepare all files metadata
+      newProject.videoFiles.forEach((file) => {
+        const collectionName = file.name
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[^a-zA-Z0-9-_]/g, '_');
         const filePath = `${parentFolder}/${collectionName}/${file.name}`;
         projectMetadata.collections.push(collectionName);
         projectMetadata.filePaths.push(filePath);
       });
 
-      // Upload files in parallel with a concurrency limit of 3
+      // Upload files in parallel with concurrency limit
       const concurrencyLimit = 3;
       const files = [...newProject.videoFiles];
       const uploadPromises: Promise<any>[] = [];
@@ -193,12 +241,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
       const uploadFile = async (file: File, index: number) => {
         const fileStartTime = Date.now();
-        console.log(`[${getTimeStamp()}] Starting upload for file ${index + 1}/${newProject.videoFiles.length}:`, {
-          fileName: file.name,
-          fileSize: formatBytes(file.size),
-          fileType: file.type
-        });
-
         setUploadProgress(prev => ({
           ...prev,
           [file.name]: {
@@ -210,10 +252,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         }));
 
         const formData = new FormData();
-        const collectionName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+        const collectionName = file.name
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[^a-zA-Z0-9-_]/g, '_');
         const filePath = `${parentFolder}/${collectionName}/${file.name}`;
 
-        // Add required fields
         formData.append('title', newProject.title);
         formData.append('description', newProject.description);
         formData.append('sourceLanguage', newProject.sourceLanguage);
@@ -240,43 +283,34 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         formData.append('video', file);
 
         try {
-          console.log(`[${getTimeStamp()}] Initiating upload request for file:`, file.name);
           let lastProgressUpdate = Date.now();
           let uploadStartTime = Date.now();
           let uploadSpeed = 0;
 
           const response = await axios.post('/api/admin/projects', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
+            headers: { 'Content-Type': 'multipart/form-data' },
             maxContentLength: Infinity,
             maxBodyLength: Infinity,
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
                 const currentTime = Date.now();
                 const timeSinceLastUpdate = (currentTime - lastProgressUpdate) / 1000;
-                const bytesSinceLastUpdate = progressEvent.loaded - (uploadProgress[file.name]?.loaded || 0);
+                const bytesSinceLastUpdate =
+                  progressEvent.loaded - (uploadProgress[file.name]?.loaded || 0);
                 uploadSpeed = bytesSinceLastUpdate / timeSinceLastUpdate;
 
                 const remainingBytes = progressEvent.total - progressEvent.loaded;
                 const estimatedTimeRemaining = remainingBytes / uploadSpeed;
 
-                const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                console.log(`[${getTimeStamp()}] Upload progress for ${file.name}: ${progress}%`, {
-                  loaded: formatBytes(progressEvent.loaded),
-                  total: formatBytes(progressEvent.total),
-                  speed: `${formatBytes(uploadSpeed)}/s`,
-                  timeElapsed: `${((currentTime - uploadStartTime) / 1000).toFixed(1)}s`,
-                  estimatedTimeRemaining: `${estimatedTimeRemaining.toFixed(1)}s`
-                });
-                
                 const newProgressData: UploadProgressData = {
                   loaded: progressEvent.loaded,
                   total: progressEvent.total,
                   phase: 'uploading',
-                  message: `Uploading: ${formatBytes(uploadSpeed)}/s • ${estimatedTimeRemaining.toFixed(1)}s remaining`
+                  message: `Uploading: ${formatBytes(uploadSpeed)}/s • ${estimatedTimeRemaining.toFixed(
+                    1
+                  )}s remaining`
                 };
-                
+
                 setUploadProgress(prev => ({
                   ...prev,
                   [file.name]: newProgressData
@@ -291,29 +325,20 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             throw new Error(response.data.message || `Failed to upload file ${file.name}`);
           }
 
-          // Store the project ID from the first upload
+          // On first successful upload, store projectId
           if (index === 0) {
             projectId = response.data.data._id;
           }
 
           completedUploads++;
-          const uploadDuration = (Date.now() - fileStartTime) / 1000;
-          console.log(`[${getTimeStamp()}] Upload completed for ${file.name}:`, {
-            duration: `${uploadDuration.toFixed(1)}s`,
-            averageSpeed: `${formatBytes(file.size / uploadDuration)}/s`,
-            completedUploads,
-            totalFiles: newProject.videoFiles.length
-          });
-
           setUploadProgress(prev => ({
             ...prev,
             [file.name]: {
               ...prev[file.name],
               phase: 'success',
-              message: `Completed • Collection: ${collectionName}`
+              message: `Upload complete`
             }
           }));
-
           return response;
         } catch (error: any) {
           hasError = true;
@@ -329,7 +354,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         }
       };
 
-      // Process files in parallel with concurrency limit
+      // Concurrency loop
       while (files.length > 0 || uploadPromises.length > 0) {
         while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
           const file = files.shift();
@@ -340,32 +365,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         }
 
         if (uploadPromises.length > 0) {
-          await Promise.race(uploadPromises.map((p, i) => 
-            p.catch(e => ({ error: e, index: i }))
-          ));
-          
-          // Remove completed promises
-          uploadPromises.forEach((promise, index) => {
-            Promise.resolve(promise).then(
-              () => {
-                uploadPromises.splice(index, 1);
-              },
-              () => {
-                uploadPromises.splice(index, 1);
-              }
-            );
-          });
+          await Promise.race(
+            uploadPromises.map((p, i) => p.catch(e => ({ error: e, index: i })))
+          );
+
+          // Clean up settled promises
+          for (let i = uploadPromises.length - 1; i >= 0; i--) {
+            if (
+              (uploadPromises[i] as any).status === 'fulfilled' ||
+              (uploadPromises[i] as any).error
+            ) {
+              uploadPromises.splice(i, 1);
+            }
+          }
         }
       }
 
       const totalDuration = (Date.now() - startTime) / 1000;
-      console.log(`[${getTimeStamp()}] All files uploaded successfully:`, {
-        totalDuration: `${totalDuration.toFixed(1)}s`,
-        averageSpeed: `${formatBytes(newProject.videoFiles.reduce((acc, file) => acc + file.size, 0) / totalDuration)}/s`
-      });
+      console.log(`[${getTimeStamp()}] All files uploaded in ${totalDuration.toFixed(1)}s`);
 
       if (!hasError) {
-        console.log('All files uploaded successfully, cleaning up...');
         setIsCreating(false);
         setNewProject({
           title: '',
@@ -375,29 +394,22 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           status: 'pending',
           videoFiles: []
         });
-        
         if (typeof refetchProjects === 'function') {
-          console.log('Refetching projects list...');
           await refetchProjects();
         }
-        
         setSuccess('Project created successfully');
         setTimeout(() => setSuccess(''), 3000);
       }
-      
     } catch (err: any) {
-      const failureTime = (Date.now() - startTime) / 1000;
-      console.error(`[${getTimeStamp()}] Project creation failed after ${failureTime.toFixed(1)}s:`, {
-        error: err.message,
-        response: err.response?.data,
-        stack: err.stack
-      });
       const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
       setError(errorMessage);
       setTimeout(() => setError(''), 3000);
     }
-  };
+  }, [newProject, refetchProjects, uploadProgress]);
 
+  // -------------------------------
+  //  CREATE USER HANDLER (UNCHANGED)
+  // -------------------------------
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -421,6 +433,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
+  // ------------------------------
+  //  UPDATE PROJECT STATUS
+  // ------------------------------
   const handleUpdateStatus = async (projectId: string, newStatus: ProjectStatus) => {
     try {
       await axios.patch(`/api/admin/projects/${projectId}`, { status: newStatus });
@@ -435,6 +450,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
+  // ------------------------------
+  //  DELETE PROJECT
+  // ------------------------------
   const handleDeleteProject = async (projectId: string) => {
     try {
       await axios.delete(`/api/admin/projects?id=${projectId}`);
@@ -446,12 +464,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       setSuccess('Project and associated files deleted successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Delete project error:', err);
       setError('Failed to delete project');
       setTimeout(() => setError(''), 3000);
     }
   };
 
+  // ------------------------------
+  //  DELETE USER
+  // ------------------------------
   const handleDeleteUser = async (userId: string) => {
     try {
       await axios.delete(`/api/admin/users/${userId}`);
@@ -466,6 +486,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
+  // ------------------------------
+  //  TOGGLE USER ACTIVE/INACTIVE
+  // ------------------------------
   const handleToggleUserActive = async (userId: string, isActive: boolean) => {
     try {
       await axios.patch(`/api/admin/users/${userId}`, { isActive });
@@ -478,14 +501,15 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
+  // ------------------------------
+  //  ASSIGN USERS TO PROJECT
+  // ------------------------------
   const handleAssignUsers = async () => {
     try {
       if (!selectedProject) return;
-      
       await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
         usernames: selectedUsernames
       });
-      
       if (typeof refetchProjects === 'function') {
         await refetchProjects();
       }
@@ -500,12 +524,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
+  // ------------------------------
+  //  REMOVE USER FROM PROJECT
+  // ------------------------------
   const handleRemoveUser = async (projectId: string, username: string) => {
     try {
       await axios.delete(`/api/admin/projects/${projectId}/assign`, {
         data: { usernames: [username] }
       });
-      
       if (refetchProjects) {
         await refetchProjects();
       }
@@ -517,89 +543,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   };
 
-  const renderProjectDetails = (project: Project) => {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">{project.title}</h3>
-          <div className="flex gap-2">
-            {/* Existing action buttons */}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{project.description}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status]}`}>
-                {project.status}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Episodes</label>
-            <select
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              value={selectedEpisode?.name || ''}
-              onChange={(e) => {
-                const episode = project.episodes.find(ep => ep.name === e.target.value);
-                setSelectedEpisode(episode || null);
-              }}
-            >
-              <option value="">Select an episode</option>
-              {project.episodes.map((episode) => (
-                <option key={episode.name} value={episode.name}>
-                  {episode.name} ({episode.status})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {selectedEpisode && (
-            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Episode Details</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Name</label>
-                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.name}</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
-                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.status}</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Collection Name</label>
-                  <p className="mt-1 text-gray-900 dark:text-gray-100">{selectedEpisode.collectionName}</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Uploaded At</label>
-                  <p className="mt-1 text-gray-900 dark:text-gray-100">
-                    {new Date(selectedEpisode.uploadedAt).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <a
-                  href={selectedEpisode.videoPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  View Video
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
+  // ----------------------------------------
+  // RENDER
+  // ----------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Top Bar */}
@@ -635,7 +581,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {activeTab === 'projects' && (
                 <>
                   <button
-                    onClick={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                    onClick={() => setViewMode(prev => (prev === 'grid' ? 'list' : 'grid'))}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                   >
                     {viewMode === 'grid' ? 'List View' : 'Grid View'}
@@ -678,6 +624,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               />
             </div>
           </div>
+
           {activeTab === 'projects' && (
             <div className="flex items-center space-x-4 w-full sm:w-auto">
               <select
@@ -721,14 +668,17 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Content */}
+      {/* CONTENT */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {activeTab === 'projects' ? (
-          // Projects Grid/List
-          <div className={viewMode === 'grid' ? 
-            "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : 
-            "space-y-4"
-          }>
+          // Projects (Grid or List)
+          <div
+            className={
+              viewMode === 'grid'
+                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+                : 'space-y-4'
+            }
+          >
             {filteredProjects.map((project) => (
               <div
                 key={project._id}
@@ -741,23 +691,20 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <div className="flex justify-between items-start">
                       <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{project.title}</h2>
                       <div className="flex items-center space-x-2">
-                        <select
-                          value={project.status}
-                          onChange={(e) => handleUpdateStatus(project._id, e.target.value as ProjectStatus)}
-                          className={`text-sm px-2 py-1 rounded ${STATUS_COLORS[project.status as keyof typeof STATUS_COLORS]}`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                          <option value="on-hold">On Hold</option>
-                        </select>
                         <div className="relative">
                           <button
-                            onClick={() => setSelectedProject(project)}
+                            onClick={() => {
+                              // Toggle the "options menu" for THIS project
+                              // If it's the same selected, reset it. Otherwise set it.
+                              setSelectedProject(prev =>
+                                prev && prev._id === project._id ? null : project
+                              );
+                            }}
                             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
                           >
                             <MoreVertical className="w-5 h-5" />
                           </button>
+                          {/* Options dropdown */}
                           {selectedProject?._id === project._id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-10 border dark:border-gray-700">
                               <div className="py-1">
@@ -769,7 +716,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   Manage
                                 </button>
                                 <button
-                                  onClick={() => router.push(`/admin/project/${project._id}/progress`)}
+                                  onClick={() =>
+                                    router.push(`/admin/project/${project._id}/progress`)
+                                  }
                                   className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                                 >
                                   <ChartBar className="w-4 h-4 mr-2" />
@@ -811,62 +760,37 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         </div>
                       </div>
                     </div>
+
                     {viewMode === 'grid' && (
                       <>
-                        <p className="text-gray-600 dark:text-gray-300 mt-2">{project.description}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-2">
+                          {project.description}
+                        </p>
                         <div className="flex flex-col gap-2 mt-4">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">
-                              Language: {project.sourceLanguage} → {project.targetLanguage}
-                            </span>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Language: {project.sourceLanguage} → {project.targetLanguage}
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <div className="relative">
-                              <select 
-                                className="block w-full px-3 py-1 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {project.episodes?.map((episode, index) => (
-                                  <option key={index} value={episode.name}>
-                                    Episode: {episode.name}
-                                  </option>
-                                )) || (
-                                  <option value="">No episodes available</option>
-                                )}
-                              </select>
-                            </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Folder Path: {project.parentFolder}
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">
-                              Folder Path: {project.parentFolder}
-                            </span>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">
-                              Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
-                            </span>
-                          </div>
+                        </div>
+
+                        {/* Episodes Button */}
+                        <div className="mt-6">
+                          <button
+                            onClick={() => {
+                              setSelectedProject(project);
+                              setIsEpisodesModalOpen(true);
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                          >
+                            View Episodes ({project.episodes?.length || 0})
+                          </button>
                         </div>
                       </>
-                    )}
-                    {project.assignedTo.length > 0 && (
-                      <div className={viewMode === 'grid' ? 'mt-4' : 'mt-2'}>
-                        <div className="flex flex-wrap gap-2">
-                          {project.assignedTo.map((user, index) => (
-                            <span
-                              key={index}
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
-                                user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                                user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                                user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                              }`}
-                            >
-                              {user.username} ({user.role})
-                            </span>
-                          ))}
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>
@@ -874,7 +798,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             ))}
           </div>
         ) : (
-          // Users List
+          // Users Table
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
@@ -912,13 +836,19 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
-                        user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                        user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                        user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.role === 'transcriber'
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                            : user.role === 'translator'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                            : user.role === 'voiceOver'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                            : user.role === 'director'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}
+                      >
                         {user.role}
                       </span>
                     </td>
@@ -937,7 +867,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {user.assignedProjects?.length || 0} projects
                       <div className="text-xs text-gray-400 dark:text-gray-500">
-                        Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                        Last login:{' '}
+                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -959,28 +890,38 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         )}
       </div>
 
-      {/* Create Project Modal */}
+      {/* CREATE PROJECT MODAL */}
       {isCreating && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-lg mx-auto my-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New Project</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Create New Project
+            </h2>
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Title
+                  </label>
                   <input
                     type="text"
                     value={newProject.title}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) =>
+                      setNewProject((prev) => ({ ...prev, title: e.target.value }))
+                    }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Description
+                  </label>
                   <textarea
                     value={newProject.description}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) =>
+                      setNewProject((prev) => ({ ...prev, description: e.target.value }))
+                    }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     rows={3}
                     required
@@ -988,38 +929,57 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                      Source Language
+                    </label>
                     <input
                       type="text"
                       value={newProject.sourceLanguage}
-                      onChange={(e) => setNewProject(prev => ({ ...prev, sourceLanguage: e.target.value }))}
+                      onChange={(e) =>
+                        setNewProject((prev) => ({ ...prev, sourceLanguage: e.target.value }))
+                      }
                       className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                      Target Language
+                    </label>
                     <input
                       type="text"
                       value={newProject.targetLanguage}
-                      onChange={(e) => setNewProject(prev => ({ ...prev, targetLanguage: e.target.value }))}
+                      onChange={(e) =>
+                        setNewProject((prev) => ({ ...prev, targetLanguage: e.target.value }))
+                      }
                       className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                       required
                     />
                   </div>
                 </div>
+                {/* Video Upload */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Video Upload</label>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    Video Upload
+                  </label>
                   <div className="space-y-4">
                     <div className="flex items-center justify-center w-full">
                       <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
                         <div className="flex flex-col items-center justify-center text-center">
-                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          <svg
+                            className="w-8 h-8 text-gray-400 mb-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                            />
                           </svg>
-                          <p className="text-sm">
-                            Click or drag to upload videos
-                          </p>
+                          <p className="text-sm">Click or drag to upload videos</p>
                           <p className="text-xs text-gray-500 mt-1">
                             Multiple files allowed • No size limit
                           </p>
@@ -1031,17 +991,17 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           multiple
                           onChange={(e) => {
                             const files = Array.from(e.target.files || []);
-                            setNewProject(prev => ({
+                            setNewProject((prev) => ({
                               ...prev,
                               videoFiles: [...prev.videoFiles, ...files]
                             }));
-                            
-                            // Initialize progress and status for new files
+
+                            // Initialize progress and status
                             const newProgress = { ...uploadProgress };
                             const newStatus = { ...uploadStatus };
-                            files.forEach(file => {
-                              newProgress[file.name] = { 
-                                loaded: 0, 
+                            files.forEach((file) => {
+                              newProgress[file.name] = {
+                                loaded: 0,
                                 total: file.size,
                                 phase: 'pending',
                                 message: 'Waiting to start'
@@ -1054,9 +1014,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         />
                       </label>
                     </div>
+                    {/* List of selected files */}
                     {newProject.videoFiles.length > 0 && (
                       <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Files:</h4>
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Selected Files:
+                        </h4>
                         <div className="space-y-3 max-h-48 overflow-y-auto">
                           {newProject.videoFiles.map((file, index) => (
                             <div key={index} className="space-y-1">
@@ -1064,38 +1027,39 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 <span className="text-gray-600 dark:text-gray-300 truncate pr-2">
                                   {file.name}
                                   {uploadProgress[file.name] && (
-                                    <span 
+                                    <span
                                       data-file-name={file.name}
                                       className={`ml-2 text-xs ${
-                                        uploadProgress[file.name].phase === 'success' ? 'text-green-500' :
-                                        uploadProgress[file.name].phase === 'error' ? 'text-red-500' :
-                                        uploadProgress[file.name].phase === 'creating-collection' ? 'text-yellow-500' :
-                                        uploadProgress[file.name].phase === 'processing' ? 'text-purple-500' :
-                                        uploadProgress[file.name].phase === 'uploading' ? 'text-blue-500' :
-                                        'text-gray-500'
+                                        uploadProgress[file.name].phase === 'success'
+                                          ? 'text-green-500'
+                                          : uploadProgress[file.name].phase === 'error'
+                                          ? 'text-red-500'
+                                          : uploadProgress[file.name].phase ===
+                                            'creating-collection'
+                                          ? 'text-yellow-500'
+                                          : uploadProgress[file.name].phase === 'processing'
+                                          ? 'text-purple-500'
+                                          : uploadProgress[file.name].phase === 'uploading'
+                                          ? 'text-blue-500'
+                                          : 'text-gray-500'
                                       }`}
                                     >
-                                      {uploadProgress[file.name].phase === 'uploading' && (
-                                        ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(uploadProgress[file.name].total)})`
-                                      )}
-                                      {(uploadProgress[file.name].phase === 'pending' || 
-                                        uploadProgress[file.name].phase === 'creating-collection' || 
-                                        uploadProgress[file.name].phase === 'processing' || 
-                                        uploadProgress[file.name].phase === 'success' || 
-                                        uploadProgress[file.name].phase === 'error') && (
-                                        ` • ${uploadProgress[file.name].message}`
-                                      )}
+                                      {uploadProgress[file.name].phase === 'uploading' &&
+                                        ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(
+                                          uploadProgress[file.name].total
+                                        )})`}
+                                      {uploadProgress[file.name].phase !== 'uploading' &&
+                                        ` • ${uploadProgress[file.name].message}`}
                                     </span>
                                   )}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setNewProject(prev => ({
+                                    setNewProject((prev) => ({
                                       ...prev,
                                       videoFiles: prev.videoFiles.filter((_, i) => i !== index)
                                     }));
-                                    
                                     const newProgress = { ...uploadProgress };
                                     const newStatus = { ...uploadStatus };
                                     delete newProgress[file.name];
@@ -1104,33 +1068,51 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                     setUploadStatus(newStatus);
                                   }}
                                   className="text-red-500 hover:text-red-700 flex-shrink-0"
-                                  disabled={uploadProgress[file.name]?.phase === 'uploading' || 
-                                           uploadProgress[file.name]?.phase === 'creating-collection' ||
-                                           uploadProgress[file.name]?.phase === 'processing'}
+                                  disabled={
+                                    uploadProgress[file.name]?.phase === 'uploading' ||
+                                    uploadProgress[file.name]?.phase === 'creating-collection' ||
+                                    uploadProgress[file.name]?.phase === 'processing'
+                                  }
                                 >
                                   Remove
                                 </button>
                               </div>
-                              {uploadProgress[file.name] && uploadProgress[file.name].phase !== 'error' && (
-                                <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                                  <div 
-                                    className={`h-2 rounded-full transition-all duration-300 ${
-                                      uploadProgress[file.name].phase === 'success' ? 'bg-green-600' :
-                                      uploadProgress[file.name].phase === 'creating-collection' ? 'bg-yellow-600' :
-                                      uploadProgress[file.name].phase === 'processing' ? 'bg-purple-600' :
-                                      uploadProgress[file.name].phase === 'uploading' ? 'bg-blue-600' :
-                                      'bg-gray-600'
-                                    }`}
-                                    style={{ 
-                                      width: uploadProgress[file.name].phase === 'uploading' ?
-                                        `${(uploadProgress[file.name].loaded / uploadProgress[file.name].total) * 100}%` :
-                                        uploadProgress[file.name].phase === 'creating-collection' ? '60%' :
-                                        uploadProgress[file.name].phase === 'processing' ? '80%' :
-                                        uploadProgress[file.name].phase === 'success' ? '100%' : '0%'
-                                    }}
-                                  ></div>
-                                </div>
-                              )}
+                              {uploadProgress[file.name] &&
+                                uploadProgress[file.name].phase !== 'error' && (
+                                  <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                    <div
+                                      className={`h-2 rounded-full transition-all duration-300 ${
+                                        uploadProgress[file.name].phase === 'success'
+                                          ? 'bg-green-600'
+                                          : uploadProgress[file.name].phase ===
+                                            'creating-collection'
+                                          ? 'bg-yellow-600'
+                                          : uploadProgress[file.name].phase === 'processing'
+                                          ? 'bg-purple-600'
+                                          : uploadProgress[file.name].phase === 'uploading'
+                                          ? 'bg-blue-600'
+                                          : 'bg-gray-600'
+                                      }`}
+                                      style={{
+                                        width:
+                                          uploadProgress[file.name].phase === 'uploading'
+                                            ? `${
+                                                (uploadProgress[file.name].loaded /
+                                                  uploadProgress[file.name].total) *
+                                                100
+                                              }%`
+                                            : uploadProgress[file.name].phase ===
+                                              'creating-collection'
+                                            ? '60%'
+                                            : uploadProgress[file.name].phase === 'processing'
+                                            ? '80%'
+                                            : uploadProgress[file.name].phase === 'success'
+                                            ? '100%'
+                                            : '0%'
+                                      }}
+                                    ></div>
+                                  </div>
+                                )}
                             </div>
                           ))}
                         </div>
@@ -1159,47 +1141,65 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Create User Modal */}
+      {/* CREATE USER MODAL */}
       {isCreatingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New User</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Create New User
+            </h2>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Username</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Username
+                </label>
                 <input
                   type="text"
                   value={newUser.username}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
+                  onChange={(e) =>
+                    setNewUser((prev) => ({ ...prev, username: e.target.value }))
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Email</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Email
+                </label>
                 <input
                   type="email"
                   value={newUser.email}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) =>
+                    setNewUser((prev) => ({ ...prev, email: e.target.value }))
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Password</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Password
+                </label>
                 <input
                   type="password"
                   value={newUser.password}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) =>
+                    setNewUser((prev) => ({ ...prev, password: e.target.value }))
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Role</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Role
+                </label>
                 <select
                   value={newUser.role === 'admin' ? 'director' : newUser.role}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value as UserRole }))}
+                  onChange={(e) =>
+                    setNewUser((prev) => ({ ...prev, role: e.target.value as UserRole }))
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 >
@@ -1230,7 +1230,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Delete User Confirmation Modal */}
+      {/* DELETE USER CONFIRMATION MODAL */}
       {showUserDeleteConfirm && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
@@ -1259,7 +1259,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Assign Users Modal */}
+      {/* ASSIGN USERS MODAL */}
       {isAssigning && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full">
@@ -1267,17 +1267,23 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               Assign Users to {selectedProject.title}
             </h2>
             <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currently Assigned</h3>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Currently Assigned
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {selectedProject.assignedTo.map((user) => (
                   <div
                     key={user.username}
                     className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                      user.role === 'transcriber' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' :
-                      user.role === 'translator' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                      user.role === 'voiceOver' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                      user.role === 'director' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      user.role === 'transcriber'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                        : user.role === 'translator'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                        : user.role === 'voiceOver'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                        : user.role === 'director'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                     }`}
                   >
                     <span className="text-sm">
@@ -1292,15 +1298,25 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   </div>
                 ))}
                 {selectedProject.assignedTo.length === 0 && (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">No users assigned</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    No users assigned
+                  </span>
                 )}
               </div>
             </div>
             <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Users</h3>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Available Users
+              </h3>
               <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-lg">
                 {users
-                  .filter(user => user.isActive && !selectedProject.assignedTo.some(assigned => assigned.username === user.username))
+                  .filter(
+                    (user) =>
+                      user.isActive &&
+                      !selectedProject.assignedTo.some(
+                        (assigned) => assigned.username === user.username
+                      )
+                  )
                   .map((user) => (
                     <label
                       key={user._id}
@@ -1311,17 +1327,24 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         checked={selectedUsernames.includes(user.username)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedUsernames(prev => [...prev, user.username]);
+                            setSelectedUsernames((prev) => [...prev, user.username]);
                           } else {
-                            setSelectedUsernames(prev => prev.filter(name => name !== user.username));
+                            setSelectedUsernames((prev) =>
+                              prev.filter((name) => name !== user.username)
+                            );
                           }
                         }}
                         className="rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
                       />
                       <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {user.username}
+                        </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {user.email} • {user.role} • Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                          {user.email} • {user.role} • Last login:{' '}
+                          {user.lastLogin
+                            ? new Date(user.lastLogin).toLocaleDateString()
+                            : 'Never'}
                         </div>
                       </div>
                     </label>
@@ -1351,47 +1374,62 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Edit Project Modal */}
+      {/* EDIT PROJECT MODAL */}
       {isEditing && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Edit Project</h2>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                await axios.patch(`/api/admin/projects/${selectedProject._id}`, {
-                  title: selectedProject.title,
-                  description: selectedProject.description,
-                  sourceLanguage: selectedProject.sourceLanguage,
-                  targetLanguage: selectedProject.targetLanguage,
-                  dialogue_collection: selectedProject.dialogue_collection,
-                  status: selectedProject.status
-                });
-                await refetchProjects();
-                setIsEditing(false);
-                setSelectedProject(null);
-                setSuccess('Project updated successfully');
-                setTimeout(() => setSuccess(''), 3000);
-              } catch (err) {
-                setError('Failed to update project');
-                setTimeout(() => setError(''), 3000);
-              }
-            }} className="space-y-4">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Edit Project
+            </h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await axios.patch(`/api/admin/projects/${selectedProject._id}`, {
+                    title: selectedProject.title,
+                    description: selectedProject.description,
+                    sourceLanguage: selectedProject.sourceLanguage,
+                    targetLanguage: selectedProject.targetLanguage,
+                    dialogue_collection: selectedProject.dialogue_collection,
+                    status: selectedProject.status
+                  });
+                  await refetchProjects();
+                  setIsEditing(false);
+                  setSelectedProject(null);
+                  setSuccess('Project updated successfully');
+                  setTimeout(() => setSuccess(''), 3000);
+                } catch (err) {
+                  setError('Failed to update project');
+                  setTimeout(() => setError(''), 3000);
+                }
+              }}
+              className="space-y-4"
+            >
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Title</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Title
+                </label>
                 <input
                   type="text"
                   value={selectedProject.title}
-                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, title: e.target.value } : null)}
+                  onChange={(e) =>
+                    setSelectedProject((prev) => (prev ? { ...prev, title: e.target.value } : null))
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
                 <textarea
                   value={selectedProject.description}
-                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  onChange={(e) =>
+                    setSelectedProject((prev) =>
+                      prev ? { ...prev, description: e.target.value } : null
+                    )
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   rows={3}
                   required
@@ -1399,32 +1437,50 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Source Language</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Source Language
+                  </label>
                   <input
                     type="text"
                     value={selectedProject.sourceLanguage}
-                    onChange={(e) => setSelectedProject(prev => prev ? { ...prev, sourceLanguage: e.target.value } : null)}
+                    onChange={(e) =>
+                      setSelectedProject((prev) =>
+                        prev ? { ...prev, sourceLanguage: e.target.value } : null
+                      )
+                    }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target Language</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Target Language
+                  </label>
                   <input
                     type="text"
                     value={selectedProject.targetLanguage}
-                    onChange={(e) => setSelectedProject(prev => prev ? { ...prev, targetLanguage: e.target.value } : null)}
+                    onChange={(e) =>
+                      setSelectedProject((prev) =>
+                        prev ? { ...prev, targetLanguage: e.target.value } : null
+                      )
+                    }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Collection Name</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Collection Name
+                </label>
                 <input
                   type="text"
                   value={selectedProject.dialogue_collection}
-                  onChange={(e) => setSelectedProject(prev => prev ? { ...prev, dialogue_collection: e.target.value } : null)}
+                  onChange={(e) =>
+                    setSelectedProject((prev) =>
+                      prev ? { ...prev, dialogue_collection: e.target.value } : null
+                    )
+                  }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
@@ -1452,11 +1508,13 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         </div>
       )}
 
-      {/* Delete Project Confirmation Modal */}
+      {/* DELETE PROJECT CONFIRMATION MODAL */}
       {showDeleteConfirm && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Delete Project</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Delete Project
+            </h2>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
               Are you sure you want to delete "{selectedProject.title}"? This action cannot be undone.
             </p>
@@ -1480,9 +1538,107 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           </div>
         </div>
       )}
+
+      {/* --------------------------------------------- */}
+      {/* MODAL: EPISODES LIST FOR THE SELECTED PROJECT */}
+      {/* --------------------------------------------- */}
+      {isEpisodesModalOpen && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[999]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full relative">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Episodes for: <span className="italic">{selectedProject.title}</span>
+            </h2>
+
+            <button
+              onClick={() => setIsEpisodesModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <span className="text-lg">×</span>
+            </button>
+
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
+                selectedProject.episodes.map((episode) => (
+                  <div
+                    key={episode.name}
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          episode.status === 'uploaded'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                            : episode.status === 'processing'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
+                        }`}
+                      >
+                        {episode.status}
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {episode.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          setSelectedEpisode(episode);
+                          setIsEpisodeDetailsOpen(true);
+                        }}
+                        className="px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() =>
+                          router.push(`/admin/project/${selectedProject._id}/episodes/${episode.name}`)
+                        }
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                      >
+                        Open
+                        <svg className="ml-1.5 -mr-0.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  No episodes available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------- */}
+      {/* MODAL: INDIVIDUAL EPISODE DETAILS            */}
+      {/* --------------------------------------------- */}
+      {isEpisodeDetailsOpen && selectedEpisode && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full relative">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Episode Details
+            </h2>
+            <button
+              onClick={() => {
+                setSelectedEpisode(null);
+                setIsEpisodeDetailsOpen(false);
+              }}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <span className="text-lg">×</span>
+            </button>
+
+            {/* Render your EpisodeView here. Adjust styling as needed. */}
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <EpisodeView episode={selectedEpisode} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-
-

@@ -15,6 +15,11 @@ export interface Episode {
   videoKey: string;
   status: 'uploaded' | 'processing' | 'error';
   uploadedAt: Date;
+  step?: 1 | 2 | 3;
+  cleanedSpeechPath?: string;
+  cleanedSpeechKey?: string;
+  musicAndSoundEffectsPath?: string;
+  musicAndSoundEffectsKey?: string;
 }
 
 export interface Project {

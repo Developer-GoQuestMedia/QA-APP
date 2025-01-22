@@ -1,0 +1,134 @@
+[{
+  "_id": {
+    "$oid": "677e1aecdb30d742ce970cc1"
+  },
+  "username": "transcriber1",
+  "email": "transcriber1@email.com",
+  "password": "$2a$10$q6yKxmd3WZW4B4XBRUGUk.HO2qVDw3Fq3iSO2Vv12BSrGE84m/RKy",
+  "role": "transcriber",
+  "lastLogin": {
+    "$date": "2025-01-16T11:59:08.188Z"
+  },
+  "lastLogout": null,
+  "sessionsLog": [],
+  "assignedProjects": [],
+  "createdAt": {
+    "$date": "2025-01-08T06:27:56.227Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-08T06:36:05.899Z"
+  },
+  "isActive": true
+},
+{
+  "_id": {
+    "$oid": "677e1aecdb30d742ce970cc2"
+  },
+  "username": "translator1",
+  "email": "translator1@email.com",
+  "password": "$2a$10$idYneXSyhL4sUwCpdCC8s.CNAVCXP6u8F78uXW4ePqFqD6R/pskrW",
+  "role": "translator",
+  "lastLogin": {
+    "$date": "2025-01-08T07:10:37.507Z"
+  },
+  "lastLogout": null,
+  "sessionsLog": [],
+  "assignedProjects": [],
+  "createdAt": {
+    "$date": "2025-01-08T06:27:56.282Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-08T06:36:00.904Z"
+  },
+  "isActive": true
+},
+{
+  "_id": {
+    "$oid": "677e1aecdb30d742ce970cc3"
+  },
+  "username": "voiceover1",
+  "email": "voiceover1@email.com",
+  "password": "$2a$10$IKXQqqK679WOgbCNYJfEI.rxW/BldcqVisX3uveAtZRLGG4Rdw7SO",
+  "role": "voiceOver",
+  "lastLogin": {
+    "$date": "2025-01-14T07:57:56.363Z"
+  },
+  "lastLogout": null,
+  "sessionsLog": [
+    {
+      "loginTime": {
+        "$date": "2025-01-08T06:29:43.283Z"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+  ],
+  "assignedProjects": [],
+  "createdAt": {
+    "$date": "2025-01-08T06:27:56.339Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-08T06:36:02.886Z"
+  },
+  "isActive": true
+},
+{
+  "_id": {
+    "$oid": "677e1aecdb30d742ce970cc4"
+  },
+  "username": "director1",
+  "email": "director1@email.com",
+  "password": "$2a$10$TILqqpMOPeWA3NWCzAYHwOY0/m5pbA3nQToc6MZyW2IY6hSrcVG7O",
+  "role": "director",
+  "lastLogin": {
+    "$date": "2025-01-08T07:17:43.384Z"
+  },
+  "lastLogout": null,
+  "sessionsLog": [],
+  "assignedProjects": [],
+  "createdAt": {
+    "$date": "2025-01-08T06:27:56.395Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-09T08:00:13.725Z"
+  },
+  "isActive": true
+},
+{
+  "_id": {
+    "$oid": "677e1e47208ef020f9b0e44a"
+  },
+  "username": "admin",
+  "email": "admin@email.com",
+  "password": "$2a$12$TiUflYYZcEBe6nqEtGoWC.AhVEBa3k6XP63n.aRpym9t47DhncBee",
+  "role": "admin",
+  "lastLogin": {
+    "$date": "2025-01-16T12:14:59.676Z"
+  },
+  "lastLogout": null,
+  "sessionsLog": [],
+  "assignedProjects": [],
+  "createdAt": {
+    "$date": "2025-01-08T06:27:56.452Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-08T06:42:28.107Z"
+  },
+  "isActive": true
+},
+{
+  "_id": {
+    "$oid": "677e4a5d50982d75614493b4"
+  },
+  "username": "viveklath",
+  "email": "vivek@goquestmedia.com",
+  "password": "$2a$12$1txHI5xL8EJ2TyEXg9hv9egUxA0WRZgRw82F0rGJj1I0DDIUbZOQa",
+  "role": "voiceOver",
+  "isActive": true,
+  "createdAt": {
+    "$date": "2025-01-08T09:50:21.525Z"
+  },
+  "updatedAt": {
+    "$date": "2025-01-08T09:50:42.222Z"
+  },
+  "createdBy": "677e1e47208ef020f9b0e44a"
+}]

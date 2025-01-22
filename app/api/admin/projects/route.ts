@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
         });
 
         const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-        
+
         uploadedFiles.push({
           name: videoFile.name,
           videoPath: signedUrl,
@@ -281,9 +281,9 @@ export async function POST(request: NextRequest) {
               status: isLast ? 'pending' : 'uploading'
             }
           },
-          { 
+          {
             returnDocument: 'after',
-            session: mongoSession 
+            session: mongoSession
           }
         );
 
@@ -297,10 +297,17 @@ export async function POST(request: NextRequest) {
         if (isLast) {
           console.log(`[${new Date().toISOString()}] Creating collections for all episodes`);
           const allEpisodes = result.episodes || [];
-          
+
           for (const episode of allEpisodes) {
             const collectionName = episode.collectionName;
             const newCollection = client.db(project.databaseName).collection(collectionName);
+
+            // ⚠️ Actually write a document to force creation
+            await newCollection.insertOne({
+              createdAt: new Date(),
+              info: `Placeholder doc for episode: ${episode.name}`,
+            });
+
             console.log(`[${new Date().toISOString()}] Created collection: ${collectionName}`);
           }
         }
@@ -328,7 +335,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to process request',
         details: error.message,
         code: error.code,
@@ -351,7 +358,7 @@ export async function DELETE(request: NextRequest) {
       ...logContext,
       step: 'initialization'
     });
-    
+
     const session = await getServerSession(authOptions);
     if (!session || !session.user || session.user.role !== 'admin') {
       console.log('Unauthorized deletion attempt:', {
@@ -471,12 +478,12 @@ export async function DELETE(request: NextRequest) {
         });
 
         const deleteObjects = project.filePaths.map((filePath: string) => ({ Key: filePath }));
-        
+
         const deleteCommand = new DeleteObjectsCommand({
           Bucket: BUCKET_NAME,
           Delete: { Objects: deleteObjects }
         });
-        
+
         const deleteResult = await s3Client.send(deleteCommand);
         console.log('R2 deletion completed', {
           ...logContext,
@@ -566,7 +573,7 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to delete project',
         details: error.message,
         code: error.code,

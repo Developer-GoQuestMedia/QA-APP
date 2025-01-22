@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from './providers'
 import dynamic from 'next/dynamic'
 import SystemInit from '@/components/SystemInit'
+import { Toaster } from 'react-hot-toast'
 
 const SpeedInsights = dynamic(() => 
   process.env.NODE_ENV === 'production'
@@ -45,6 +46,7 @@ export default function RootLayout({
         <Providers>
           <SystemInit />
           {children}
+          <Toaster position="bottom-right" />
         </Providers>
         <SpeedInsights />
       </body>

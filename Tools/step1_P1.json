@@ -1,0 +1,159 @@
+// [{
+//   "_id": {
+//     "$oid": "67877fbd8409593ce5465654"
+//   },
+//   "sceneIndex": 1,//transcribed
+//   "timeStart": "00:00:00:280",//transcribed
+//   "timeEnd": "00:00:08:680",//transcribed
+//   "episodeId": {
+//         "$oid": "123456789123456789123456"
+//       },
+//   "dialogueCount": 1,//transcribed    
+//   "inputParameters": {
+//     "videoFilePath": "https://pub-ca2dd6ef0390446c8dda16e228d97cf6.r2.dev/Kuma%20Ep%2001/videos/Kuma%20Ep%2001_Clip_01.mp4",
+//     "speechFilePath": "https://pub-ca2dd6ef0390446c8dda16e228d97cf6.r2.dev/Kuma%20Ep%2001/recordings/Kuma%20Ep%2001_Clip_01.wav"
+//   },
+//   "dialogues": [
+//     {
+//       "_id": {
+//         "$oid": "6757fdbf79542727d6b72e07"
+//       },
+//       "index": 1,//transcribed // don't use
+//       "dialogNumber": "1.1",//transcribed S1->D1 = 1.1
+//       "timeStart": "00:00:00:280",//transcribed
+//       "timeEnd": "00:00:01:280",//transcribed
+//       "character": "BackGround!",//transcribed
+//       "dialogue": {
+//         "original": "Nadire",//transcribed
+//         "translated": "-Nadire",//translation Step 3 
+//         "adapted": "-नाम_0."//adaptation
+//       },
+//       "emotions": {
+//         "primary": {
+//           "emotion": "Neutral",//transcribed
+//           "intensity": 1//transcribed
+//         },
+//         "secondary": {
+//           "emotion": "Neutral",//transcribed
+//           "intensity": 1//transcribed
+//         }
+//       },
+//       "characterProfile": {
+//             "age": "",
+//             "occupation": "",
+//             "accents": [],
+//             "otherNotes": ""
+//           },
+//       "direction": "Normal tone",//transcribed
+//       "lipMovements": "0",//transcribed
+//       "sceneDiscription": "detailed discription of the scene",//transcribed
+//       "technicalNotes": "Neutral tone",//transcribed
+//       "culturalNotes": "General conversation",//transcribed
+//       "status": "voice-over-added",//app state
+//       "recordingStatus": "pending",//app state
+      
+//       "updatedAt": {
+//         "$date": "2025-01-08T07:49:04.005Z"
+//       },//app state
+//       "updatedBy": "voiceover1",//app state
+//       "voiceOverUrl": "https://pub-ca2dd6ef0390446c8dda16e228d97cf6.r2.dev/Kuma (The other wife) S1E1/recordings/Kuma (The other wife) S1E1_Clip_01.wav",//app state
+//       "deleteVoiceOver": true,//app state
+//       "words": [
+//         {
+//           "characterName": "BackGround!",//transcribed
+//           "wordSequenceNumber": 1,//transcribed
+//           //s1 ->D1->W1 = 1.1.1
+//           "word": "Nadire",//transcribed
+//           "wordStartTimestamp": "00:00:00:280",//transcribed
+//           "wordEndTimestamp": "00:00:01:280",//transcribed
+//           "numberOfLipMovementsForThisWord": 3//transcribed
+//         }
+//       ],
+//       "voiceOverNotes": "",//app state
+//       "directorNotes": ""//app state
+//     }
+//   ]
+// }
+// ]
+
+
+
+
+
+
+{
+  "_id": {
+    "$oid": "67860628864c49fc7b3ac4a9"
+  },
+  "title": "a",
+  "description": "a",
+  "sourceLanguage": "a",
+  "targetLanguage": "a",
+  "parentFolder": "a",
+  "episodes": [
+    {
+      "name": "Sacrificiul Episode 18.mp4",
+      "collectionName": "Sacrificiul_Episode_18",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_18/Sacrificiul%20Episode%2018.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063803Z&X-Amz-Expires=3600&X-Amz-Signature=8f971d621981f59aa8c3f352f78ab05b6e29830e6759120a9d9b6422b24ee4e4&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_18/Sacrificiul Episode 18.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 13.mp4",
+      "collectionName": "Sacrificiul_Episode_13",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_13/Sacrificiul%20Episode%2013.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063810Z&X-Amz-Expires=3600&X-Amz-Signature=50d420bc1e8b0f3b2f03014e054f618567c23a018b282c11c0ecadcd351b8536&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_13/Sacrificiul Episode 13.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 17.mp4",
+      "collectionName": "Sacrificiul_Episode_17",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_17/Sacrificiul%20Episode%2017.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063822Z&X-Amz-Expires=3600&X-Amz-Signature=afa0a84fba42c04d6d8a428a0cb77645085aaa587a1ec812a455759d6157c1c6&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_17/Sacrificiul Episode 17.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 15.mp4",
+      "collectionName": "Sacrificiul_Episode_15",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_15/Sacrificiul%20Episode%2015.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063856Z&X-Amz-Expires=3600&X-Amz-Signature=97a022f2c6bc5f914d0866620955e80c04fb129df7dc9bdba96deb48d3cff1e3&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_15/Sacrificiul Episode 15.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 12.mp4",
+      "collectionName": "Sacrificiul_Episode_12",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_12/Sacrificiul%20Episode%2012.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063858Z&X-Amz-Expires=3600&X-Amz-Signature=fd63e0a59d895a6fa0ca9030423cf10f44ab8d4bb58b3f1fd624a34c1ee9ac2f&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_12/Sacrificiul Episode 12.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 16.mp4",
+      "collectionName": "Sacrificiul_Episode_16",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_16/Sacrificiul%20Episode%2016.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063902Z&X-Amz-Expires=3600&X-Amz-Signature=c0f49b38608cf8ef00fed93ec6ddc522ac961fed8a0d67f8f17197f3b559b31a&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_16/Sacrificiul Episode 16.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 11.mp4",
+      "collectionName": "Sacrificiul_Episode_11",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_11/Sacrificiul%20Episode%2011.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063925Z&X-Amz-Expires=3600&X-Amz-Signature=1571bd2e6b3a62d02123dd1530caf3ca038a211b0a026f676e69d4768ccd0bb9&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_11/Sacrificiul Episode 11.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 14.mp4",
+      "collectionName": "Sacrificiul_Episode_14",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_14/Sacrificiul%20Episode%2014.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063927Z&X-Amz-Expires=3600&X-Amz-Signature=48d273c1d2f8d9ab95f7ffdfcd4595e1e2ea6c7de318bfcb7a10cf2b2c5eb52c&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_14/Sacrificiul Episode 14.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 19.mp4",
+      "collectionName": "Sacrificiul_Episode_19",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_19/Sacrificiul%20Episode%2019.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063929Z&X-Amz-Expires=3600&X-Amz-Signature=2e3c4273ee1324bc3a69ec320b96e0d90c89c16d3b00916888d175727f0da95c&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_19/Sacrificiul Episode 19.mp4"
+    },
+    {
+      "name": "Sacrificiul Episode 20.mp4",
+      "collectionName": "Sacrificiul_Episode_20",
+      "videoPath": "https://test-bucket-2.b575e906ed24bdc29b7a7ca951242790.r2.cloudflarestorage.com/a/Sacrificiul_Episode_20/Sacrificiul%20Episode%2020.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=b8926f87a5448b38e3433748e27a2ba9%2F20250114%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250114T063937Z&X-Amz-Expires=3600&X-Amz-Signature=5911730ab11fbd57e9217ab87c1b2bd522410ea582b099621ed37e23ad0bc590&X-Amz-SignedHeaders=host&x-id=GetObject",
+      "videoKey": "a/Sacrificiul_Episode_20/Sacrificiul Episode 20.mp4"
+    }
+  ],
+  "uploadStatus": {
+    "totalFiles": 10,
+    "completedFiles": 10
+  }
+}

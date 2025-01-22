@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import AdminView from '@/components/AdminView'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Project } from '@/types/project'
@@ -11,7 +11,9 @@ export default function Page() {
   const { data: session, status } = useSession()
   const [projects, setProjects] = useState<Project[]>([])
 
-  const fetchProjects = async () => {
+  // If you want to ensure fetchProjects has stable identity, wrap in useCallback:
+  // Otherwise, simple inline definition is okay.
+  const fetchProjects = useCallback(async () => {
     try {
       console.log('Admin dashboard: Fetching projects...', {
         timestamp: new Date().toISOString(),
@@ -46,7 +48,7 @@ export default function Page() {
         userRole: session?.user?.role
       })
     }
-  }
+  }, [session?.user?.id, session?.user?.role])
 
   useEffect(() => {
     console.log('Admin dashboard: Component mounted', {
@@ -59,11 +61,13 @@ export default function Page() {
     if (status === 'authenticated') {
       fetchProjects()
     }
-  }, [status, session])
+    // We only run once on authentication check
+  }, [status, fetchProjects, session?.user?.role, session?.user?.id])
 
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+  // Removed the second effect that was calling `fetchProjects` again:
+  // useEffect(() => {
+  //   fetchProjects();
+  // }, [fetchProjects]);
 
   if (status === 'loading') {
     console.log('Admin dashboard: Loading state', {
@@ -76,7 +80,7 @@ export default function Page() {
   if (status === 'unauthenticated') {
     console.log('Admin dashboard: Unauthenticated access attempt', {
       timestamp: new Date().toISOString(),
-      pathname: window.location.pathname
+      pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown'
     })
     return null
   }
@@ -93,4 +97,4 @@ export default function Page() {
       <AdminView projects={projects} refetchProjects={fetchProjects} />
     </DashboardLayout>
   )
-} 
+}

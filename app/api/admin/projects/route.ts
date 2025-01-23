@@ -57,6 +57,7 @@ async function deleteR2Folder(folderPath: string) {
 }
 
 interface Episode {
+  _id?: string;  // Make _id optional since it's added when creating new episodes
   name: string;
   collectionName: string;
   videoPath: string;
@@ -86,6 +87,121 @@ interface ProjectDocument {
   };
 }
 
+// Add memory monitoring for Node.js
+function logMemoryUsage() {
+  const used = process.memoryUsage();
+  console.log('Memory usage:', {
+    rss: `${Math.round(used.rss / 1024 / 1024)}MB`,
+    heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+    heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+    external: `${Math.round(used.external / 1024 / 1024)}MB`
+  });
+}
+
+// Constants for file upload limits
+const MAX_FILE_SIZE = 800 * 1024 * 1024; // 800MB
+const MAX_TOTAL_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
+
+// Add helper function to check if file exists in R2
+async function checkFileExistsInR2(key: string) {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key
+    });
+    await s3Client.send(command);
+    return true;
+  } catch (error: any) {
+    if (error.name === 'NoSuchKey') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function ensureDatabaseAndCollection(client: any, databaseName: string, collectionName: string) {
+  try {
+    // Check if database exists by trying to use it
+    const db = client.db(databaseName);
+    
+    // Check if collection exists
+    const collections = await db.listCollections({ name: collectionName }).toArray();
+    const collectionExists = collections.length > 0;
+    
+    if (!collectionExists) {
+      console.log(`[${new Date().toISOString()}] Creating collection ${collectionName} in database ${databaseName}`);
+      const newCollection = await db.createCollection(collectionName);
+      
+      // Write a placeholder document to ensure collection is created
+      await newCollection.insertOne({
+        createdAt: new Date(),
+        info: `Placeholder doc for collection: ${collectionName}`,
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error ensuring database and collection:', error);
+    throw error;
+  }
+}
+
+// Add helper function to ensure episode exists in database
+async function ensureEpisodeInDatabase(client: any, projectId: string, episode: Episode) {
+  try {
+    const { db } = await connectToDatabase();
+    
+    // Update project with episode info
+    const result = await db.collection('projects').findOneAndUpdate(
+      { _id: new ObjectId(projectId) },
+      {
+        $addToSet: { // Use addToSet to avoid duplicates
+          episodes: {
+            _id: new ObjectId(), // Add unique ID for each episode
+            ...episode,
+            status: 'uploaded',
+            uploadedAt: new Date()
+          }
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!result) {
+      throw new Error('Failed to update project with episode');
+    }
+
+    // Ensure database exists for the project
+    const projectDb = client.db(result.databaseName);
+    
+    // Create collection for episode if it doesn't exist
+    const collections = await projectDb.listCollections({ name: episode.collectionName }).toArray();
+    if (collections.length === 0) {
+      const collection = await projectDb.createCollection(episode.collectionName);
+      
+      // Create initial document in collection
+      await collection.insertOne({
+        episodeId: episode._id,
+        name: episode.name,
+        videoPath: episode.videoPath,
+        videoKey: episode.videoKey,
+        status: 'uploaded',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          projectId: result._id,
+          collectionName: episode.collectionName
+        }
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error ensuring episode in database:', error);
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let videoFile: File | null = null;
@@ -97,6 +213,9 @@ export async function POST(request: NextRequest) {
   }> = [];
 
   try {
+    // Log initial memory usage
+    logMemoryUsage();
+
     // Step 0: Authorization check
     const authSession = await getServerSession(authOptions);
     if (!authSession || !authSession.user || authSession.user.role !== 'admin') {
@@ -105,6 +224,13 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     videoFile = formData.get('video') as File;
+
+    // Validate file size
+    if (videoFile && videoFile.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ 
+        error: `File size exceeds limit of ${MAX_FILE_SIZE / 1024 / 1024}MB` 
+      }, { status: 400 });
+    }
 
     // Extract project data
     const projectData = {
@@ -122,64 +248,113 @@ export async function POST(request: NextRequest) {
 
     // Only proceed with initialization steps if this is the first file
     if (isFirst) {
-      console.log(`[${new Date().toISOString()}] Starting new project initialization:`, {
+      console.log(`[${new Date().toISOString()}] Starting project initialization:`, {
         title: projectData.title,
         totalFiles: collections.length
       });
 
-      // Step 1: Create parent folder name (sanitize title for folder name)
       const parentFolder = projectData.title.replace(/[^a-zA-Z0-9-_]/g, '_');
-      console.log(`[${new Date().toISOString()}] Step 1: Created parent folder name: ${parentFolder}`);
-
-      // Step 2: Create project document in MongoDB
       const { db, client } = await connectToDatabase();
       const mongoSession = await client.startSession();
 
       try {
         await mongoSession.withTransaction(async () => {
-          // Check if project already exists
           const existingProject = await db.collection('projects').findOne({
             title: projectData.title,
             parentFolder: parentFolder
           });
 
           if (existingProject) {
-            throw new Error('Project with this title already exists');
-          }
-
-          // Create initial project document
-          const result = await db.collection<ProjectDocument>('projects').insertOne({
-            ...projectData,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            assignedTo: [],
-            parentFolder: parentFolder,
-            databaseName: parentFolder,
-            episodes: [],
-            uploadStatus: {
-              totalFiles: collections.length,
-              completedFiles: 0,
-              currentFile: -1,
-              status: 'initializing'
+            console.log(`[${new Date().toISOString()}] Found existing project, checking files...`);
+            
+            // Check if this specific file exists in R2
+            if (!videoFile) {
+              throw new Error('No video file provided');
             }
-          }, { session: mongoSession });
+            
+            const collectionName = videoFile.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+            const filePath = `${parentFolder}/${collectionName}/${videoFile.name}`;
+            const fileExists = await checkFileExistsInR2(filePath);
 
-          console.log(`[${new Date().toISOString()}] Step 2: Created project document:`, {
-            projectId: result.insertedId,
-            title: projectData.title
-          });
+            if (fileExists) {
+              throw new Error('File already exists in this project');
+            }
 
-          // Step 3: Create database
-          if (!/^[a-zA-Z0-9_-]+$/.test(parentFolder)) {
-            throw new Error('Invalid database name. Use only letters, numbers, underscores, and hyphens');
+            // Check if collection exists and create if it doesn't
+            const collectionExists = existingProject.episodes.some(
+              (ep: Episode) => ep.collectionName === collectionName
+            );
+
+            if (collectionExists) {
+              throw new Error('Collection already exists in this project');
+            }
+
+            // Ensure database and collection exist
+            await ensureDatabaseAndCollection(client, existingProject.databaseName, collectionName);
+
+            console.log(`[${new Date().toISOString()}] Continuing with existing project:`, {
+              projectId: existingProject._id,
+              title: existingProject.title,
+              database: existingProject.databaseName,
+              collection: collectionName
+            });
+            
+            // Update project status
+            await db.collection('projects').updateOne(
+              { _id: existingProject._id },
+              { 
+                $set: { 
+                  status: 'uploading',
+                  uploadStatus: {
+                    totalFiles: collections.length,
+                    completedFiles: existingProject.episodes.length,
+                    currentFile: index,
+                    status: 'uploading'
+                  }
+                }
+              }
+            );
+          } else {
+            // Create new project
+            const result = await db.collection<ProjectDocument>('projects').insertOne({
+              ...projectData,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              assignedTo: [],
+              parentFolder: parentFolder,
+              databaseName: parentFolder,
+              episodes: [],
+              uploadStatus: {
+                totalFiles: collections.length,
+                completedFiles: 0,
+                currentFile: -1,
+                status: 'initializing'
+              }
+            }, { session: mongoSession });
+
+            // Create database and initial collection
+            if (!/^[a-zA-Z0-9_-]+$/.test(parentFolder)) {
+              throw new Error('Invalid database name. Use only letters, numbers, underscores, and hyphens');
+            }
+
+            if (!videoFile) {
+              throw new Error('No video file provided');
+            }
+
+            const collectionName = videoFile.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, '_');
+            await ensureDatabaseAndCollection(client, parentFolder, collectionName);
+
+            console.log(`[${new Date().toISOString()}] Created new project with database and collection:`, {
+              projectId: result.insertedId,
+              title: projectData.title,
+              database: parentFolder,
+              collection: collectionName
+            });
           }
-
-          const newDb = client.db(parentFolder);
-          console.log(`[${new Date().toISOString()}] Step 3: Created database: ${parentFolder}`);
 
           // Update project status to ready for upload
           await db.collection<ProjectDocument>('projects').updateOne(
-            { _id: result.insertedId },
+            { title: projectData.title },
             { $set: { status: 'uploading' } },
             { session: mongoSession }
           );
@@ -202,10 +377,15 @@ export async function POST(request: NextRequest) {
         const folderPath = `${parentFolder}/${collectionName}/`;
         const key = `${folderPath}${videoFile.name}`;
 
-        // Upload to R2
-        const arrayBuffer = await videoFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        // Process file in chunks to manage memory better
+        let buffer: Buffer;
+        {
+          // Create a new scope to help with garbage collection
+          const arrayBuffer = await videoFile.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+        } // arrayBuffer should be garbage collected after this block
 
+        // Upload to R2
         const putCommand = new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: key,
@@ -215,6 +395,9 @@ export async function POST(request: NextRequest) {
 
         await s3Client.send(putCommand);
         console.log(`[${new Date().toISOString()}] Uploaded file to R2:`, { key });
+
+        // Clear references to help garbage collection
+        buffer = Buffer.alloc(0);
 
         // Generate signed URL
         const getCommand = new GetObjectCommand({
@@ -230,6 +413,15 @@ export async function POST(request: NextRequest) {
           videoKey: key,
           collectionName
         });
+
+        // Force garbage collection if available
+        if (global.gc) {
+          try {
+            global.gc();
+          } catch (e) {
+            console.error('Failed to force garbage collection:', e);
+          }
+        }
 
       } catch (uploadError: any) {
         console.error(`[${new Date().toISOString()}] R2 upload error:`, uploadError);
@@ -254,23 +446,22 @@ export async function POST(request: NextRequest) {
           throw new Error('Project not found');
         }
 
-        // Update project with new episode
-        const result = await db.collection<ProjectDocument>('projects').findOneAndUpdate(
+        // Ensure each uploaded file is properly added to database
+        for (const file of uploadedFiles) {
+          await ensureEpisodeInDatabase(client, project._id.toString(), {
+            name: file.name,
+            collectionName: file.collectionName,
+            videoPath: file.videoPath,
+            videoKey: file.videoKey,
+            status: 'uploaded',
+            uploadedAt: new Date()
+          });
+        }
+
+        // Update project status
+        transactionResult = await db.collection<ProjectDocument>('projects').findOneAndUpdate(
           { _id: project._id },
           {
-            $push: {
-              episodes: {
-                $each: uploadedFiles.map(file => ({
-                  _id: new ObjectId().toString(),
-                  name: file.name,
-                  collectionName: file.collectionName,
-                  videoPath: file.videoPath,
-                  videoKey: file.videoKey,
-                  status: 'uploaded',
-                  uploadedAt: new Date()
-                }))
-              }
-            },
             $set: {
               updatedAt: new Date(),
               uploadStatus: {
@@ -288,30 +479,16 @@ export async function POST(request: NextRequest) {
           }
         );
 
-        if (!result) {
+        if (!transactionResult) {
           throw new Error('Failed to update project');
         }
 
-        transactionResult = result;
-
-        // If this is the last file, create collections for all episodes
-        if (isLast) {
-          console.log(`[${new Date().toISOString()}] Creating collections for all episodes`);
-          const allEpisodes = result.episodes || [];
-
-          for (const episode of allEpisodes) {
-            const collectionName = episode.collectionName;
-            const newCollection = client.db(project.databaseName).collection(collectionName);
-
-            // ⚠️ Actually write a document to force creation
-            await newCollection.insertOne({
-              createdAt: new Date(),
-              info: `Placeholder doc for episode: ${episode.name}`,
-            });
-
-            console.log(`[${new Date().toISOString()}] Created collection: ${collectionName}`);
-          }
-        }
+        console.log(`[${new Date().toISOString()}] Updated project status:`, {
+          projectId: project._id,
+          status: isLast ? 'completed' : 'uploading',
+          completedFiles: index + 1,
+          totalFiles: collections.length
+        });
       });
 
       return NextResponse.json({
@@ -344,6 +521,18 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    // Cleanup and force garbage collection if available
+    if (global.gc) {
+      try {
+        global.gc();
+      } catch (e) {
+        console.error('Failed to force garbage collection:', e);
+      }
+    }
+    
+    // Final memory usage log
+    logMemoryUsage();
   }
 }
 

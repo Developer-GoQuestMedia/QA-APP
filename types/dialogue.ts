@@ -68,4 +68,21 @@ export interface Dialogue {
   words?: WordDetail[];
   scenario?: Scenario;
   deleteVoiceOver?: boolean;
+}
+
+export interface DialogueViewProps {
+  dialogues: Dialogue[];
+  projectId: string;
+  episode?: {
+    _id: string;
+    name: string;
+    status: string;
+  };
+  project?: {
+    _id: string | ObjectId;
+    title: string;
+    sourceLanguage: string;
+    targetLanguage: string;
+    status: string;
+  };
 } 

@@ -61,12 +61,13 @@ export async function POST(
     try {
       console.log('Calling external API in the background...');
       const apiResponse = await axios.post(
-        'https://some-external-api.com/whatever',
+        'https://audio-cleaner-676840814994.us-central1.run.app/',
         {
           // Pass along whatever data you need
           name: requestBody.name,
           videoPath: requestBody.videoPath,
           videoKey: requestBody.videoKey,
+          episodeId: params.episodeId,
         },
         {
           headers: { 'Content-Type': 'application/json' },

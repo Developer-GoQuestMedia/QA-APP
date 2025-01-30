@@ -1,9 +1,44 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { getSocketInstance } from '@/lib/socket';
 // If you need authentication, import getServerSession and authOptions:
 // import { getServerSession } from 'next-auth';
 // import { authOptions } from '@/lib/auth';
+
+interface Episode {
+  _id: { $oid: string };
+  name: string;
+  collectionName: string;
+  videoPath: string;
+  videoKey: string;
+  status: string;
+  uploadedAt: { $date: string };
+  step1?: {
+    inputParameters: {
+      name: string;
+      videoPath: string;
+      videoKey: string;
+      episodeId: string;
+    };
+    cleanedSpeechPath: string;
+    cleanedSpeechKey: string;
+    musicAndSoundEffectsPath: string;
+    musicAndSoundEffectsKey: string;
+    updatedAt: { $date: string };
+  };
+}
+
+function checkEpisodeNames(episodes: Episode[]) {
+  episodes.forEach((episode) => {
+    if (episode.step1 && episode.step1.inputParameters) {
+      const { name } = episode.step1.inputParameters;
+      console.log(`Episode ID: ${episode._id.$oid}, Name: ${name}`);
+    } else {
+      console.log(`Episode ID: ${episode._id.$oid} has no step1 inputParameters.`);
+    }
+  });
+}
 
 export async function POST(
   request: Request,
@@ -40,22 +75,30 @@ export async function POST(
     musicAndSoundEffectsKey,
   } = body;
 
-//   // Validate required fields
-//   if (
-//     !inputParameters ||
-//     !cleanedSpeechPath ||
-//     !cleanedSpeechKey ||
-//     !musicAndSoundEffectsPath ||
-//     !musicAndSoundEffectsKey
-//   ) {
-//     return NextResponse.json(
-//       {
-//         error:
-//           'Missing one of the required fields: inputParameters, cleanedSpeechPath, cleanedSpeechKey, musicAndSoundEffectsPath, musicAndSoundEffectsKey',
-//       },
-//       { status: 400 }
-//     );
-//   }
+  // Ensure inputParameters is an object
+  if (typeof inputParameters !== 'object') {
+    return NextResponse.json({ error: 'Invalid inputParameters format' }, { status: 400 });
+  }
+
+  // Destructure inputParameters
+  const { name } = inputParameters;
+
+  // Validate required fields
+  if (
+    !inputParameters ||
+    !cleanedSpeechPath ||
+    !cleanedSpeechKey ||
+    !musicAndSoundEffectsPath ||
+    !musicAndSoundEffectsKey
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'Missing one of the required fields: inputParameters, cleanedSpeechPath, cleanedSpeechKey, musicAndSoundEffectsPath, musicAndSoundEffectsKey',
+      },
+      { status: 400 }
+    );
+  }
 
   try {
     const { db } = await connectToDatabase();
@@ -71,7 +114,7 @@ export async function POST(
       return NextResponse.json({ error: 'Episode not found' }, { status: 404 });
     }
 
-    // Update that episode’s step1 object
+    // Update that episode's step1 object
     await db.collection('projects').updateOne(
       { 'episodes._id': episodeObjectId },
       {
@@ -88,7 +131,13 @@ export async function POST(
       }
     );
 
-    return NextResponse.json({ success: true });
+    // Notify admin view with the name from inputParameters and log the data
+    notifyAdmin(`Processing complete for: ${name}`);
+
+    return NextResponse.json({
+      success: true,
+      notifyMessage: `Processing complete for: ${name}`
+    });
   } catch (error: any) {
     console.error('Error updating episode:', error);
     return NextResponse.json(
@@ -96,4 +145,18 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// Function to notify admin view
+function notifyAdmin(message: string) {
+  const io = getSocketInstance();
+  
+  if (io) {
+    io.emit('notification', { message, type: 'success' });
+    
+    setTimeout(() => {
+      io.emit('notification', { message: 'Test from server!', type: 'success' });
+    }, 5000);
+  }
+  console.log('Admin Notification:', message);
 }

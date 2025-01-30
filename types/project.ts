@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb';
 import { User } from './user';
 
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
@@ -8,7 +9,7 @@ interface AssignedUser {
 }
 
 export interface Episode {
-  _id: string;
+  _id: ObjectId | string;
   name: string;
   collectionName: string;
   videoPath: string;
@@ -24,7 +25,7 @@ export interface Episode {
 
 export interface Project {
   dialogue_collection: any;
-  _id: string;
+  _id: ObjectId | string;
   title: string;
   description: string;
   sourceLanguage: string;

@@ -5,97 +5,106 @@ import { ObjectId } from 'mongodb'
 import { authOptions } from '../../../lib/auth'
 
 export async function GET(request: Request) {
-  console.log('=== API Dialogues Route Debug ===');
+  console.log('=== GET /api/dialogues - Started ===');
   
   try {
-    // Check authentication
+    // 1. Authentication Check
     const session = await getServerSession(authOptions);
-    if (!session) {
-      console.log('No session found');
-      return new NextResponse(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401 }
-      );
+    if (!session?.user) {
+      console.log('Unauthorized access attempt');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get query parameters
+    // 2. Get Query Parameters
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
-    const collection = searchParams.get('collection');
+    const episodeName = searchParams.get('episodeName');
 
-    console.log('Query params:', { projectId, collection });
+    console.log('Query parameters:', { projectId, episodeName });
 
-    if (!projectId) {
-      console.log('No projectId provided');
-      return new NextResponse(
-        JSON.stringify({ error: 'Project ID is required' }),
+    if (!projectId || !episodeName) {
+      console.log('Missing required parameters');
+      return NextResponse.json(
+        { error: 'Project ID and Episode Name are required' },
         { status: 400 }
       );
     }
 
-    // Validate projectId format
-    if (!ObjectId.isValid(projectId)) {
-      console.log('Invalid projectId format');
-      return new NextResponse(
-        JSON.stringify({ error: 'Invalid project ID format' }),
-        { status: 400 }
-      );
-    }
-
-    // Connect to database
+    // 3. Connect to Database
     const { db } = await connectToDatabase();
-    console.log('Connected to database');
 
-    // Get project to verify collection name
+    // 4. Find Project and Verify Access
     const project = await db.collection('projects').findOne({
-      _id: new ObjectId(projectId)
+      _id: new ObjectId(projectId),
+      'assignedTo': {
+        $elemMatch: {
+          username: session.user.username,
+          role: 'voiceOver'
+        }
+      }
     });
 
     if (!project) {
-      console.log('Project not found');
-      return new NextResponse(
-        JSON.stringify({ error: 'Project not found' }),
-        { status: 404 }
-      );
+      console.log('Project not found or user not authorized');
+      return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 });
     }
 
-    // Determine collection name from project
-    const collectionName = project.dialogue_collection || collection || 'dialogues';
+    // 5. Find Episode in Project
+    const episode = project.episodes.find((ep: any) => ep.name === episodeName);
+    if (!episode) {
+      console.log('Episode not found:', episodeName);
+      return NextResponse.json({ error: 'Episode not found' }, { status: 404 });
+    }
+
+    console.log('Found episode:', {
+      episodeId: episode._id,
+      name: episode.name,
+      status: episode.status
+    });
+
+    // 6. Get Collection Name
+    const collectionName = project.dialogue_collection || 'dialogues';
     console.log('Using collection:', collectionName);
 
-    // Fetch dialogues
+    // 7. Fetch Dialogues for Episode
     const dialogues = await db.collection(collectionName)
-      .find({ projectId: new ObjectId(projectId) })
+      .find({
+        projectId: new ObjectId(projectId),
+        episodeId: episode._id.toString()
+      })
       .sort({ timeStart: 1 })
       .toArray();
 
-    // Transform ObjectIds to strings for JSON serialization
+    console.log(`Found ${dialogues.length} dialogues for episode`);
+
+    // 8. Transform ObjectIds to strings for JSON serialization
     const serializedDialogues = dialogues.map(dialogue => ({
       ...dialogue,
       _id: dialogue._id.toString(),
-      projectId: dialogue.projectId.toString()
+      projectId: dialogue.projectId.toString(),
+      episodeId: dialogue.episodeId.toString()
     }));
 
-    console.log(`Found ${dialogues.length} dialogues`);
-    console.log('=== End Debug ===');
-
-    return new NextResponse(
-      JSON.stringify({ 
-        data: serializedDialogues,
-        collection: collectionName,
-        project: {
-          title: project.title,
-          sourceLanguage: project.sourceLanguage,
-          targetLanguage: project.targetLanguage
-        }
-      }),
-      { status: 200 }
-    );
+    // 9. Return Response with Additional Context
+    return NextResponse.json({
+      data: serializedDialogues,
+      episode: {
+        _id: episode._id.toString(),
+        name: episode.name,
+        status: episode.status
+      },
+      project: {
+        _id: project._id.toString(),
+        title: project.title,
+        sourceLanguage: project.sourceLanguage,
+        targetLanguage: project.targetLanguage
+      }
+    });
 
   } catch (error) {
-    console.error('Error in dialogues route:', error);
-    return new NextResponse(
-      JSON.stringify({ error: 'Internal server error' }),
+    console.error('Error fetching dialogues:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch dialogues' },
       { status: 500 }
     );
   }

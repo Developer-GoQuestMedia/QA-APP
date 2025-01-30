@@ -414,17 +414,50 @@ export default function TranscriberDialogueView({
   // Add episode selection handler
   const handleEpisodeChange = async (episodeId: string) => {
     const episode = episodes.find(ep => ep._id === episodeId);
-    if (!episode) return;
+    if (!episode) {
+      console.error('Episode not found:', episodeId);
+      setError('Selected episode not found');
+      return;
+    }
 
+    setError(''); // Clear any previous errors
+    
     try {
+      console.log('Fetching dialogues for episode:', {
+        projectId,
+        episodeName: episode.name,
+        episodeId: episode._id
+      });
+
       // Fetch dialogues for the selected episode
-      const response = await axios.get(`/api/dialogues?projectId=${projectId}&episodeId=${episodeId}`);
+      const response = await axios.get(`/api/dialogues?projectId=${projectId}&episodeName=${encodeURIComponent(episode.name)}`);
+      
+      if (!response.data?.data) {
+        throw new Error('No dialogue data received from server');
+      }
+
+      console.log('Fetched dialogues:', {
+        count: response.data.data.length,
+        episodeName: episode.name
+      });
+
       setDialoguesList(response.data.data);
       setCurrentDialogueIndex(0);
       setSelectedEpisode(episode);
     } catch (error) {
       console.error('Failed to fetch dialogues for episode:', error);
-      setError('Failed to load dialogues for selected episode');
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.error || error.message;
+        setError(`Failed to load dialogues: ${errorMessage}`);
+        // Log additional error details
+        console.error('API Error Details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        });
+      } else {
+        setError('An unexpected error occurred while loading dialogues');
+      }
     }
   };
 

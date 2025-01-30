@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run dev-custom && next dev",
+    "dev-custom": "tsx server.ts",
     "dev:no-warnings": "node --no-warnings ./node_modules/.bin/next dev",
     "build:next": "prisma generate && next build && prisma generate",
     "build": "cross-env NODE_ENV=production npm run build:next && node scripts/build-success.js && npm run start",
@@ -28,6 +29,8 @@
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/mongoose": "^5.11.96",
+    "@types/react-toastify": "^4.0.2",
+    "@types/socket.io-client": "^1.4.36",
     "@vercel/blob": "^0.27.0",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
@@ -49,6 +52,9 @@
     "react-dom": "^18",
     "react-hot-toast": "^2.5.1",
     "react-swipeable": "^7.0.2",
+    "react-toastify": "^11.0.3",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7"
   },

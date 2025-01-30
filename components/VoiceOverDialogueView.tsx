@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import { type Dialogue } from '../types/dialogue'
+import { type Episode, type Project } from '../types/project'
 import { formatTime, getNumberValue, calculateDuration } from '../utils/formatters'
 import { useAudioRecording } from '../hooks/useAudioRecording'
 import axios from 'axios'
@@ -441,6 +442,8 @@ const ErrorFallback = ({ error, resetError }: ErrorFallbackProps) => (
 interface DialogueViewProps {
   dialogues: Dialogue[];
   projectId: string;
+  episode: Episode;
+  project: Project;
 }
 
 interface QueryData {
@@ -459,7 +462,7 @@ const logEvent = (message: string, data?: Record<string, unknown>): void => {
   console.log(message, data);
 };
 
-export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
+export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId, episode, project }: DialogueViewProps) {
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);

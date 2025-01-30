@@ -1,9 +1,11 @@
-import { Project, ProjectStatus, Episode } from '@/types/project'
-import { User, UserRole } from '@/types/user'
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { useQueryClient, useQuery } from '@tanstack/react-query'
-import axios from 'axios'
+'use client';
+
+import { Project, ProjectStatus, Episode } from '@/types/project';
+import { User, UserRole } from '@/types/user';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import {
   Search,
   Plus,
@@ -13,9 +15,12 @@ import {
   ChartBar,
   Trash2,
   Edit3,
-  UserPlus
-} from 'lucide-react'
-import EpisodeView from './EpisodeView'
+  UserPlus,
+} from 'lucide-react';
+import EpisodeView from './EpisodeView';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { io } from 'socket.io-client';
 
 interface AdminViewProps {
   projects: Project[];
@@ -30,10 +35,10 @@ interface UploadProgressData {
 }
 
 const STATUS_COLORS = {
-  'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
   'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-  'completed': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
-  'on-hold': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+  'on-hold': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 } as const;
 
 type Tab = 'projects' | 'users';
@@ -50,6 +55,17 @@ const formatBytes = (bytes: number, decimals: number = 2) => {
 const getTimeStamp = () => {
   return new Date().toISOString();
 };
+
+// Utility function to notify admin
+function useNotifyAdmin() {
+  return (message: string, type: 'success' | 'error' = 'success') => {
+    if (type === 'error') {
+      toast.error(message); // Show error notifications
+    } else {
+      toast.success(message); // Show success notifications
+    }
+  };
+}
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projects');
@@ -71,7 +87,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     sourceLanguage: '',
     targetLanguage: '',
     status: 'pending' as ProjectStatus,
-    videoFiles: [] as File[]
+    videoFiles: [] as File[],
   });
 
   const [newUser, setNewUser] = useState({
@@ -79,7 +95,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     email: '',
     password: '',
     role: 'transcriber' as UserRole,
-    isActive: true
+    isActive: true,
   });
 
   const [error, setError] = useState('');
@@ -90,7 +106,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
 
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressData>>({});
-  const [uploadStatus, setUploadStatus] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
+  const [uploadStatus, setUploadStatus] = useState<
+    Record<string, 'pending' | 'uploading' | 'success' | 'error'>
+  >({});
 
   // ---------------------------------------
   //  NEW STATES FOR EPISODE MODALS
@@ -115,7 +133,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,
-      retry: 1
+      retry: 1,
     }),
     []
   );
@@ -131,6 +149,32 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     };
     fetchInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchProjects]);
+
+  // Socket.IO setup
+  useEffect(() => {
+    console.log('Connecting to Socket.IO on client mount...');
+
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000');
+
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+    });
+
+    socket.on('notification', (data: { message: string; type: any; }) => {
+      console.log('Real-time notification received:', data);
+      notify(data.message, data.type || 'success');
+      refetchProjects(); // Trigger UI update
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected');
+    });
+
+    return () => {
+      console.log('Cleaning up socket...');
+      socket.disconnect();
+    };
   }, []);
 
   // --------------------------
@@ -139,7 +183,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
     return projects
-      .filter(project => {
+      .filter((project) => {
         const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'all' || project.status === filterStatus;
         return matchesSearch && matchesStatus;
@@ -161,273 +205,188 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   //   FILTER USERS FOR TAB
   // ------------------------
   const filteredUsers = useMemo(() => {
-    return users.filter(user =>
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    return users.filter(
+      (user) =>
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [users, searchTerm]);
 
+  const notify = useNotifyAdmin();
+
   // -------------------------------------
-  //  CREATE PROJECT HANDLER (UNCHANGED)
+  //  CREATE PROJECT HANDLER (UPDATED)
   // -------------------------------------
-  const handleCreateProject = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    const startTime = Date.now();
-    try {
-      console.log(`[${getTimeStamp()}] Starting project creation with payload:`, {
-        title: newProject.title,
-        description: newProject.description,
-        sourceLanguage: newProject.sourceLanguage,
-        targetLanguage: newProject.targetLanguage,
-        totalFiles: newProject.videoFiles.length,
-        fileNames: newProject.videoFiles.map(f => f.name),
-        totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0)
-      });
+  const handleCreateProject = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const startTime = Date.now();
+      let successCount = 0;
+      let skipCount = 0;
+      let errorCount = 0;
 
-      // Validate required fields
-      const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
-      const missingFields = requiredFields.filter(field => !(newProject as any)[field]);
-      if (missingFields.length > 0) {
-        setError(`Missing required fields: ${missingFields.join(', ')}`);
-        return;
-      }
+      try {
+        console.log(`[${getTimeStamp()}] Starting project creation with payload:`, {
+          title: newProject.title,
+          description: newProject.description,
+          sourceLanguage: newProject.sourceLanguage,
+          targetLanguage: newProject.targetLanguage,
+          totalFiles: newProject.videoFiles.length,
+          fileNames: newProject.videoFiles.map((f) => f.name),
+          totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0),
+        });
 
-      // Validate if files are selected
-      if (newProject.videoFiles.length === 0) {
-        setError('Please select at least one video file');
-        return;
-      }
+        // Validate required fields
+        const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
+        const missingFields = requiredFields.filter((field) => !(newProject as any)[field]);
+        if (missingFields.length > 0) {
+          setError(`Missing required fields: ${missingFields.join(', ')}`);
+          return;
+        }
 
-      // Initialize upload status for all files
-      const initialStatus: Record<string, 'pending' | 'uploading' | 'success' | 'error'> = {};
-      newProject.videoFiles.forEach(file => {
-        initialStatus[file.name] = 'pending';
-      });
-      setUploadStatus(initialStatus);
+        // Validate if files are selected
+        if (newProject.videoFiles.length === 0) {
+          setError('Please select at least one video file');
+          return;
+        }
 
-      let projectId: string | undefined;
-      let hasError = false;
+        // Initialize upload status for all files
+        const initialStatus: Record<string, 'pending' | 'uploading' | 'success' | 'error'> = {};
+        newProject.videoFiles.forEach((file) => {
+          initialStatus[file.name] = 'pending';
+        });
+        setUploadStatus(initialStatus);
 
-      // Create project metadata
-      const projectMetadata = {
-        title: newProject.title,
-        description: newProject.description,
-        sourceLanguage: newProject.sourceLanguage,
-        targetLanguage: newProject.targetLanguage,
-        status: newProject.status,
-        databaseName: newProject.title.replace(/[^a-zA-Z0-9-_]/g, '_'),
-        collections: [] as string[],
-        filePaths: [] as string[]
-      };
+        // Upload files in parallel with concurrency limit
+        const concurrencyLimit = 3;
+        const files = [...newProject.videoFiles];
+        const uploadPromises: Promise<any>[] = [];
 
-      // Parent folder name
-      const parentFolder = projectMetadata.databaseName;
+        const uploadFile = async (file: File, index: number) => {
+          try {
+            const formData = new FormData();
+            formData.append('video', file);
+            formData.append('title', newProject.title);
+            formData.append('description', newProject.description);
+            formData.append('sourceLanguage', newProject.sourceLanguage);
+            formData.append('targetLanguage', newProject.targetLanguage);
+            formData.append(
+              'metadata',
+              JSON.stringify({
+                currentFile: {
+                  isFirst: index === 0,
+                  isLast: index === newProject.videoFiles.length - 1,
+                  index,
+                },
+                collections: newProject.videoFiles.map((f) =>
+                  f.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]/g, '_')
+                ),
+                filePaths: newProject.videoFiles.map((f) => f.name),
+              })
+            );
 
-      // Prepare all files metadata
-      newProject.videoFiles.forEach((file) => {
-        const collectionName = file.name
-          .replace(/\.[^/.]+$/, '')
-          .replace(/[^a-zA-Z0-9-_]/g, '_');
-        const filePath = `${parentFolder}/${collectionName}/${file.name}`;
-        projectMetadata.collections.push(collectionName);
-        projectMetadata.filePaths.push(filePath);
-      });
+            const response = await axios.post('/api/admin/projects', formData);
 
-      // Upload files in parallel with concurrency limit
-      const concurrencyLimit = 3;
-      const files = [...newProject.videoFiles];
-      const uploadPromises: Promise<any>[] = [];
-      let completedUploads = 0;
+            if (response.data.skipped) {
+              console.log(`File ${file.name} skipped:`, response.data.message);
+              skipCount++;
+              return { status: 'skipped', data: response.data };
+            }
 
-      const uploadFile = async (file: File, index: number) => {
-        const fileStartTime = Date.now();
-        setUploadProgress(prev => ({
-          ...prev,
-          [file.name]: {
-            loaded: 0,
-            total: file.size,
-            phase: 'uploading',
-            message: 'Preparing upload...'
-          }
-        }));
-
-        const formData = new FormData();
-        const collectionName = file.name
-          .replace(/\.[^/.]+$/, '')
-          .replace(/[^a-zA-Z0-9-_]/g, '_');
-        const filePath = `${parentFolder}/${collectionName}/${file.name}`;
-
-        formData.append('title', newProject.title);
-        formData.append('description', newProject.description);
-        formData.append('sourceLanguage', newProject.sourceLanguage);
-        formData.append('targetLanguage', newProject.targetLanguage);
-        formData.append('dialogue_collection', collectionName);
-        formData.append('status', newProject.status);
-        formData.append('parentFolder', parentFolder);
-
-        const fileMetadata = {
-          databaseName: projectMetadata.databaseName,
-          collections: projectMetadata.collections,
-          filePaths: projectMetadata.filePaths,
-          parentFolder: parentFolder,
-          currentFile: {
-            index,
-            total: newProject.videoFiles.length,
-            isFirst: index === 0,
-            isLast: index === newProject.videoFiles.length - 1,
-            projectId: projectId
+            console.log(`Uploaded file ${index + 1}/${newProject.videoFiles.length}:`, file.name);
+            successCount++;
+            return { status: 'success', data: response.data };
+          } catch (err: any) {
+            console.error(`Error uploading file ${file.name}:`, {
+              error: err,
+              response: err.response?.data,
+              status: err.response?.status,
+              details: err.response?.data?.details,
+              errorType: err.response?.data?.errorType,
+              mongoError: err.response?.data?.mongoError,
+              r2Error: err.response?.data?.r2Error
+            });
+            errorCount++;
+            return { status: 'error', error: err.message };
           }
         };
 
-        formData.append('metadata', JSON.stringify(fileMetadata));
-        formData.append('video', file);
-
-        try {
-          let lastProgressUpdate = Date.now();
-          let uploadStartTime = Date.now();
-          let uploadSpeed = 0;
-
-          const response = await axios.post('/api/admin/projects', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const currentTime = Date.now();
-                const timeSinceLastUpdate = (currentTime - lastProgressUpdate) / 1000;
-                const bytesSinceLastUpdate =
-                  progressEvent.loaded - (uploadProgress[file.name]?.loaded || 0);
-                uploadSpeed = bytesSinceLastUpdate / timeSinceLastUpdate;
-
-                const remainingBytes = progressEvent.total - progressEvent.loaded;
-                const estimatedTimeRemaining = remainingBytes / uploadSpeed;
-
-                const newProgressData: UploadProgressData = {
-                  loaded: progressEvent.loaded,
-                  total: progressEvent.total,
-                  phase: 'uploading',
-                  message: `Uploading: ${formatBytes(uploadSpeed)}/s • ${estimatedTimeRemaining.toFixed(
-                    1
-                  )}s remaining`
-                };
-
-                setUploadProgress(prev => ({
-                  ...prev,
-                  [file.name]: newProgressData
-                }));
-
-                lastProgressUpdate = currentTime;
-              }
+        // Process files with concurrency
+        while (files.length > 0 || uploadPromises.length > 0) {
+          while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
+            const file = files.shift();
+            if (file) {
+              const index = newProject.videoFiles.indexOf(file);
+              uploadPromises.push(uploadFile(file, index));
             }
+          }
+
+          if (uploadPromises.length > 0) {
+            await Promise.all(uploadPromises);
+            uploadPromises.length = 0;
+          }
+        }
+
+        const totalDuration = (Date.now() - startTime) / 1000;
+        console.log(`[${getTimeStamp()}] All files processed in ${totalDuration.toFixed(1)}s`);
+
+        // Show final status
+        let statusMessage = `Upload complete:\n`;
+        if (successCount > 0) statusMessage += `✓ ${successCount} files uploaded successfully\n`;
+        if (skipCount > 0) statusMessage += `⚠ ${skipCount} files skipped (already exist)\n`;
+        if (errorCount > 0) statusMessage += `✗ ${errorCount} files failed to upload\n`;
+
+        setSuccess(statusMessage);
+
+        if (successCount > 0 || skipCount > 0) {
+          setIsCreating(false);
+          setNewProject({
+            title: '',
+            description: '',
+            sourceLanguage: '',
+            targetLanguage: '',
+            status: 'pending',
+            videoFiles: [],
           });
-
-          if (!response.data.success) {
-            throw new Error(response.data.message || `Failed to upload file ${file.name}`);
+          if (typeof refetchProjects === 'function') {
+            await refetchProjects();
           }
-
-          // On first successful upload, store projectId
-          if (index === 0) {
-            projectId = response.data.data._id;
-          }
-
-          completedUploads++;
-          setUploadProgress(prev => ({
-            ...prev,
-            [file.name]: {
-              ...prev[file.name],
-              phase: 'success',
-              message: `Upload complete`
-            }
-          }));
-          return response;
-        } catch (error: any) {
-          hasError = true;
-          setUploadProgress(prev => ({
-            ...prev,
-            [file.name]: {
-              ...prev[file.name],
-              phase: 'error',
-              message: error.message
-            }
-          }));
-          throw error;
-        }
-      };
-
-      // Concurrency loop
-      while (files.length > 0 || uploadPromises.length > 0) {
-        while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
-          const file = files.shift();
-          if (file) {
-            const index = newProject.videoFiles.indexOf(file);
-            uploadPromises.push(uploadFile(file, index));
-          }
+          notify(`Project "${newProject.title}" created successfully.`);
         }
 
-        if (uploadPromises.length > 0) {
-          await Promise.race(
-            uploadPromises.map((p, i) => p.catch(e => ({ error: e, index: i })))
-          );
-
-          // Clean up settled promises
-          for (let i = uploadPromises.length - 1; i >= 0; i--) {
-            if (
-              (uploadPromises[i] as any).status === 'fulfilled' ||
-              (uploadPromises[i] as any).error
-            ) {
-              uploadPromises.splice(i, 1);
-            }
-          }
-        }
+        setTimeout(() => setSuccess(''), 5000);
+      } catch (err: any) {
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
+        setError(errorMessage);
+        notify('Failed to create project', 'error');
+        setTimeout(() => setError(''), 5000);
       }
-
-      const totalDuration = (Date.now() - startTime) / 1000;
-      console.log(`[${getTimeStamp()}] All files uploaded in ${totalDuration.toFixed(1)}s`);
-
-      if (!hasError) {
-        setIsCreating(false);
-        setNewProject({
-          title: '',
-          description: '',
-          sourceLanguage: '',
-          targetLanguage: '',
-          status: 'pending',
-          videoFiles: []
-        });
-        if (typeof refetchProjects === 'function') {
-          await refetchProjects();
-        }
-        setSuccess('Project created successfully');
-        setTimeout(() => setSuccess(''), 3000);
-      }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
-      setError(errorMessage);
-      setTimeout(() => setError(''), 3000);
-    }
-  }, [newProject, refetchProjects, uploadProgress]);
+    },
+    [newProject, refetchProjects, notify]
+  );
 
   // -------------------------------
-  //  CREATE USER HANDLER (UNCHANGED)
+  //  CREATE USER HANDLER (UPDATED)
   // -------------------------------
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const response = await axios.post('/api/admin/users', newUser);
       if (response.data.success) {
+        toast.success(response.data.notifyMessage);
         setIsCreatingUser(false);
         setNewUser({
           username: '',
           email: '',
           password: '',
           role: 'transcriber',
-          isActive: true
+          isActive: true,
         });
         queryClient.invalidateQueries({ queryKey: ['users'] });
-        setSuccess('User created successfully');
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
+      toast.error('Something went wrong');
       setError('Failed to create user');
       setTimeout(() => setError(''), 3000);
     }
@@ -442,7 +401,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       if (typeof refetchProjects === 'function') {
         await refetchProjects();
       }
-      setSuccess('Status updated successfully');
+      notify('Status updated successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to update project status');
@@ -461,7 +420,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       }
       setShowDeleteConfirm(false);
       setSelectedProject(null);
-      setSuccess('Project and associated files deleted successfully');
+      notify('Project and associated files deleted successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to delete project');
@@ -478,11 +437,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowUserDeleteConfirm(false);
       setSelectedUser(null);
-      setSuccess('User deleted successfully');
-      setTimeout(() => setSuccess(''), 3000);
+      notify('User deleted successfully.');
     } catch (err) {
-      setError('Failed to delete user');
-      setTimeout(() => setError(''), 3000);
+      notify('Failed to delete user', 'error');
     }
   };
 
@@ -493,7 +450,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     try {
       await axios.patch(`/api/admin/users/${userId}`, { isActive });
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      setSuccess(`User ${isActive ? 'activated' : 'deactivated'} successfully`);
+      notify(`User ${isActive ? 'activated' : 'deactivated'} successfully`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(`Failed to ${isActive ? 'activate' : 'deactivate'} user`);
@@ -508,7 +465,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     try {
       if (!selectedProject) return;
       await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
-        usernames: selectedUsernames
+        usernames: selectedUsernames,
       });
       if (typeof refetchProjects === 'function') {
         await refetchProjects();
@@ -516,7 +473,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       setIsAssigning(false);
       setSelectedUsernames([]);
       setSelectedProject(null);
-      setSuccess('Users assigned successfully');
+      notify('Users assigned successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to assign users');
@@ -530,12 +487,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleRemoveUser = async (projectId: string, username: string) => {
     try {
       await axios.delete(`/api/admin/projects/${projectId}/assign`, {
-        data: { usernames: [username] }
+        data: { usernames: [username] },
       });
       if (refetchProjects) {
         await refetchProjects();
       }
-      setSuccess('User removed successfully');
+      notify('User removed successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to remove user');
@@ -581,7 +538,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {activeTab === 'projects' && (
                 <>
                   <button
-                    onClick={() => setViewMode(prev => (prev === 'grid' ? 'list' : 'grid'))}
+                    onClick={() => setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid'))}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                   >
                     {viewMode === 'grid' ? 'List View' : 'Grid View'}
@@ -681,22 +638,28 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           >
             {filteredProjects.map((project) => (
               <div
-                key={project._id}
+                key={typeof project._id === 'object' ? project._id.toString() : project._id}
                 className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 ${
                   viewMode === 'list' ? 'p-4' : 'p-6'
                 }`}
               >
-                <div className={`${viewMode === 'list' ? 'flex items-center justify-between' : 'space-y-4'}`}>
+                <div
+                  className={`${
+                    viewMode === 'list' ? 'flex items-center justify-between' : 'space-y-4'
+                  }`}
+                >
                   <div className={viewMode === 'list' ? 'flex-1' : ''}>
                     <div className="flex justify-between items-start">
-                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{project.title}</h2>
+                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                        {project.title}
+                      </h2>
                       <div className="flex items-center space-x-2">
                         <div className="relative">
                           <button
                             onClick={() => {
                               // Toggle the "options menu" for THIS project
                               // If it's the same selected, reset it. Otherwise set it.
-                              setSelectedProject(prev =>
+                              setSelectedProject((prev) =>
                                 prev && prev._id === project._id ? null : project
                               );
                             }}
@@ -993,7 +956,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             const files = Array.from(e.target.files || []);
                             setNewProject((prev) => ({
                               ...prev,
-                              videoFiles: [...prev.videoFiles, ...files]
+                              videoFiles: [...prev.videoFiles, ...files],
                             }));
 
                             // Initialize progress and status
@@ -1004,7 +967,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 loaded: 0,
                                 total: file.size,
                                 phase: 'pending',
-                                message: 'Waiting to start'
+                                message: 'Waiting to start',
                               };
                               newStatus[file.name] = 'pending';
                             });
@@ -1058,7 +1021,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   onClick={() => {
                                     setNewProject((prev) => ({
                                       ...prev,
-                                      videoFiles: prev.videoFiles.filter((_, i) => i !== index)
+                                      videoFiles: prev.videoFiles.filter((_, i) => i !== index),
                                     }));
                                     const newProgress = { ...uploadProgress };
                                     const newStatus = { ...uploadStatus };
@@ -1108,7 +1071,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                             ? '80%'
                                             : uploadProgress[file.name].phase === 'success'
                                             ? '100%'
-                                            : '0%'
+                                            : '0%',
                                       }}
                                     ></div>
                                   </div>
@@ -1170,9 +1133,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 <input
                   type="email"
                   value={newUser.email}
-                  onChange={(e) =>
-                    setNewUser((prev) => ({ ...prev, email: e.target.value }))
-                  }
+                  onChange={(e) => setNewUser((prev) => ({ ...prev, email: e.target.value }))}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
@@ -1234,7 +1195,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       {showUserDeleteConfirm && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Delete User</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Delete User
+            </h2>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
               Are you sure you want to delete "{selectedUser.username}"? This action cannot be undone.
             </p>
@@ -1290,7 +1253,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       {user.username} ({user.role})
                     </span>
                     <button
-                      onClick={() => handleRemoveUser(selectedProject._id, user.username)}
+                      onClick={() => handleRemoveUser(typeof selectedProject._id === 'object' ? selectedProject._id.toString() : selectedProject._id, user.username)}
                       className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       ×
@@ -1391,12 +1354,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     sourceLanguage: selectedProject.sourceLanguage,
                     targetLanguage: selectedProject.targetLanguage,
                     dialogue_collection: selectedProject.dialogue_collection,
-                    status: selectedProject.status
+                    status: selectedProject.status,
                   });
                   await refetchProjects();
                   setIsEditing(false);
                   setSelectedProject(null);
-                  setSuccess('Project updated successfully');
+                  notify('Project updated successfully');
                   setTimeout(() => setSuccess(''), 3000);
                 } catch (err) {
                   setError('Failed to update project');
@@ -1529,7 +1492,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteProject(selectedProject._id)}
+                onClick={() => handleDeleteProject(typeof selectedProject._id === 'object' ? selectedProject._id.toString() : selectedProject._id)}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               >
                 Delete
@@ -1560,7 +1523,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
                 selectedProject.episodes.map((episode) => (
                   <div
-                    key={episode.name}
+                    // Make sure to convert ObjectId to a string if needed
+                    key={typeof episode._id === 'object' ? String(episode._id) : episode._id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
                     <div className="flex items-center space-x-3">
@@ -1596,7 +1560,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                       >
                         Open
-                        <svg className="ml-1.5 -mr-0.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg
+                          className="ml-1.5 -mr-0.5 w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
@@ -1639,6 +1608,25 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           </div>
         </div>
       )}
+
+      {/* Toast Container for notifications */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
     </div>
   );
+}
+
+// Function to notify admin view (if needed elsewhere)
+function notifyAdmin(message: string) {
+  console.log('Admin Notification:', message);
 }

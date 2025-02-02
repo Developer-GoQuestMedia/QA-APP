@@ -4,7 +4,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Project, Episode } from '@/types/project'
-import { ChartBar, Search, ChevronRight, Loader2 } from 'lucide-react'
+import { Search, ChevronRight, Loader2 } from 'lucide-react'
 import { ObjectId } from 'mongodb'
 import axios from 'axios'
 
@@ -18,7 +18,7 @@ interface VoiceOverViewProps {
   projects: Project[]
 }
 
-// Helper function to convert ObjectId to string
+// Helper to convert ObjectId
 const getIdString = (id: string | ObjectId): string => {
   return typeof id === 'string' ? id : id.toString()
 }
@@ -26,6 +26,7 @@ const getIdString = (id: string | ObjectId): string => {
 export default function VoiceOverView({ projects }: VoiceOverViewProps) {
   const { data: session } = useSession()
   const router = useRouter()
+
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -40,87 +41,103 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
   })
 
   // Filter projects assigned to current user as voice-over
-  const assignedProjects = projects.filter(project => 
-    project.assignedTo.some((assignment: AssignedUser) => 
-      assignment.username === session?.user?.username && 
-      assignment.role === 'voiceOver'
+  const assignedProjects = projects.filter((project) =>
+    project.assignedTo.some(
+      (assignment: AssignedUser) =>
+        assignment.username === session?.user?.username &&
+        assignment.role === 'voiceOver'
     )
   )
 
-  // Filter projects based on search term
-  const filteredProjects = assignedProjects.filter(project =>
+  // Filter by search term
+  const filteredProjects = assignedProjects.filter((project) =>
     project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     project.description.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   console.log('Filtered projects:', {
     totalAssigned: assignedProjects.length,
-    assignedProjectTitles: assignedProjects.map(p => p.title)
+    assignedProjectTitles: assignedProjects.map((p) => p.title)
   })
 
+  // Handle user logout
   const handleLogout = async () => {
     try {
       console.log('Initiating logout')
       setIsLoggingOut(true)
-      // Clear any client-side session data
       if (typeof window !== 'undefined') {
         window.localStorage.clear()
       }
-      // Use direct redirect
-      await signOut({ 
-        redirect: true,
-        callbackUrl: '/login'
-      })
+      await signOut({ redirect: true, callbackUrl: '/login' })
     } catch (error) {
       console.error('Error during signOut:', error)
-      // Fallback redirect if signOut fails
       router.replace('/login')
     } finally {
       setIsLoggingOut(false)
     }
   }
 
+  // Show episodes modal for a selected project
   const handleProjectClick = (project: Project) => {
     setSelectedProject(project)
     setIsEpisodesModalOpen(true)
   }
 
-  const handleEpisodeClick = async (projectId: string, episodeName: string, episodeId: string) => {
+  // Handle fetching dialogues and navigating
+  const handleEpisodeClick = async (
+    projectId: string,
+    episodeName: string,
+    episodeId: string,
+    project: Project,
+    episode: Episode
+  ) => {
     try {
       setLoadingEpisodeId(episodeId)
-      console.log('Fetching dialogues for episode:', { projectId, episodeName, episodeId });
+      console.log('Fetching dialogues for episode:', {
+        projectId,
+        episodeName,
+        episodeId
+      })
 
-      // Fetch dialogues for this episode
+      // 1) Fetch from /api/dialogues
       const response = await axios.get(`/api/dialogues`, {
         params: {
           projectId,
-          episodeName
+          episodeName,
+          databaseName: project.databaseName,   // If your server needs them
+          collectionName: episode.collectionName
         }
-      });
+      })
 
       if (response.data) {
-        const { data: dialogues, episode, project } = response.data;
+        // The server returns { data: dialogues[], episode, project }
+        const { data: dialogues, episode, project } = response.data
         console.log('Fetched data:', {
           dialoguesCount: dialogues.length,
           episode: episode.name,
           project: project.title
-        });
+        })
 
-        // Navigate to VoiceOverDialogueView with all necessary data
-        const queryParams = new URLSearchParams({
-          dialogues: JSON.stringify(dialogues),
-          episode: JSON.stringify(episode),
-          project: JSON.stringify(project)
-        });
+        /*
+         * OLD APPROACH (commented out to avoid 431 errors when JSON is huge):
+         *
+         * const queryParams = new URLSearchParams({
+         *   dialogues: JSON.stringify(dialogues),
+         *   episode: JSON.stringify(episode),
+         *   project: JSON.stringify(project)
+         * })
+         * const url = `/allDashboards/voice-over/${projectId}/episodes/${episodeName}/dialogues?${queryParams}`
+         * router.push(url)
+         */
 
-        const url = `/allDashboards/voice-over/${projectId}/episodes/${episodeName}/dialogues?${queryParams}`;
-        router.push(url);
+        // NEW APPROACH: Short path; the next page can fetch dialogues (again)
+        const minimalUrl = `/allDashboards/voice-over/${projectId}/episodes/${episodeName}/dialogues`
+        router.push(minimalUrl)
       } else {
-        console.error('No data returned from API');
+        console.error('No data returned from API')
       }
     } catch (error) {
-      console.error('Error fetching dialogues:', error);
-      // You might want to show an error toast here
+      console.error('Error fetching dialogues:', error)
     } finally {
       setLoadingEpisodeId(null)
     }
@@ -129,16 +146,15 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-6">
+
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-white">Voice-Over Dashboard</h1>
-          <button 
+          <button
             onClick={handleLogout}
             disabled={isLoggingOut}
             className={`px-4 py-2 rounded transition-colors ${
-              isLoggingOut 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-red-500 hover:bg-red-600'
+              isLoggingOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'
             } text-white`}
           >
             {isLoggingOut ? 'Logging out...' : 'Logout'}
@@ -148,7 +164,7 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search projects..."
@@ -174,12 +190,17 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
               >
                 <div className="flex justify-between items-start mb-4">
                   <h2 className="text-xl font-semibold text-white">{project.title}</h2>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    project.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                    project.status === 'on-hold' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      project.status === 'completed'
+                        ? 'bg-green-100 text-green-800'
+                        : project.status === 'in-progress'
+                        ? 'bg-blue-100 text-blue-800'
+                        : project.status === 'on-hold'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
                     {project.status}
                   </span>
                 </div>
@@ -228,35 +249,55 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
 
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
-                selectedProject.episodes.map((episode: Episode) => (
-                  <div
-                    key={getIdString(episode._id)}
-                    onClick={() => handleEpisodeClick(
-                      getIdString(selectedProject._id),
-                      episode.name,
-                      getIdString(episode._id)
-                    )}
-                    className="flex items-center justify-between p-4 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        episode.status === 'uploaded'
-                          ? 'bg-green-100 text-green-800'
-                          : episode.status === 'processing'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {episode.status}
-                      </span>
-                      <span className="text-white font-medium">{episode.name}</span>
+                selectedProject.episodes.map((episode: Episode) => {
+                  const projectIdStr = getIdString(selectedProject._id)
+                  const episodeIdStr = getIdString(episode._id)
+                  const episodeNameStr = episode.name
+
+                  return (
+                    <div
+                      key={episodeIdStr}
+                      onClick={() => {
+                        console.log('Episode Clicked:', {
+                          projectId: projectIdStr,
+                          projectTitle: selectedProject.title,
+                          episodeId: episodeIdStr,
+                          episodeName: episodeNameStr,
+                          episodeStatus: episode.status
+                        })
+
+                        handleEpisodeClick(
+                          projectIdStr,
+                          episodeNameStr,
+                          episodeIdStr,
+                          selectedProject,
+                          episode
+                        )
+                      }}
+                      className="flex items-center justify-between p-4 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            episode.status === 'uploaded'
+                              ? 'bg-green-100 text-green-800'
+                              : episode.status === 'processing'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {episode.status}
+                        </span>
+                        <span className="text-white font-medium">{episodeNameStr}</span>
+                      </div>
+                      {loadingEpisodeId === episodeIdStr ? (
+                        <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      )}
                     </div>
-                    {loadingEpisodeId === getIdString(episode._id) ? (
-                      <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                    )}
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="text-center p-4 text-gray-400">
                   No episodes available for this project.
@@ -269,4 +310,3 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
     </div>
   )
 }
-

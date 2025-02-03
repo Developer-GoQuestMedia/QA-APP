@@ -75,17 +75,17 @@ CharacterInfo.displayName = 'CharacterInfo';
 
 const VideoPlayer = React.memo(({ 
   videoRef, 
-  videoUrl, 
+  videoClipUrl, 
   isVideoLoading 
 }: { 
   videoRef: React.RefObject<HTMLVideoElement>,
-  videoUrl: string,
+  videoClipUrl: string,
   isVideoLoading: boolean
 }) => (
   <div className="relative">
     <video
       ref={videoRef}
-      src={videoUrl}
+      src={videoClipUrl}
       className="w-full aspect-video max-h-[200px] object-contain bg-black"
       aria-label="Dialogue video player"
     />
@@ -697,7 +697,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         video.removeEventListener('error', handleLoadEnd);
       };
     }
-  }, [currentDialogue?.videoUrl]);
+  }, [currentDialogue?.videoClipUrl]);
 
   // Save changes with approval
   const handleApproveAndSave = async () => {
@@ -1114,7 +1114,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       
       <VideoPlayer 
         videoRef={videoRef}
-        videoUrl={currentDialogue.videoUrl}
+        videoClipUrl={currentDialogue.videoClipUrl}
         isVideoLoading={isVideoLoading}
       />
       

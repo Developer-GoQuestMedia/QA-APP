@@ -62,16 +62,13 @@ async function fetchDialogues({ projectId, episodeName }: FetchDialoguesParams):
   }
 }
 
-export function useDialogues(projectId: string, episodeName: string) {
+export function useDialogues(projectId: string, episodeName: string = "default") {
   return useQuery({
     queryKey: ['dialogues', projectId, episodeName],
     queryFn: () => fetchDialogues({ projectId, episodeName }),
     enabled: Boolean(projectId && episodeName && ObjectId.isValid(projectId)),
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     gcTime: 30 * 60 * 1000, // Keep unused data for 30 minutes
-    retry: 1, // Only retry once on failure
-    onError: (error) => {
-      console.error('useDialogues hook error:', error);
-    }
+    retry: 1 // Only retry once on failure
   });
-} 
+}

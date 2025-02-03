@@ -9,7 +9,7 @@ interface AssignedUser {
 }
 
 export interface Episode {
-  _id: ObjectId | string                 // can be a Mongo ObjectId or string
+  _id: string | ObjectId; // Ensure _id is not optional
   name: string
   collectionName?: string                // optional
   videoPath?: string                     // optional

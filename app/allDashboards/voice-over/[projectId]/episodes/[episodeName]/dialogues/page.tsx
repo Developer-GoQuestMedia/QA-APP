@@ -5,20 +5,39 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import VoiceOverDialogueView from '@/components/VoiceOverDialogueView'
 import { Dialogue } from '@/types/dialogue'
-import { Project } from '@/types/project'
+import { Project, Episode as ProjectEpisode, ProjectStatus } from '@/types/project'
 import axios from 'axios'
 
+// Define a minimal episode type for the API response
 interface Episode {
-  _id?: string
+  _id: string
   name: string
-  status: string
-  // etc.
+  status: 'uploaded' | 'processing' | 'error'
 }
 
 interface PageData {
-  dialogues: Dialogue[]
+  data: Dialogue[]
   episode: Episode
-  project: Project
+  project: {
+    _id: string
+    title: string
+    sourceLanguage: string
+    targetLanguage: string
+    status: ProjectStatus
+    databaseName: string
+    description: string
+    dialogue_collection: any
+    assignedTo: { username: string; role: string }[]
+    updatedAt: string | Date
+    parentFolder: string
+    episodes: ProjectEpisode[]
+    uploadStatus: {
+      totalFiles: number
+      completedFiles: number
+      currentFile: number
+      status: string
+    }
+  }
 }
 
 export default function DialoguesPage() {
@@ -65,7 +84,7 @@ export default function DialoguesPage() {
         const projectResp = await axios.get('/api/projects', {
           params: { projectId } // might be /api/projects?projectId=...
         })
-        const projectDoc = projectResp.data.project
+        const projectDoc = projectResp.data
         if (!projectDoc) {
           setError('Project not found or unauthorized')
           setLoading(false)
@@ -74,7 +93,7 @@ export default function DialoguesPage() {
 
         // 4) Find the episode in that project that matches "episodeName"
         const foundEpisode = projectDoc.episodes.find(
-          (ep: any) => ep.name === episodeName
+          (ep: ProjectEpisode) => ep.name === episodeName
         )
         if (!foundEpisode) {
           setError('Episode not found')
@@ -83,37 +102,33 @@ export default function DialoguesPage() {
         }
 
         // 5) Now call /api/dialogues with the real databaseName & collectionName
-        const databaseName = projectDoc.databaseName
-        const collectionName = foundEpisode.collectionName
-
         const dialoguesResp = await axios.get('/api/dialogues', {
           params: {
-            databaseName,
-            collectionName
+            databaseName: projectDoc.databaseName,
+            collectionName: foundEpisode.collectionName
           }
         })
 
-        if (!dialoguesResp.data?.data) {
+        if (!dialoguesResp.data) {
           setError('No dialogues found')
           setLoading(false)
           return
         }
 
-        // 6) Construct the data for VoiceOverDialogueView
+        // Ensure the data matches the expected types
+        const responseData = dialoguesResp.data
         setData({
-          dialogues: dialoguesResp.data.data,
+          data: responseData.data,
           episode: {
-            // or you can pass everything
-            _id: foundEpisode._id,
-            name: foundEpisode.name,
-            status: foundEpisode.status,
+            _id: responseData.episode._id,
+            name: responseData.episode.name,
+            status: responseData.episode.status as 'uploaded' | 'processing' | 'error'
           },
           project: {
-            _id: projectDoc._id,
-            title: projectDoc.title,
-            databaseName: projectDoc.databaseName,
-            // add any other fields VoiceOverDialogueView needs
-          } as Project
+            ...projectDoc,
+            _id: projectDoc._id.toString(),
+            status: projectDoc.status as ProjectStatus
+          }
         })
       } catch (err: unknown) {
         console.error('Error fetching dialogues page data:', err)
@@ -150,11 +165,11 @@ export default function DialoguesPage() {
     )
   }
 
-  // 7) Pass the dialogues (and other props) into VoiceOverDialogueView
+  // Pass the correctly typed data to VoiceOverDialogueView
   return (
     <VoiceOverDialogueView
-      dialogues={data.dialogues}
-      projectId={typeof data.project._id === 'string' ? data.project._id : ''}
+      dialogues={data.data}
+      projectId={data.project._id}
       episode={data.episode}
       project={data.project}
     />

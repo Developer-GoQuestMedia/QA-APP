@@ -4,15 +4,25 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialogues } from '@/hooks/useDialogues'
 import VoiceOverDialogueView from '../../../../components/VoiceOverDialogueView'
+import { Project } from '@/types/project'
+import { Dialogue } from '@/types/dialogue'
+import { Episode } from '@/types/project'
+
+interface DialogueViewProps {
+  dialogues: Dialogue[];
+  projectId: string;
+  episode?: Episode;
+  project?: Project;
+}
 
 export default function VoiceOverProjectPage({
   params,
 }: {
   params: { projectId: string }
-}) {
+} & DialogueViewProps) {
   const { status } = useSession()
   const router = useRouter()
-  const { data: dialogues, isLoading } = useDialogues(params.projectId)
+  const { data: dialogues, isLoading } = useDialogues(params.projectId, "default")
 
   if (status === 'loading' || isLoading) {
     return (

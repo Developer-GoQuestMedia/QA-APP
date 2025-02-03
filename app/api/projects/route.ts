@@ -41,72 +41,155 @@ import { ObjectId } from 'mongodb'
 import { connectToDatabase } from '@/lib/mongodb'
 import { authOptions } from '@/lib/auth'
 
+// Define interfaces based on the actual MongoDB document structure
+interface Episode {
+  _id: ObjectId | string
+  name: string
+  collectionName: string
+  videoPath: string
+  videoKey: string
+  status: string
+  uploadedAt: Date
+}
+
+interface AssignedUser {
+  username: string
+  role: string
+}
+
+interface Project {
+  _id: ObjectId | string
+  title: string
+  description: string
+  sourceLanguage: string
+  targetLanguage: string
+  status: string
+  createdAt: Date
+  updatedAt: Date
+  assignedTo: AssignedUser[]
+  parentFolder: string
+  databaseName: string
+  episodes: Episode[]
+  uploadStatus: {
+    totalFiles: number
+    completedFiles: number
+    currentFile: number
+    status: string
+  }
+  index: string
+}
+
 export async function GET(request: Request) {
   console.log('=== GET /api/projects - Start ===')
   try {
-    // STEP 1: (Optional) Check for authentication
-    //         Remove if your endpoint doesn't require a session.
+    // Enhanced session check
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    console.log('Session check:', {
+      exists: !!session,
+      user: session?.user,
+      timestamp: new Date().toISOString()
+    })
+
+    if (!session?.user?.username || !session?.user?.role) {
+      console.log('Unauthorized: Invalid session data')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // STEP 2: Parse query string for `projectId`
+    // Parse query string for `projectId`
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
 
-    // STEP 3: Connect to the database
+    // Connect to the database
     const { db } = await connectToDatabase()
     console.log('Connected to database')
 
-    // If NO `projectId`, return ALL projects
+    // If NO `projectId`, return ALL projects assigned to the user
     if (!projectId) {
-      console.log('Fetching ALL projects')
-      const projects = await db.collection('projects').find({}).toArray()
+      console.log('Fetching ALL projects for user:', session.user.username)
+      const projects = await db.collection('projects').find({
+        assignedTo: {
+          $elemMatch: {
+            username: session.user.username,
+            role: session.user.role
+          }
+        }
+      }).toArray() as Project[]
 
       // Serialize each project's _id and each episode's _id
-      const serializedProjects = projects.map((proj: any) => ({
+      const serializedProjects = projects.map((proj: Project) => ({
         ...proj,
         _id: proj._id.toString(),
-        episodes: proj.episodes?.map((ep: any) => ({
+        episodes: proj.episodes?.map((ep) => ({
           ...ep,
           _id: ep._id.toString()
         })),
       }))
 
-      console.log(`Found ${serializedProjects.length} projects`)
+      console.log(`Found ${serializedProjects.length} projects for user`)
       return NextResponse.json(serializedProjects)
     }
 
     // If `projectId` is provided, validate & fetch a SINGLE project
     console.log('Fetching single project, projectId =', projectId)
 
-    // (Optional) If your ID must be a valid 24-char hex:
     if (!ObjectId.isValid(projectId)) {
       return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 })
     }
 
-    // STEP 4: Fetch the specific project by _id
+    // STEP 4: Fetch the specific project by _id AND ensure user has access
+    console.log('Attempting to fetch project:', {
+      projectId,
+      username: session.user.username,
+      role: session.user.role,
+      timestamp: new Date().toISOString()
+    })
+
     const project = await db.collection('projects').findOne({
-      _id: new ObjectId(projectId)
+      _id: new ObjectId(projectId),
+      assignedTo: {
+        $elemMatch: {
+          username: session.user.username,
+          role: session.user.role
+        }
+      }
+    }) as Project | null
+
+    console.log('Project fetch result:', {
+      found: !!project,
+      projectId,
+      assignedUsers: project?.assignedTo,
+      timestamp: new Date().toISOString()
     })
 
     if (!project) {
+      console.log('Project not found or user not authorized:', {
+        projectId,
+        username: session.user.username,
+        role: session.user.role
+      })
       return NextResponse.json(
-        { error: 'Project not found' },
+        { error: 'Project not found or unauthorized' },
         { status: 404 }
       )
     }
 
-    // STEP 5: Serialize the ObjectIds for JSON
+    // Serialize the ObjectIds for JSON
     const serializedProject = {
       ...project,
       _id: project._id.toString(),
-      episodes: project.episodes?.map((ep: any) => ({
+      episodes: project.episodes?.map((ep) => ({
         ...ep,
         _id: ep._id.toString()
       }))
     }
+
+    console.log('Project details:', {
+      id: serializedProject._id,
+      title: serializedProject.title,
+      episodeCount: serializedProject.episodes?.length,
+      assignedUsers: serializedProject.assignedTo,
+      timestamp: new Date().toISOString()
+    })
 
     console.log('Returning single project:', serializedProject._id)
     return NextResponse.json(serializedProject)

@@ -75,17 +75,17 @@ CharacterInfo.displayName = 'CharacterInfo';
 
 const VideoPlayer = React.memo(({ 
   videoRef, 
-  videoClipUrl, 
+  videoUrl,
   isVideoLoading 
 }: { 
   videoRef: React.RefObject<HTMLVideoElement>,
-  videoClipUrl: string,
+  videoUrl: string,
   isVideoLoading: boolean
 }) => (
   <div className="relative">
     <video
       ref={videoRef}
-      src={videoClipUrl}
+      src={videoUrl}
       className="w-full aspect-video max-h-[200px] object-contain bg-black"
       aria-label="Dialogue video player"
     />
@@ -442,8 +442,8 @@ const ErrorFallback = ({ error, resetError }: ErrorFallbackProps) => (
 interface DialogueViewProps {
   dialogues: Dialogue[];
   projectId: string;
-  episode: Episode;
-  project: Project;
+  episode?: Episode;
+  project?: Project;
 }
 
 interface QueryData {
@@ -697,7 +697,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         video.removeEventListener('error', handleLoadEnd);
       };
     }
-  }, [currentDialogue?.videoClipUrl]);
+  }, [currentDialogue?.videoUrl]);
 
   // Save changes with approval
   const handleApproveAndSave = async () => {
@@ -1114,7 +1114,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       
       <VideoPlayer 
         videoRef={videoRef}
-        videoClipUrl={currentDialogue.videoClipUrl}
+        videoUrl={currentDialogue.videoUrl}
         isVideoLoading={isVideoLoading}
       />
       

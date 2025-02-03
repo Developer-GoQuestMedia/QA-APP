@@ -9,7 +9,7 @@ interface AssignedUser {
 }
 
 export interface Episode {
-  _id: string | ObjectId; // Ensure _id is not optional
+  _id: string;  // Changed from string | ObjectId to just string
   name: string
   collectionName?: string                // optional
   videoPath?: string                     // optional
@@ -25,7 +25,7 @@ export interface Episode {
 
 export interface Project {
   dialogue_collection: any
-  _id: ObjectId | string                 // can also be string or ObjectId
+  _id: string;  // Changed from ObjectId | string to just string
   title: string
   description: string
   sourceLanguage: string

@@ -2,7 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { type Dialogue } from '@/types/dialogue'
 import { type Project } from '@/types/project'
 import axios from 'axios'
-import { ObjectId } from 'mongodb'
+
+// Utility function to validate MongoDB ObjectId format
+function isValidObjectId(id: string): boolean {
+  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+  return objectIdPattern.test(id);
+}
 
 // Maintain a record of logged projectIds
 const loggedProjectIds = new Set<string>();
@@ -14,7 +19,7 @@ interface FetchDialoguesParams {
 
 async function fetchDialogues({ projectId, episodeName }: FetchDialoguesParams): Promise<Dialogue[]> {
   // Validate parameters
-  if (!projectId || !ObjectId.isValid(projectId)) {
+  if (!projectId || !isValidObjectId(projectId)) {
     console.error('Invalid projectId:', projectId);
     throw new Error('Invalid project ID format');
   }
@@ -66,7 +71,7 @@ export function useDialogues(projectId: string, episodeName: string = "default")
   return useQuery({
     queryKey: ['dialogues', projectId, episodeName],
     queryFn: () => fetchDialogues({ projectId, episodeName }),
-    enabled: Boolean(projectId && episodeName && ObjectId.isValid(projectId)),
+    enabled: Boolean(projectId && episodeName && isValidObjectId(projectId)),
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     gcTime: 30 * 60 * 1000, // Keep unused data for 30 minutes
     retry: 1 // Only retry once on failure

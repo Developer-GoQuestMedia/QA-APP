@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Project, Episode } from '@/types/project'
 import { Search, ChevronRight, Loader2 } from 'lucide-react'
-import { ObjectId } from 'mongodb'
 import axios from 'axios'
 
 // Define AssignedUser type
@@ -18,9 +17,10 @@ interface VoiceOverViewProps {
   projects: Project[]
 }
 
-// Helper to convert ObjectId
-const getIdString = (id: string | ObjectId): string => {
-  return typeof id === 'string' ? id : id.toString()
+// Utility function to validate MongoDB ObjectId format
+function isValidObjectId(id: string): boolean {
+  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+  return objectIdPattern.test(id);
 }
 
 export default function VoiceOverView({ projects }: VoiceOverViewProps) {
@@ -184,7 +184,7 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project) => (
               <div
-                key={getIdString(project._id)}
+                key={isValidObjectId(project._id) ? project._id : project.title}
                 className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors cursor-pointer"
                 onClick={() => handleProjectClick(project)}
               >
@@ -250,8 +250,8 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
                 selectedProject.episodes.map((episode: Episode) => {
-                  const projectIdStr = getIdString(selectedProject._id)
-                  const episodeIdStr = getIdString(episode._id)
+                  const projectIdStr = isValidObjectId(selectedProject._id) ? selectedProject._id : selectedProject.title
+                  const episodeIdStr = isValidObjectId(episode._id) ? episode._id : episode.name
                   const episodeNameStr = episode.name
 
                   return (

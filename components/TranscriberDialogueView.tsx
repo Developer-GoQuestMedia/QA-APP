@@ -23,11 +23,16 @@ interface Dialogue {
 interface Episode {
   _id: string
   name: string
-  collectionName: string
-  videoPath: string
-  videoKey: string
-  status: string
-  uploadedAt: Date
+  collectionName?: string
+  videoPath?: string
+  videoKey?: string
+  status: 'uploaded' | 'processing' | 'error'
+  uploadedAt?: Date
+  step?: 1 | 2 | 3
+  cleanedSpeechPath?: string
+  cleanedSpeechKey?: string
+  musicAndSoundEffectsPath?: string
+  musicAndSoundEffectsKey?: string
 }
 
 interface DialogueViewProps {
@@ -49,6 +54,7 @@ export default function TranscriberDialogueView({
   episodes,
   currentEpisodeId 
 }: DialogueViewProps) {
+  // Move all hooks to the top
   const [dialoguesList, setDialoguesList] = useState(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -60,15 +66,15 @@ export default function TranscriberDialogueView({
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const queryClient = useQueryClient();
   const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
-  const [currentTimestamp, setCurrentTimestamp] = useState('00:00.000');
-  const [playbackRate, setPlaybackRate] = useState(1);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(
     currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
   );
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const queryClient = useQueryClient();
 
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-90, 90], [-10, 10]);
@@ -76,13 +82,9 @@ export default function TranscriberDialogueView({
   const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8]);
   const animControls = useAnimation();
 
-  // Update dialoguesList when initialDialogues changes
-  useEffect(() => {
-    setDialoguesList(initialDialogues);
-  }, [initialDialogues]);
-
-  // Early return if no dialogues
-  if (!dialoguesList || dialoguesList.length === 0) {
+  // Early return check moved after hooks
+  const currentDialogue = dialoguesList[currentDialogueIndex];
+  if (!dialoguesList || dialoguesList.length === 0 || !currentDialogue) {
     return (
       <div className="flex items-center justify-center p-4 text-foreground">
         <p>No dialogues available for this project.</p>
@@ -90,7 +92,10 @@ export default function TranscriberDialogueView({
     );
   }
 
-  const currentDialogue = dialoguesList[currentDialogueIndex];
+  // Update dialoguesList when initialDialogues changes
+  useEffect(() => {
+    setDialoguesList(initialDialogues);
+  }, [initialDialogues]);
 
   // Video control functions
   const togglePlayPause = useCallback(() => {
@@ -106,14 +111,13 @@ export default function TranscriberDialogueView({
 
   // Check for unsaved changes
   const hasChanges = useCallback(() => {
-    if (!currentDialogue) return false;
     return (
       character !== currentDialogue.character ||
       pendingOriginalText !== currentDialogue.dialogue.original ||
       timeStart !== currentDialogue.timeStart ||
       timeEnd !== currentDialogue.timeEnd
     );
-  }, [currentDialogue, character, pendingOriginalText, timeStart, timeEnd]);
+  }, [character, pendingOriginalText, timeStart, timeEnd, currentDialogue]);
 
   // Navigation handlers
   const handleNext = useCallback(() => {
@@ -170,13 +174,6 @@ export default function TranscriberDialogueView({
         index: currentDialogue.index,
         projectId
       };
-      
-      console.log('Save attempt:', {
-        dialogueId: currentDialogue._id,
-        currentProjectId: projectId,
-        dialogueProjectId: currentDialogue.projectId,
-        updateData
-      });
       
       const { data: responseData } = await axios.patch(
         `/api/dialogues/${currentDialogue._id}`,
@@ -248,16 +245,44 @@ export default function TranscriberDialogueView({
     if (video) {
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
-      
+      const handleLoadStart = () => setIsVideoLoading(true);
+      const handleCanPlay = () => setIsVideoLoading(false);
+      const handleWaiting = () => setIsVideoLoading(true);
+      const handlePlaying = () => setIsVideoLoading(false);
+
       video.addEventListener('play', handlePlay);
       video.addEventListener('pause', handlePause);
-      
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('waiting', handleWaiting);
+      video.addEventListener('playing', handlePlaying);
+
       return () => {
         video.removeEventListener('play', handlePlay);
         video.removeEventListener('pause', handlePause);
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('waiting', handleWaiting);
+        video.removeEventListener('playing', handlePlaying);
       };
     }
   }, []);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevious();
+      } else if (e.key === ' ' && !e.repeat) {
+        e.preventDefault();
+        togglePlayPause();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [handleNext, handlePrevious, togglePlayPause]);
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const SWIPE_THRESHOLD = 50;
@@ -292,41 +317,6 @@ export default function TranscriberDialogueView({
     }
   };
 
-  // Add new keyboard controls
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
-        return; // Don't trigger shortcuts when typing
-      }
-      
-      switch(e.key.toLowerCase()) {
-        case ' ':
-          e.preventDefault();
-          togglePlayPause();
-          break;
-        case 'arrowleft':
-          e.preventDefault();
-          handlePrevious();
-          break;
-        case 'arrowright':
-          e.preventDefault();
-          handleNext();
-          break;
-        case 's':
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            if (hasChanges()) {
-              handleApproveAndSave();
-            }
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [togglePlayPause, handlePrevious, handleNext, hasChanges, handleApproveAndSave]);
-
   // Add timestamp marker functionality
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -338,7 +328,7 @@ export default function TranscriberDialogueView({
   const handleVideoTimeUpdate = () => {
     if (videoRef.current) {
       const currentTime = videoRef.current.currentTime;
-      setCurrentTimestamp(formatTime(currentTime));
+      setTimeStart(formatTime(currentTime));
     }
   };
 
@@ -353,7 +343,7 @@ export default function TranscriberDialogueView({
     }
 
     return () => clearTimeout(autoSaveTimeout);
-  }, [pendingOriginalText, character, timeStart, timeEnd]);
+  }, [pendingOriginalText, character, timeStart, timeEnd, hasChanges, handleApproveAndSave]);
 
   // Add status indicator component
   const NetworkStatusIndicator = () => {
@@ -387,29 +377,6 @@ export default function TranscriberDialogueView({
       setPlaybackRate(rate);
     }
   };
-
-  // Add video loading event handlers
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      const handleLoadStart = () => setIsVideoLoading(true);
-      const handleCanPlay = () => setIsVideoLoading(false);
-      const handleWaiting = () => setIsVideoLoading(true);
-      const handlePlaying = () => setIsVideoLoading(false);
-      
-      video.addEventListener('loadstart', handleLoadStart);
-      video.addEventListener('canplay', handleCanPlay);
-      video.addEventListener('waiting', handleWaiting);
-      video.addEventListener('playing', handlePlaying);
-      
-      return () => {
-        video.removeEventListener('loadstart', handleLoadStart);
-        video.removeEventListener('canplay', handleCanPlay);
-        video.removeEventListener('waiting', handleWaiting);
-        video.removeEventListener('playing', handlePlaying);
-      };
-    }
-  }, []);
 
   // Add episode selection handler
   const handleEpisodeChange = async (episodeId: string) => {
@@ -490,10 +457,6 @@ export default function TranscriberDialogueView({
       </div>
     </div>
   );
-
-  if (!currentDialogue) {
-    return <div className="text-center p-4">No dialogues available.</div>
-  }
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">

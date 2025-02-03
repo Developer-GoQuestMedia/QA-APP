@@ -9,31 +9,26 @@ interface AssignedUser {
 }
 
 export interface Episode {
-  _id: string;  // Changed from string | ObjectId to just string
+  step: number;
+  _id: string
   name: string
-  collectionName?: string                // optional
-  videoPath?: string                     // optional
-  videoKey?: string                      // optional
+  collectionName: string
+  videoPath?: string
+  videoKey?: string
   status: 'uploaded' | 'processing' | 'error'
   uploadedAt?: Date
-  step?: 1 | 2 | 3
-  cleanedSpeechPath?: string
-  cleanedSpeechKey?: string
-  musicAndSoundEffectsPath?: string
-  musicAndSoundEffectsKey?: string
 }
 
 export interface Project {
-  dialogue_collection: any
-  _id: string;  // Changed from ObjectId | string to just string
+  _id: string
   title: string
   description: string
   sourceLanguage: string
   targetLanguage: string
   status: ProjectStatus
   assignedTo: AssignedUser[]
-  updatedAt: string | Date
-  createdAt?: string | Date
+  updatedAt: Date | string
+  createdAt: Date | string
   parentFolder: string
   databaseName: string
   episodes: Episode[]
@@ -43,6 +38,8 @@ export interface Project {
     currentFile: number
     status: string
   }
+  dialogue_collection?: any
+  index?: string
 }
 
 // Re-export the UserRole type from 'types/user'

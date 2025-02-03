@@ -2,22 +2,18 @@ import { ObjectId } from "mongoose";
 
 export interface CharacterProfile {
   age?: string;
+  gender?: string;
   occupation?: string;
   accents?: string[];
   otherNotes?: string;
 }
 
-export interface WordDetail {
-  characterName: string;
-  wordSequenceNumber: number;
+export interface Word {
+  wordSequenceNumber: string;
   word: string;
-  wordTimestamp: string;
-  dialogNumber: number;
-  dialogStartTimestamp: string;
-  dialogEndTimestamp: string;
-  dialogVocalFile?: string;
-  characterProfile?: CharacterProfile;
-  numberOfLipMovementsForThisWord?: number;
+  wordStartTimestamp: string;
+  wordEndTimestamp: string;
+  numberOfLipMovementsForThisWord: number;
 }
 
 export interface DialogueText {
@@ -46,21 +42,21 @@ export interface Scenario {
 }
 
 export interface Dialogue {
-  videoClipUrl: string;
-  _id: string;
-  index: number;
+  dialogNumber: string;
   timeStart: string;
   timeEnd: string;
-  character: string;
-  videoUrl: string;
+  subtitleIndex: number;
+  videoClipUrl: string;
+  characterName: string;
   dialogue: DialogueText;
-  emotions?: Emotions;
-  direction?: string;
+  emotions: Emotions;
+  characterProfile: CharacterProfile;
+  tone?: string;
   lipMovements?: string;
-  sceneContext?: string;
   technicalNotes?: string;
   culturalNotes?: string;
-  status: string;
+  words: Word[];
+  status?: string;
   voiceOverUrl?: string;
   voiceOverNotes?: string;
   directorNotes?: string;
@@ -68,9 +64,19 @@ export interface Dialogue {
   projectId?: string;
   updatedAt?: string;
   updatedBy?: string;
-  words?: WordDetail[];
+  _id?: string;
   scenario?: Scenario;
   deleteVoiceOver?: boolean;
+}
+
+export interface Scene {
+  _id: string;
+  sceneNumber: string;
+  sceneDiscription: string;
+  timeStart: string;
+  timeEnd: string;
+  dialogueCount: number;
+  dialogues: Dialogue[];
 }
 
 export interface DialogueViewProps {

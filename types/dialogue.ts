@@ -1,3 +1,5 @@
+import { ObjectId } from "mongoose";
+
 export interface CharacterProfile {
   age?: string;
   occupation?: string;
@@ -44,6 +46,7 @@ export interface Scenario {
 }
 
 export interface Dialogue {
+  videoClipUrl: string;
   _id: string;
   index: number;
   timeStart: string;

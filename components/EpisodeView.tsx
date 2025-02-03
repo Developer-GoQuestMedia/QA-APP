@@ -295,7 +295,7 @@
           </div>
           <div>
             <label className="text-sm font-medium text-gray-500">Uploaded At</label>
-            <p>{new Date(episode.uploadedAt).toLocaleString()}</p>
+            <p>{episode.uploadedAt ? new Date(episode.uploadedAt).toLocaleString() : 'Not available'}</p>
           </div>
           <div className="mt-4">
             {getStepButton()}

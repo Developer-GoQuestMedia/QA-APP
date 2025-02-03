@@ -24,7 +24,7 @@ import { io } from 'socket.io-client';
 
 interface AdminViewProps {
   projects: Project[];
-  refetchProjects: () => Promise<any>;
+  refetchProjects: () => Promise<void>;
 }
 
 interface UploadProgressData {
@@ -66,6 +66,11 @@ function useNotifyAdmin() {
     }
   };
 }
+
+const handleError = (error: Error): void => {
+  console.error('Error:', error);
+  toast.error('An error occurred. Please try again.');
+};
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projects');
@@ -183,32 +188,17 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   //   FILTER & SORT PROJECTS
   // --------------------------
   const filteredProjects = useMemo(() => {
-    if (!projects) return [];
-    return projects
-      .filter((project) => {
-        const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = filterStatus === 'all' || project.status === filterStatus;
-        return matchesSearch && matchesStatus;
-      })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case 'title':
-            return a.title.localeCompare(b.title);
-          case 'status':
-            return a.status.localeCompare(b.status);
-          case 'date':
-          default:
-            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        }
-      });
-  }, [projects, searchTerm, filterStatus, sortBy]);
+    return projects.filter((project: Project) =>
+      project.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [projects, searchTerm]);
 
   // ------------------------
   //   FILTER USERS FOR TAB
   // ------------------------
   const filteredUsers = useMemo(() => {
     return users.filter(
-      (user) =>
+      (user: User) =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -368,7 +358,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // -------------------------------
   //  CREATE USER HANDLER (UPDATED)
   // -------------------------------
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     try {
       const response = await axios.post('/api/admin/users', newUser);
@@ -385,10 +375,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         queryClient.invalidateQueries({ queryKey: ['users'] });
         setTimeout(() => setSuccess(''), 3000);
       }
-    } catch (err) {
-      toast.error('Something went wrong');
-      setError('Failed to create user');
-      setTimeout(() => setError(''), 3000);
+    } catch (error) {
+      if (error instanceof Error) {
+        handleError(error);
+      }
     }
   };
 
@@ -638,7 +628,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           >
             {filteredProjects.map((project) => (
               <div
-                key={typeof project._id === 'object' ? project._id.toString() : project._id}
+                key={project._id.toString()}
                 className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 ${
                   viewMode === 'list' ? 'p-4' : 'p-6'
                 }`}
@@ -785,7 +775,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredUsers.map((user) => (
-                  <tr key={user._id}>
+                  <tr key={user._id.toString()}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div>
@@ -1253,7 +1243,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       {user.username} ({user.role})
                     </span>
                     <button
-                      onClick={() => handleRemoveUser(typeof selectedProject._id === 'object' ? selectedProject._id.toString() : selectedProject._id, user.username)}
+                      onClick={() => handleRemoveUser(selectedProject._id.toString(), user.username)}
                       className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       ×
@@ -1282,7 +1272,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   )
                   .map((user) => (
                     <label
-                      key={user._id}
+                      key={user._id.toString()}
                       className="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                     >
                       <input
@@ -1492,7 +1482,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteProject(typeof selectedProject._id === 'object' ? selectedProject._id.toString() : selectedProject._id)}
+                onClick={() => handleDeleteProject(selectedProject._id.toString())}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               >
                 Delete

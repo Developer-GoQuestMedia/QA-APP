@@ -9,7 +9,7 @@ interface Dialogue {
   timeStart: string
   timeEnd: string
   character: string
-  videoUrl: string
+  videoClipUrl: string
   dialogue: {
     original: string
     translated: string
@@ -221,7 +221,7 @@ export default function DirectorDialogueView({ dialogues: initialDialogues, proj
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
         <video
           ref={videoRef}
-          src={currentDialogue.videoUrl}
+          src={currentDialogue.videoClipUrl}
           controls
           className="w-full"
         />

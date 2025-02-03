@@ -13,6 +13,8 @@ interface Episode {
   _id: string
   name: string
   status: 'uploaded' | 'processing' | 'error'
+  step: number
+  collectionName: string
 }
 
 interface PageData {
@@ -29,6 +31,7 @@ interface PageData {
     dialogue_collection: any
     assignedTo: { username: string; role: string }[]
     updatedAt: string | Date
+    createdAt: string | Date
     parentFolder: string
     episodes: ProjectEpisode[]
     uploadStatus: {
@@ -122,7 +125,9 @@ export default function DialoguesPage() {
           episode: {
             _id: responseData.episode._id,
             name: responseData.episode.name,
-            status: responseData.episode.status as 'uploaded' | 'processing' | 'error'
+            status: responseData.episode.status as 'uploaded' | 'processing' | 'error',
+            step: responseData.episode.step,
+            collectionName: foundEpisode.collectionName
           },
           project: {
             ...projectDoc,

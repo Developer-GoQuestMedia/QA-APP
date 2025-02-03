@@ -12,6 +12,8 @@ interface Dialogue {
   videoUrl: string
   projectId?: string
   episodeId?: string
+  collectionName?: string
+  uploadedAt?: string | Date
   dialogue: {
     original: string
     translated: string
@@ -27,7 +29,7 @@ interface Episode {
   videoPath?: string
   videoKey?: string
   status: 'uploaded' | 'processing' | 'error'
-  uploadedAt?: Date
+  uploadedAt?: string | Date
   step?: 1 | 2 | 3
   cleanedSpeechPath?: string
   cleanedSpeechKey?: string
@@ -54,100 +56,82 @@ export default function TranscriberDialogueView({
   episodes,
   currentEpisodeId 
 }: DialogueViewProps) {
-  // Move all hooks to the top
-  const [dialoguesList, setDialoguesList] = useState(initialDialogues);
+  // State declarations
+  const [dialoguesList, setDialoguesList] = useState<Dialogue[]>(initialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [currentDialogue, setCurrentDialogue] = useState<Dialogue | null>(dialoguesList[0] || null);
   const [character, setCharacter] = useState('');
   const [pendingOriginalText, setPendingOriginalText] = useState('');
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
   const [isVideoLoading, setIsVideoLoading] = useState(true);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(
-    currentEpisodeId ? episodes.find(ep => ep._id === currentEpisodeId) || null : episodes[0] || null
-  );
+  const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
+  // Refs and motion hooks
   const videoRef = useRef<HTMLVideoElement>(null);
   const queryClient = useQueryClient();
-
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-90, 90], [-10, 10]);
   const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5]);
   const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8]);
   const animControls = useAnimation();
 
-  // Early return check moved after hooks
-  const currentDialogue = dialoguesList[currentDialogueIndex];
-  if (!dialoguesList || dialoguesList.length === 0 || !currentDialogue) {
-    return (
-      <div className="flex items-center justify-center p-4 text-foreground">
-        <p>No dialogues available for this project.</p>
-      </div>
-    );
-  }
+  // Constants
+  const AUTO_SAVE_DELAY = 30000; // 30 seconds
 
-  // Update dialoguesList when initialDialogues changes
+  // Update current dialogue when index changes
   useEffect(() => {
-    setDialoguesList(initialDialogues);
-  }, [initialDialogues]);
-
-  // Video control functions
-  const togglePlayPause = useCallback(() => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+    const dialogue = dialoguesList[currentDialogueIndex];
+    if (dialogue) {
+      setCurrentDialogue(dialogue);
+      setCharacter(dialogue.character || '');
+      setPendingOriginalText(dialogue.dialogue.original || '');
+      setTimeStart(dialogue.timeStart);
+      setTimeEnd(dialogue.timeEnd);
     }
+  }, [currentDialogueIndex, dialoguesList]);
+
+  // Navigation handlers
+  const handleNext = useCallback(() => {
+    if (currentDialogueIndex < dialoguesList.length - 1) {
+      setCurrentDialogueIndex(prev => prev + 1);
+    }
+  }, [currentDialogueIndex, dialoguesList.length]);
+
+  const handlePrevious = useCallback(() => {
+    if (currentDialogueIndex > 0) {
+      setCurrentDialogueIndex(prev => prev - 1);
+    }
+  }, [currentDialogueIndex]);
+
+  // Video control handlers
+  const togglePlayPause = useCallback(() => {
+    if (!videoRef.current) return;
+    
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
   // Check for unsaved changes
   const hasChanges = useCallback(() => {
+    if (!currentDialogue) return false;
+    
     return (
       character !== currentDialogue.character ||
       pendingOriginalText !== currentDialogue.dialogue.original ||
       timeStart !== currentDialogue.timeStart ||
       timeEnd !== currentDialogue.timeEnd
     );
-  }, [character, pendingOriginalText, timeStart, timeEnd, currentDialogue]);
-
-  // Navigation handlers
-  const handleNext = useCallback(() => {
-    if (hasChanges()) {
-      setShowConfirmation(true);
-    } else if (currentDialogueIndex < dialoguesList.length - 1) {
-      setCurrentDialogueIndex(prev => prev + 1);
-    }
-  }, [hasChanges, currentDialogueIndex, dialoguesList.length]);
-
-  const handlePrevious = useCallback(() => {
-    if (currentDialogueIndex > 0) {
-      if (hasChanges()) {
-        setShowConfirmation(true);
-      } else {
-        setCurrentDialogueIndex(prev => prev - 1);
-      }
-    }
-  }, [currentDialogueIndex, hasChanges]);
-
-  // Reset changes and continue navigation
-  const handleDiscardChanges = () => {
-    setShowConfirmation(false);
-    if (currentDialogue) {
-      setCharacter(currentDialogue.character || '');
-      setPendingOriginalText(currentDialogue.dialogue.original || '');
-      setTimeStart(currentDialogue.timeStart);
-      setTimeEnd(currentDialogue.timeEnd);
-    }
-  };
+  }, [currentDialogue, character, pendingOriginalText, timeStart, timeEnd]);
 
   // Save changes with approval
   const handleApproveAndSave = useCallback(async () => {
@@ -229,47 +213,29 @@ export default function TranscriberDialogueView({
     } finally {
       setIsSaving(false);
     }
-  }, [currentDialogue, projectId, pendingOriginalText, character, timeStart, timeEnd, currentDialogueIndex, dialoguesList.length, queryClient]);
+  }, [
+    currentDialogue,
+    projectId,
+    pendingOriginalText,
+    character,
+    timeStart,
+    timeEnd,
+    currentDialogueIndex,
+    dialoguesList.length,
+    queryClient,
+    setDialoguesList,
+    setNetworkStatus,
+    setShowConfirmation,
+    setCurrentDialogueIndex,
+    setError,
+    setIsSaving
+  ]);
 
-  useEffect(() => {
-    if (currentDialogue) {
-      setCharacter(currentDialogue.character || '')
-      setPendingOriginalText(currentDialogue.dialogue.original || '')
-      setTimeStart(currentDialogue.timeStart)
-      setTimeEnd(currentDialogue.timeEnd)
-    }
-  }, [currentDialogue])
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      const handlePlay = () => setIsPlaying(true);
-      const handlePause = () => setIsPlaying(false);
-      const handleLoadStart = () => setIsVideoLoading(true);
-      const handleCanPlay = () => setIsVideoLoading(false);
-      const handleWaiting = () => setIsVideoLoading(true);
-      const handlePlaying = () => setIsVideoLoading(false);
-
-      video.addEventListener('play', handlePlay);
-      video.addEventListener('pause', handlePause);
-      video.addEventListener('loadstart', handleLoadStart);
-      video.addEventListener('canplay', handleCanPlay);
-      video.addEventListener('waiting', handleWaiting);
-      video.addEventListener('playing', handlePlaying);
-
-      return () => {
-        video.removeEventListener('play', handlePlay);
-        video.removeEventListener('pause', handlePause);
-        video.removeEventListener('loadstart', handleLoadStart);
-        video.removeEventListener('canplay', handleCanPlay);
-        video.removeEventListener('waiting', handleWaiting);
-        video.removeEventListener('playing', handlePlaying);
-      };
-    }
-  }, []);
-
+  // Key press event handler
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      if (!currentDialogue) return;
+
       if (e.key === 'ArrowRight') {
         handleNext();
       } else if (e.key === 'ArrowLeft') {
@@ -282,38 +248,69 @@ export default function TranscriberDialogueView({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [handleNext, handlePrevious, togglePlayPause]);
+  }, [currentDialogue, handleNext, handlePrevious, togglePlayPause]);
 
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const SWIPE_THRESHOLD = 50;
-    const velocity = Math.abs(info.velocity.x);
-    const offset = Math.abs(info.offset.x);
+  // Auto-save functionality
+  useEffect(() => {
+    const shouldAutoSave = currentDialogue && hasChanges();
+    if (!shouldAutoSave) return;
 
-    if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
-      animControls.start({ x: 0, opacity: 1 })
-      return;
-    }
+    const autoSaveTimeout = setTimeout(() => {
+      handleApproveAndSave();
+    }, AUTO_SAVE_DELAY);
 
-    const direction = info.offset.x > 0 ? 'right' : 'left'
-    
-    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-      animControls.start({ 
-        x: -200, 
-        opacity: 0,
-        transition: { duration: 0.2 }
-      }).then(() => {
-        handleNext();
-        animControls.set({ x: 0, opacity: 1 });
-      });
-    } else if (direction === 'right' && currentDialogueIndex > 0) {
-      animControls.start({ 
-        x: 200, 
-        opacity: 0,
-        transition: { duration: 0.2 }
-      }).then(() => {
-        handlePrevious();
-        animControls.set({ x: 0, opacity: 1 });
-      });
+    return () => clearTimeout(autoSaveTimeout);
+  }, [currentDialogue, hasChanges, handleApproveAndSave]);
+
+  // Video event handlers
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleLoadStart = () => setIsVideoLoading(true);
+    const handleCanPlay = () => setIsVideoLoading(false);
+    const handleWaiting = () => setIsVideoLoading(true);
+    const handlePlaying = () => setIsVideoLoading(false);
+    const handleTimeUpdate = () => {
+      if (!currentDialogue) return;
+      const currentTime = video.currentTime;
+      // Add your time update logic here using currentTime
+      // For example: update progress bar, check if current time is within dialogue time range, etc.
+      if (currentTime >= parseFloat(currentDialogue.timeEnd)) {
+        video.pause();
+        setIsPlaying(false);
+      }
+    };
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('loadstart', handleLoadStart);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('playing', handlePlaying);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('loadstart', handleLoadStart);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [currentDialogue]);
+
+  // Reset changes and continue navigation
+  const handleDiscardChanges = () => {
+    setShowConfirmation(false);
+    if (currentDialogue) {
+      setCharacter(currentDialogue.character || '');
+      setPendingOriginalText(currentDialogue.dialogue.original || '');
+      setTimeStart(currentDialogue.timeStart);
+      setTimeEnd(currentDialogue.timeEnd);
     }
   };
 
@@ -331,19 +328,6 @@ export default function TranscriberDialogueView({
       setTimeStart(formatTime(currentTime));
     }
   };
-
-  // Add auto-save functionality
-  useEffect(() => {
-    let autoSaveTimeout: NodeJS.Timeout;
-
-    if (hasChanges()) {
-      autoSaveTimeout = setTimeout(() => {
-        handleApproveAndSave();
-      }, 30000); // Auto-save after 30 seconds of inactivity
-    }
-
-    return () => clearTimeout(autoSaveTimeout);
-  }, [pendingOriginalText, character, timeStart, timeEnd, hasChanges, handleApproveAndSave]);
 
   // Add status indicator component
   const NetworkStatusIndicator = () => {
@@ -374,7 +358,6 @@ export default function TranscriberDialogueView({
   const changePlaybackRate = (rate: number) => {
     if (videoRef.current) {
       videoRef.current.playbackRate = rate;
-      setPlaybackRate(rate);
     }
   };
 
@@ -410,7 +393,6 @@ export default function TranscriberDialogueView({
 
       setDialoguesList(response.data.data);
       setCurrentDialogueIndex(0);
-      setSelectedEpisode(episode);
     } catch (error) {
       console.error('Failed to fetch dialogues for episode:', error);
       if (axios.isAxiosError(error)) {
@@ -437,7 +419,7 @@ export default function TranscriberDialogueView({
             Current Episode
           </label>
           <select
-            value={selectedEpisode?._id || ''}
+            value={currentDialogue?._id || ''}
             onChange={(e) => handleEpisodeChange(e.target.value)}
             className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
@@ -448,15 +430,48 @@ export default function TranscriberDialogueView({
             ))}
           </select>
         </div>
-        {selectedEpisode && (
+        {currentDialogue && (
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            <div>Collection: {selectedEpisode.collectionName}</div>
-            <div>Uploaded: {new Date(selectedEpisode.uploadedAt).toLocaleDateString()}</div>
+            <div>Collection: {currentDialogue.collectionName}</div>
+            <div>Uploaded: {currentDialogue.uploadedAt ? (typeof currentDialogue.uploadedAt === 'string' ? new Date(currentDialogue.uploadedAt).toLocaleDateString() : currentDialogue.uploadedAt.toLocaleDateString()) : 'Not available'}</div>
           </div>
         )}
       </div>
     </div>
   );
+
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const SWIPE_THRESHOLD = 50;
+    const velocity = Math.abs(info.velocity.x);
+    const offset = Math.abs(info.offset.x);
+
+    if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
+      animControls.start({ x: 0, opacity: 1 })
+      return;
+    }
+
+    const direction = info.offset.x > 0 ? 'right' : 'left'
+    
+    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
+      animControls.start({ 
+        x: -200, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
+        handleNext();
+        animControls.set({ x: 0, opacity: 1 });
+      });
+    } else if (direction === 'right' && currentDialogueIndex > 0) {
+      animControls.start({ 
+        x: 200, 
+        opacity: 0,
+        transition: { duration: 0.2 }
+      }).then(() => {
+        handlePrevious();
+        animControls.set({ x: 0, opacity: 1 });
+      });
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
@@ -467,7 +482,7 @@ export default function TranscriberDialogueView({
         <div className="relative">
           <video
             ref={videoRef}
-            src={currentDialogue.videoUrl}
+            src={currentDialogue?.videoUrl}
             className="w-full"
           />
           {isVideoLoading && (
@@ -503,7 +518,7 @@ export default function TranscriberDialogueView({
                 key={rate}
                 onClick={() => changePlaybackRate(rate)}
                 className={`px-2 py-1 rounded ${
-                  playbackRate === rate
+                  videoRef.current?.playbackRate === rate
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                 }`}

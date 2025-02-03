@@ -75,17 +75,17 @@ CharacterInfo.displayName = 'CharacterInfo';
 
 const VideoPlayer = React.memo(({ 
   videoRef, 
-  videoUrl,
+  videoClipUrl,
   isVideoLoading 
 }: { 
   videoRef: React.RefObject<HTMLVideoElement>,
-  videoUrl: string,
+  videoClipUrl: string,
   isVideoLoading: boolean
 }) => (
   <div className="relative">
     <video
       ref={videoRef}
-      src={videoUrl}
+      src={videoClipUrl}
       className="w-full aspect-video max-h-[200px] object-contain bg-black"
       aria-label="Dialogue video player"
     />
@@ -482,9 +482,10 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const [isSyncedPlaying, setIsSyncedPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [maxDuration, setMaxDuration] = useState(0);
+  const [currentRecordingDuration, setCurrentRecordingDuration] = useState(0);
 
   const currentDialogue = dialoguesList[currentDialogueIndex];
-  const maxDuration = currentDialogue ? calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd) : 0;
 
   const {
     audioBlob,
@@ -697,7 +698,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         video.removeEventListener('error', handleLoadEnd);
       };
     }
-  }, [currentDialogue?.videoUrl]);
+  }, [currentDialogue?.videoClipUrl]);
 
   // Save changes with approval
   const handleApproveAndSave = async () => {
@@ -891,7 +892,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         totalDialogues: dialoguesList.length
       });
     }
-  }, [isRecording]);
+  }, [isRecording, currentDialogue?._id, maxDuration, currentDialogueIndex, dialoguesList.length]);
 
   // Add audio blob logging
   useEffect(() => {
@@ -903,7 +904,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         duration: recordingDuration
       });
     }
-  }, [localAudioBlob]);
+  }, [localAudioBlob, currentDialogue?._id, recordingDuration]);
 
   // Optimize audio blob state effect
   useEffect(() => {
@@ -1105,6 +1106,29 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [localAudioBlob, currentDialogue?.voiceOverUrl, updateAudioDuration]);
 
+  // Fix useEffect dependencies in the main component
+  useEffect(() => {
+    if (!currentDialogue || !dialoguesList.length) return;
+    
+    // Update maxDuration based on current dialogue
+    const duration = calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd);
+    setMaxDuration(duration);
+    
+    // Update current index
+    const index = dialoguesList.findIndex(d => d._id === currentDialogue._id);
+    if (index !== -1 && index !== currentDialogueIndex) {
+      setCurrentDialogueIndex(index);
+    }
+  }, [currentDialogue, dialoguesList, currentDialogueIndex, calculateDuration]);
+
+  // Fix useEffect dependencies for recording duration
+  useEffect(() => {
+    if (!currentDialogue || !recordingDuration) return;
+    
+    // Update recording duration
+    setCurrentRecordingDuration(recordingDuration);
+  }, [currentDialogue, recordingDuration, setCurrentRecordingDuration]);
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">
       <CharacterInfo 
@@ -1114,7 +1138,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       
       <VideoPlayer 
         videoRef={videoRef}
-        videoUrl={currentDialogue.videoUrl}
+        videoClipUrl={currentDialogue.videoClipUrl}
         isVideoLoading={isVideoLoading}
       />
       

@@ -140,6 +140,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>(queryConfig);
 
+  const notify = useNotifyAdmin();
+
   // Only fetch on mount once if needed
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -161,9 +163,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       console.log('Socket connected:', socket.id);
     });
 
-    socket.on('notification', (data: { message: string; type: any; }) => {
+    socket.on('notification', (data: { message: string; type: 'success' | 'error' }) => {
       console.log('Real-time notification received:', data);
-      notify(data.message, data.type || 'success');
+      notify(data.message, data.type);
       refetchProjects(); // Trigger UI update
     });
 
@@ -175,7 +177,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       console.log('Cleaning up socket...');
       socket.disconnect();
     };
-  }, []);
+  }, [notify, refetchProjects]);
 
   // --------------------------
   //   FILTER & SORT PROJECTS
@@ -211,8 +213,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [users, searchTerm]);
-
-  const notify = useNotifyAdmin();
 
   // -------------------------------------
   //  CREATE PROJECT HANDLER (UPDATED)
@@ -1199,7 +1199,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               Delete User
             </h2>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete "{selectedUser.username}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{selectedUser.username}&quot;? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1479,7 +1479,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               Delete Project
             </h2>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete "{selectedProject.title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{selectedProject.title}&quot;? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button

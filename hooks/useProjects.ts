@@ -1,18 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-
-interface Project {
-  _id: string
-  title: string
-  description: string
-  sourceLanguage: string
-  targetLanguage: string
-  status: string
-  assignedTo: Array<{
-    username: string
-    role: string
-  }>
-}
+import { Project } from '@/types/project'
 
 // Track if initial fetch has been logged
 let hasLoggedInitialFetch = false;

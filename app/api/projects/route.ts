@@ -103,17 +103,27 @@ export async function GET(request: Request) {
     const { db } = await connectToDatabase()
     console.log('Connected to database')
 
-    // If NO `projectId`, return ALL projects assigned to the user
+    // If NO `projectId`, return ALL projects for admin or assigned projects for other roles
     if (!projectId) {
-      console.log('Fetching ALL projects for user:', session.user.username)
-      const projects = await db.collection('projects').find({
-        assignedTo: {
-          $elemMatch: {
-            username: session.user.username,
-            role: session.user.role
+      console.log('Fetching projects for user:', {
+        username: session.user.username,
+        role: session.user.role,
+        isAdmin: session.user.role === 'admin'
+      })
+
+      // For admin users, return all projects without assignment check
+      const query = session.user.role === 'admin' 
+        ? {} 
+        : {
+            assignedTo: {
+              $elemMatch: {
+                username: session.user.username,
+                role: session.user.role
+              }
+            }
           }
-        }
-      }).toArray() as Project[]
+
+      const projects = await db.collection('projects').find(query).toArray() as Project[]
 
       // Serialize each project's _id and each episode's _id
       const serializedProjects = projects.map((proj: Project) => ({
@@ -136,23 +146,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 })
     }
 
-    // STEP 4: Fetch the specific project by _id AND ensure user has access
-    console.log('Attempting to fetch project:', {
-      projectId,
-      username: session.user.username,
-      role: session.user.role,
-      timestamp: new Date().toISOString()
-    })
-
-    const project = await db.collection('projects').findOne({
-      _id: new ObjectId(projectId),
-      assignedTo: {
-        $elemMatch: {
-          username: session.user.username,
-          role: session.user.role
+    // For admin users, fetch project without assignment check
+    const query = session.user.role === 'admin'
+      ? { _id: new ObjectId(projectId) }
+      : {
+          _id: new ObjectId(projectId),
+          assignedTo: {
+            $elemMatch: {
+              username: session.user.username,
+              role: session.user.role
+            }
+          }
         }
-      }
-    }) as Project | null
+
+    const project = await db.collection('projects').findOne(query) as Project | null
 
     console.log('Project fetch result:', {
       found: !!project,

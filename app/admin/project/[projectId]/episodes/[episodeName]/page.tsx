@@ -4,7 +4,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import EpisodeView from '@/components/EpisodeView';
+import AdminEpisodeView from '@/components/AdminEpisodeView';
 import { Episode } from '@/types/project';
 
 export default function EpisodeDetailsPage() {
@@ -52,7 +52,7 @@ export default function EpisodeDetailsPage() {
       )}
 
       {episode ? (
-        <EpisodeView episode={episode} />
+        <AdminEpisodeView episode={episode} />
       ) : (
         !error && <p>Loading Episode...</p>
       )}

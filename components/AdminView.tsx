@@ -1,3 +1,15 @@
+/**
+ * AdminView Component
+ * 
+ * A comprehensive admin dashboard for managing projects and users.
+ * Features include:
+ * - Project management (CRUD operations)
+ * - User management
+ * - Episode tracking
+ * - Team assignment
+ * - Status management
+ */
+
 'use client';
 
 import { Project, ProjectStatus, Episode } from '@/types/project';
@@ -17,10 +29,13 @@ import {
   Edit3,
   UserPlus,
 } from 'lucide-react';
-import EpisodeView from './EpisodeView';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { io } from 'socket.io-client';
+
+// ===============================
+// Type Definitions
+// ===============================
 
 interface AdminViewProps {
   projects: Project[];
@@ -34,6 +49,47 @@ interface UploadProgressData {
   message?: string;
 }
 
+type Tab = 'projects' | 'users';
+
+// Add type declarations at the top of the file
+type FilteredProject = Pick<Project, '_id' | 'title' | 'status' | 'assignedTo'>;
+
+// Add this interface for the filtered users logging
+interface FilteredUsersLog {
+  total: number;
+  filtered: number;
+  searchTerm: string;
+  selectedCount: number;
+}
+
+// Add these type declarations at the top of the file
+interface ProjectHandlers {
+  handleCreateProject: () => Promise<void>;
+  handleUpdateProject: (projectId: string) => Promise<void>;
+  handleDeleteProject: (projectId: string) => Promise<void>;
+  handleAssignUsers: () => Promise<void>;
+}
+
+interface UserHandlers {
+  handleCreateUser: () => Promise<void>;
+  handleUpdateUser: (userId: string) => Promise<void>;
+  handleDeleteUser: (userId: string) => Promise<void>;
+}
+
+// Add these type declarations at the top of the file
+interface UserSelectionHandlers {
+  handleUserSelection: (username: string) => void;
+  handleRemoveUser: (projectId: string, username: string) => Promise<void>;
+}
+
+// ===============================
+// Constants
+// ===============================
+
+/**
+ * Color mappings for different project statuses
+ * Used for visual distinction in the UI
+ */
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
   'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -41,8 +97,13 @@ const STATUS_COLORS = {
   'on-hold': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 } as const;
 
-type Tab = 'projects' | 'users';
+// ===============================
+// Utility Functions
+// ===============================
 
+/**
+ * Formats bytes into human-readable sizes
+ */
 const formatBytes = (bytes: number, decimals: number = 2) => {
   if (bytes === 0) return '0 MB';
   const k = 1024;
@@ -52,40 +113,90 @@ const formatBytes = (bytes: number, decimals: number = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
+/**
+ * Gets current timestamp in ISO format
+ */
 const getTimeStamp = () => {
   return new Date().toISOString();
 };
 
-// Utility function to notify admin
+/**
+ * Custom hook for handling admin notifications
+ */
 function useNotifyAdmin() {
   return (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') {
-      toast.error(message); // Show error notifications
+      toast.error(message);
     } else {
-      toast.success(message); // Show success notifications
+      toast.success(message);
     }
   };
 }
 
+/**
+ * Generic error handler
+ */
 const handleError = (error: Error): void => {
   console.error('Error:', error);
   toast.error('An error occurred. Please try again.');
 };
 
+// ===============================
+// Main Component
+// ===============================
+
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
+  // Add debug logging at component mount
+  useEffect(() => {
+    console.log('AdminView - Component mounted with projects:', {
+      projectsArray: projects,
+      isArray: Array.isArray(projects),
+      length: projects?.length,
+      projectDetails: projects?.map(p => ({
+        _id: p._id,
+        title: p.title,
+        status: p.status,
+        assignedTo: p.assignedTo?.length || 0
+      }))
+    });
+  }, [projects]);
+
+  // =================
+  // State Management
+  // =================
+
+  // Tab and View Control
   const [activeTab, setActiveTab] = useState<Tab>('projects');
-  const [isCreating, setIsCreating] = useState(false);
-  const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showUserDeleteConfirm, setShowUserDeleteConfirm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'title' | 'date' | 'status'>('date');
 
+  // Search and Filtering
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all');
+
+  // Project Selection States
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProjectForTeam, setSelectedProjectForTeam] = useState<Project | null>(null);
+  const [selectedProjectForEpisodes, setSelectedProjectForEpisodes] = useState<Project | null>(null);
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+
+  // User Selection States
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
+
+  // Modal States
+  const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false);
+  const [isEpisodeDetailsOpen, setIsEpisodeDetailsOpen] = useState(false);
+
+  // Confirmation States
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUserDeleteConfirm, setShowUserDeleteConfirm] = useState(false);
+
+  // Form States
   const [newProject, setNewProject] = useState({
     title: '',
     description: '',
@@ -103,29 +214,34 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     isActive: true,
   });
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
-
+  // Progress States
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgressData>>({});
   const [uploadStatus, setUploadStatus] = useState<
     Record<string, 'pending' | 'uploading' | 'success' | 'error'>
   >({});
 
-  // ---------------------------------------
-  //  NEW STATES FOR EPISODE MODALS
-  // ---------------------------------------
-  // Separate modal to show the entire episode list
-  const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false);
+  // Feedback States
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // Separate modal to show a single episode's details
-  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
-  const [isEpisodeDetailsOpen, setIsEpisodeDetailsOpen] = useState(false);
+  // Add new state for assign users search
+  const [assignUserSearchTerm, setAssignUserSearchTerm] = useState('');
 
-  // Memoize query configuration for fetching users
+  // Add this near other state declarations
+  const [modalFilteredUsers, setModalFilteredUsers] = useState<User[]>([]);
+
+  // =================
+  // Hooks
+  // =================
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const notify = useNotifyAdmin();
+
+  // =================
+  // Data Fetching
+  // =================
+
+  // User data query configuration
   const queryConfig = useMemo(
     () => ({
       queryKey: ['users'],
@@ -145,33 +261,51 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery<User[]>(queryConfig);
 
-  const notify = useNotifyAdmin();
+  // =================
+  // Effects
+  // =================
 
-  // Only fetch on mount once if needed
+  // Initial data fetch
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!projects?.length) {
-        await refetchProjects();
+      if (!projects?.length && !isLoadingUsers) {
+        console.log('AdminView - No projects found, fetching...');
+        try {
+          await refetchProjects();
+          console.log('AdminView - Projects fetched successfully:', {
+            count: projects?.length,
+            titles: projects?.map((project: Project) => project.title)
+          });
+        } catch (error) {
+          console.error('AdminView - Error fetching projects:', error);
+        }
+      } else {
+        console.log('AdminView - Projects already loaded:', {
+          count: projects?.length,
+          titles: projects?.map((project: Project) => project.title)
+        });
       }
     };
-    fetchInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refetchProjects]);
 
-  // Socket.IO setup
+    fetchInitialData();
+  }, [projects, refetchProjects, isLoadingUsers]);
+
+  // Socket.IO setup for real-time updates
   useEffect(() => {
     console.log('Connecting to Socket.IO on client mount...');
-
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000');
 
     socket.on('connect', () => {
       console.log('Socket connected:', socket.id);
     });
 
-    socket.on('notification', (data: { message: string; type: 'success' | 'error' }) => {
+    socket.on('notification', (data: { message: string; type: 'success' | 'error'; action?: string }) => {
       console.log('Real-time notification received:', data);
       notify(data.message, data.type);
-      refetchProjects(); // Trigger UI update
+      // Only refetch for project-related changes
+      if (data.action && ['project_created', 'project_updated', 'project_deleted', 'users_assigned'].includes(data.action)) {
+        refetchProjects();
+      }
     });
 
     socket.on('disconnect', () => {
@@ -184,19 +318,92 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     };
   }, [notify, refetchProjects]);
 
-  // --------------------------
-  //   FILTER & SORT PROJECTS
-  // --------------------------
-  const filteredProjects = useMemo(() => {
-    return projects.filter((project: Project) =>
-      project.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [projects, searchTerm]);
+  // Reset both selection and search when modal opens
+  useEffect(() => {
+    if (isAssigning) {
+      setSelectedUsernames([]);
+      setAssignUserSearchTerm('');
+    }
+  }, [isAssigning]);
 
-  // ------------------------
-  //   FILTER USERS FOR TAB
-  // ------------------------
-  const filteredUsers = useMemo(() => {
+  // User selection handler
+  const handleUserSelection = useCallback((username: string): void => {
+    console.log('Selecting user:', username);
+    setSelectedUsernames((prev: string[]) => {
+      const isCurrentlySelected = prev.includes(username);
+      const newSelection = isCurrentlySelected
+        ? prev.filter((name: string) => name !== username)
+        : [...prev, username];
+      console.log('Updated selection:', newSelection);
+      return newSelection;
+    });
+  }, []);
+
+  // Add proper type declaration for the remove user handler
+  const handleRemoveUser = useCallback(async (projectId: string, username: string): Promise<void> => {
+    try {
+      await axios.post(`/api/admin/projects/${projectId}/remove-user`, {
+        username
+      });
+      await refetchProjects();
+      notify('User removed successfully', 'success');
+    } catch (error) {
+      console.error('Error removing user:', error);
+      notify('Failed to remove user', 'error');
+    }
+  }, [refetchProjects, notify]);
+
+  // =================
+  // Data Processing
+  // =================
+
+  /**
+   * Filter and sort projects based on search term, status, and sort criteria
+   */
+  const filteredProjects = useMemo(() => {
+    console.log('Filtering projects:', {
+      inputProjects: projects,
+      searchTerm,
+      filterStatus,
+      sortBy
+    });
+
+    if (!Array.isArray(projects)) {
+      console.error('Projects is not an array:', projects);
+      return [];
+    }
+
+    let filtered = projects.filter((project: Project) => {
+      const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase());
+      console.log('Checking project:', {
+        title: project.title,
+        status: project.status,
+        matchesSearch
+      });
+      return matchesSearch;
+    });
+
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter((project: Project) => project.status === filterStatus);
+    }
+
+    return filtered.sort((a: Project, b: Project) => {
+      switch (sortBy) {
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'status':
+          return a.status.localeCompare(b.status);
+        case 'date':
+        default:
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+    });
+  }, [projects, searchTerm, filterStatus, sortBy]);
+
+  /**
+   * Filter users based on search term (username or email)
+   */
+  const mainFilteredUsers = useMemo(() => {
     return users.filter(
       (user: User) =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -204,156 +411,112 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     );
   }, [users, searchTerm]);
 
-  // -------------------------------------
-  //  CREATE PROJECT HANDLER (UPDATED)
-  // -------------------------------------
-  const handleCreateProject = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      const startTime = Date.now();
-      let successCount = 0;
-      let skipCount = 0;
-      let errorCount = 0;
+  // Add this useEffect to handle user filtering
+  useEffect(() => {
+    if (!isAssigning || !selectedProject || !users) return;
 
-      try {
-        console.log(`[${getTimeStamp()}] Starting project creation with payload:`, {
-          title: newProject.title,
-          description: newProject.description,
-          sourceLanguage: newProject.sourceLanguage,
-          targetLanguage: newProject.targetLanguage,
-          totalFiles: newProject.videoFiles.length,
-          fileNames: newProject.videoFiles.map((f) => f.name),
-          totalSize: newProject.videoFiles.reduce((acc, file) => acc + file.size, 0),
-        });
+    const filtered = users.filter((user: User) => {
+      const isActive = user.isActive;
+      const matchesSearch = 
+        assignUserSearchTerm === '' ||
+        user.username.toLowerCase().includes(assignUserSearchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(assignUserSearchTerm.toLowerCase());
 
-        // Validate required fields
-        const requiredFields = ['title', 'description', 'sourceLanguage', 'targetLanguage'];
-        const missingFields = requiredFields.filter((field) => !(newProject as any)[field]);
-        if (missingFields.length > 0) {
-          setError(`Missing required fields: ${missingFields.join(', ')}`);
-          return;
-        }
+      return isActive && matchesSearch;
+    });
 
-        // Validate if files are selected
-        if (newProject.videoFiles.length === 0) {
-          setError('Please select at least one video file');
-          return;
-        }
+    const logData: FilteredUsersLog = {
+      total: users.length,
+      filtered: filtered.length,
+      searchTerm: assignUserSearchTerm,
+      selectedCount: selectedUsernames.length
+    };
+    
+    console.log('Filtered users:', logData);
+    setModalFilteredUsers(filtered);
+  }, [users, selectedProject, assignUserSearchTerm, isAssigning, selectedUsernames]);
 
-        // Initialize upload status for all files
-        const initialStatus: Record<string, 'pending' | 'uploading' | 'success' | 'error'> = {};
-        newProject.videoFiles.forEach((file) => {
-          initialStatus[file.name] = 'pending';
-        });
-        setUploadStatus(initialStatus);
+  // =================
+  // Event Handlers
+  // =================
 
-        // Upload files in parallel with concurrency limit
-        const concurrencyLimit = 3;
-        const files = [...newProject.videoFiles];
-        const uploadPromises: Promise<any>[] = [];
+  /**
+   * Handles closing all dropdowns
+   */
+  const closeAllDropdowns = useCallback(() => {
+    setSelectedProject(null);
+    setSelectedProjectForTeam(null);
+  }, []);
 
-        const uploadFile = async (file: File, index: number) => {
-          try {
-            const formData = new FormData();
-            formData.append('video', file);
-            formData.append('title', newProject.title);
-            formData.append('description', newProject.description);
-            formData.append('sourceLanguage', newProject.sourceLanguage);
-            formData.append('targetLanguage', newProject.targetLanguage);
-            formData.append(
-              'metadata',
-              JSON.stringify({
-                currentFile: {
-                  isFirst: index === 0,
-                  isLast: index === newProject.videoFiles.length - 1,
-                  index,
-                },
-                collections: newProject.videoFiles.map((f) =>
-                  f.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]/g, '_')
-                ),
-                filePaths: newProject.videoFiles.map((f) => f.name),
-              })
-            );
-
-            const response = await axios.post('/api/admin/projects', formData);
-
-            if (response.data.skipped) {
-              console.log(`File ${file.name} skipped:`, response.data.message);
-              skipCount++;
-              return { status: 'skipped', data: response.data };
-            }
-
-            console.log(`Uploaded file ${index + 1}/${newProject.videoFiles.length}:`, file.name);
-            successCount++;
-            return { status: 'success', data: response.data };
-          } catch (err: any) {
-            console.error(`Error uploading file ${file.name}:`, {
-              error: err,
-              response: err.response?.data,
-              status: err.response?.status,
-              details: err.response?.data?.details,
-              errorType: err.response?.data?.errorType,
-              mongoError: err.response?.data?.mongoError,
-              r2Error: err.response?.data?.r2Error
-            });
-            errorCount++;
-            return { status: 'error', error: err.message };
-          }
-        };
-
-        // Process files with concurrency
-        while (files.length > 0 || uploadPromises.length > 0) {
-          while (files.length > 0 && uploadPromises.length < concurrencyLimit) {
-            const file = files.shift();
-            if (file) {
-              const index = newProject.videoFiles.indexOf(file);
-              uploadPromises.push(uploadFile(file, index));
-            }
-          }
-
-          if (uploadPromises.length > 0) {
-            await Promise.all(uploadPromises);
-            uploadPromises.length = 0;
-          }
-        }
-
-        const totalDuration = (Date.now() - startTime) / 1000;
-        console.log(`[${getTimeStamp()}] All files processed in ${totalDuration.toFixed(1)}s`);
-
-        // Show final status
-        let statusMessage = `Upload complete:\n`;
-        if (successCount > 0) statusMessage += `✓ ${successCount} files uploaded successfully\n`;
-        if (skipCount > 0) statusMessage += `⚠ ${skipCount} files skipped (already exist)\n`;
-        if (errorCount > 0) statusMessage += `✗ ${errorCount} files failed to upload\n`;
-
-        setSuccess(statusMessage);
-
-        if (successCount > 0 || skipCount > 0) {
-          setIsCreating(false);
-          setNewProject({
-            title: '',
-            description: '',
-            sourceLanguage: '',
-            targetLanguage: '',
-            status: 'pending',
-            videoFiles: [],
-          });
-          if (typeof refetchProjects === 'function') {
-            await refetchProjects();
-          }
-          notify(`Project "${newProject.title}" created successfully.`);
-        }
-
-        setTimeout(() => setSuccess(''), 5000);
-      } catch (err: any) {
-        const errorMessage = err.response?.data?.message || err.message || 'Failed to create project';
-        setError(errorMessage);
-        notify('Failed to create project', 'error');
-        setTimeout(() => setError(''), 5000);
+  /**
+   * Handles clicking outside dropdowns
+   */
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      // Don't close if clicking inside the assign users modal
+      if (target.closest('[data-modal="assign-users"]')) {
+        return;
       }
-    },
-    [newProject, refetchProjects, notify]
-  );
+      // Only close dropdowns when clicking outside dropdown containers
+      if (!target.closest('.dropdown-container')) {
+        closeAllDropdowns();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [closeAllDropdowns]);
+
+  /**
+   * Handle project creation with file upload and processing
+   */
+  const handleCreateProject = useCallback(async () => {
+    if (!newProject.title || !newProject.videoFiles.length) {
+      setError('Please fill in all required fields and upload at least one video file');
+      return;
+    }
+
+    try {
+      // Create FormData and append project details
+      const formData = new FormData();
+      formData.append('title', newProject.title);
+      formData.append('description', newProject.description);
+      formData.append('sourceLanguage', newProject.sourceLanguage);
+      formData.append('targetLanguage', newProject.targetLanguage);
+      formData.append('status', newProject.status);
+
+      // Append video files
+      newProject.videoFiles.forEach(file => {
+        formData.append('videos', file);
+      });
+
+      await axios.post('/api/admin/projects', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setSuccess('Project created successfully');
+      setIsCreating(false);
+      setNewProject({
+        title: '',
+        description: '',
+        sourceLanguage: '',
+        targetLanguage: '',
+        status: 'pending' as ProjectStatus,
+        videoFiles: []
+      });
+
+      await refetchProjects();
+    } catch (error) {
+      console.error('Error creating project:', error);
+      setError('Failed to create project');
+      notify('Failed to create project', 'error');
+    }
+  }, [newProject, refetchProjects, notify]);
 
   // -------------------------------
   //  CREATE USER HANDLER (UPDATED)
@@ -451,44 +614,24 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // ------------------------------
   //  ASSIGN USERS TO PROJECT
   // ------------------------------
-  const handleAssignUsers = async () => {
+  const handleAssignUsers = useCallback(async () => {
+    if (!selectedProject || !selectedUsernames.length) return;
+
     try {
-      if (!selectedProject) return;
       await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
-        usernames: selectedUsernames,
+        usernames: selectedUsernames
       });
-      if (typeof refetchProjects === 'function') {
-        await refetchProjects();
-      }
+
+      await refetchProjects();
       setIsAssigning(false);
       setSelectedUsernames([]);
       setSelectedProject(null);
-      notify('Users assigned successfully');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError('Failed to assign users');
-      setTimeout(() => setError(''), 3000);
+      notify('Users assigned successfully', 'success');
+    } catch (error) {
+      console.error('Error assigning users:', error);
+      notify('Failed to assign users', 'error');
     }
-  };
-
-  // ------------------------------
-  //  REMOVE USER FROM PROJECT
-  // ------------------------------
-  const handleRemoveUser = async (projectId: string, username: string) => {
-    try {
-      await axios.delete(`/api/admin/projects/${projectId}/assign`, {
-        data: { usernames: [username] },
-      });
-      if (refetchProjects) {
-        await refetchProjects();
-      }
-      notify('User removed successfully');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError('Failed to remove user');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
+  }, [selectedProject, selectedUsernames, refetchProjects, notify]);
 
   // ----------------------------------------
   // RENDER
@@ -504,21 +647,19 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <div className="flex space-x-2">
                 <button
                   onClick={() => setActiveTab('projects')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    activeTab === 'projects'
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+                  className={`px-4 py-2 rounded-lg transition-colors ${activeTab === 'projects'
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                 >
                   Projects
                 </button>
                 <button
                   onClick={() => setActiveTab('users')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    activeTab === 'users'
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+                  className={`px-4 py-2 rounded-lg transition-colors ${activeTab === 'users'
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                 >
                   Users
                 </button>
@@ -566,7 +707,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 type="text"
                 placeholder={`Search ${activeTab}...`}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  console.log('Search term changed:', e.target.value); // Debug log
+                  setSearchTerm(e.target.value);
+                }}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
               />
             </div>
@@ -576,7 +720,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <div className="flex items-center space-x-4 w-full sm:w-auto">
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as ProjectStatus | 'all')}
+                onChange={(e) => {
+                  console.log('Status filter changed:', e.target.value); // Debug log
+                  setFilterStatus(e.target.value as ProjectStatus | 'all');
+                }}
                 className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
               >
                 <option value="all">All Status</option>
@@ -587,7 +734,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               </select>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'title' | 'date' | 'status')}
+                onChange={(e) => {
+                  console.log('Sort changed:', e.target.value); // Debug log
+                  setSortBy(e.target.value as 'title' | 'date' | 'status');
+                }}
                 className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
               >
                 <option value="date">Sort by Date</option>
@@ -596,6 +746,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               </select>
             </div>
           )}
+
+
         </div>
       </div>
 
@@ -629,14 +781,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             {filteredProjects.map((project) => (
               <div
                 key={project._id.toString()}
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 ${
-                  viewMode === 'list' ? 'p-4' : 'p-6'
-                }`}
+                className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 ${viewMode === 'list' ? 'p-4' : 'p-6'
+                  }`}
               >
                 <div
-                  className={`${
-                    viewMode === 'list' ? 'flex items-center justify-between' : 'space-y-4'
-                  }`}
+                  className={`${viewMode === 'list' ? 'flex items-center justify-between' : 'space-y-4'
+                    }`}
                 >
                   <div className={viewMode === 'list' ? 'flex-1' : ''}>
                     <div className="flex justify-between items-start">
@@ -644,71 +794,76 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         {project.title}
                       </h2>
                       <div className="flex items-center space-x-2">
-                        <div className="relative">
+                        <div className="dropdown-container relative">
                           <button
-                            onClick={() => {
-                              // Toggle the "options menu" for THIS project
-                              // If it's the same selected, reset it. Otherwise set it.
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedProject((prev) =>
                                 prev && prev._id === project._id ? null : project
                               );
+                              setSelectedProjectForTeam(null);
                             }}
                             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
                           >
                             <MoreVertical className="w-5 h-5" />
                           </button>
-                          {/* Options dropdown */}
                           {selectedProject?._id === project._id && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-10 border dark:border-gray-700">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => router.push(`/admin/project/${project._id}`)}
-                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <Settings className="w-4 h-4 mr-2" />
-                                  Manage
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    router.push(`/admin/project/${project._id}/progress`)
-                                  }
-                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <ChartBar className="w-4 h-4 mr-2" />
-                                  Progress
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setIsEditing(true);
-                                    setSelectedProject(project);
-                                  }}
-                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <Edit3 className="w-4 h-4 mr-2" />
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setIsAssigning(true);
-                                    setSelectedProject(project);
-                                  }}
-                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <Users className="w-4 h-4 mr-2" />
-                                  Assign Users
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setShowDeleteConfirm(true);
-                                    setSelectedProject(project);
-                                  }}
-                                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete
-                                </button>
+                            <>
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setSelectedProject(null)}
+                              />
+                              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700">
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => router.push(`/admin/project/${project._id}`)}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                  >
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Manage
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      router.push(`/admin/project/${project._id}/progress`)
+                                    }
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <ChartBar className="w-4 h-4 mr-2" />
+                                    Progress
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setIsEditing(true);
+                                      setSelectedProject(project);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <Edit3 className="w-4 h-4 mr-2" />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setIsAssigning(true);
+                                      setSelectedProject(project);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <Users className="w-4 h-4 mr-2" />
+                                    Assign Users
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowDeleteConfirm(true);
+                                      setSelectedProject(project);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </button>
+                                </div>
                               </div>
-                            </div>
+                            </>
                           )}
                         </div>
                       </div>
@@ -729,13 +884,125 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           <div className="text-sm text-gray-500 dark:text-gray-400">
                             Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
                           </div>
+
+                          {/* Project Status Control */}
+                          <div className="mt-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                              Status
+                            </label>
+                            <select
+                              value={project.status}
+                              onChange={(e) => handleUpdateStatus(project._id.toString(), e.target.value as ProjectStatus)}
+                              className={`text-sm rounded-full px-3 py-1 font-medium border-0 ${STATUS_COLORS[project.status as keyof typeof STATUS_COLORS]
+                                }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="in-progress">In Progress</option>
+                              <option value="completed">Completed</option>
+                              <option value="on-hold">On Hold</option>
+                            </select>
+                          </div>
+
+                          {/* Assigned Users List */}
+                          <div className="dropdown-container relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProjectForTeam((prev) =>
+                                  prev && prev._id === project._id ? null : project
+                                );
+                                setSelectedProject(null);
+                              }}
+                              className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              <span>Assigned Team ({project.assignedTo.length})</span>
+                              <svg
+                                className={`w-5 h-5 transition-transform duration-200 ${selectedProjectForTeam?._id === project._id ? 'transform rotate-180' : ''
+                                  }`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+
+                            {selectedProjectForTeam?._id === project._id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={() => setSelectedProjectForTeam(null)}
+                                />
+                                <div className="absolute left-0 mt-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700 max-h-60 overflow-y-auto">
+                                  <div className="p-2 space-y-1">
+                                    {project.assignedTo.length > 0 ? (
+                                      project.assignedTo.map((user) => (
+                                        <div
+                                          key={user.username}
+                                          className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        >
+                                          <div className="flex items-center space-x-2">
+                                            <span
+                                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.role === 'transcriber'
+                                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                                                : user.role === 'translator'
+                                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                                                  : user.role === 'voiceOver'
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                                                    : user.role === 'director'
+                                                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                                                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                }`}
+                                            >
+                                              {user.role}
+                                            </span>
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                              {user.username}
+                                            </span>
+                                          </div>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveUser(project._id.toString(), user.username);
+                                            }}
+                                            className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                            title="Remove user"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                                        No users assigned
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="border-t border-gray-200 dark:border-gray-700 p-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsAssigning(true);
+                                        setSelectedProject(project);
+                                        setSelectedProjectForTeam(null);
+                                      }}
+                                      className="flex items-center justify-center w-full px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                                    >
+                                      <Users className="w-4 h-4 mr-2" />
+                                      Assign Users
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {/* Episodes Button */}
                         <div className="mt-6">
                           <button
                             onClick={() => {
-                              setSelectedProject(project);
+                              setSelectedProjectForEpisodes(project);
                               setIsEpisodesModalOpen(true);
                             }}
                             className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
@@ -774,7 +1041,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredUsers.map((user) => (
+                {mainFilteredUsers.map((user) => (
                   <tr key={user._id.toString()}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -790,17 +1057,16 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.role === 'transcriber'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                            : user.role === 'translator'
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'transcriber'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                          : user.role === 'translator'
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
                             : user.role === 'voiceOver'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                            : user.role === 'director'
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                              : user.role === 'director'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}
                       >
                         {user.role}
                       </span>
@@ -808,11 +1074,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleToggleUserActive(user._id, !user.isActive)}
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.isActive
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                        }`}
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isActive
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                          }`}
                       >
                         {user.isActive ? 'Active' : 'Inactive'}
                       </button>
@@ -982,20 +1247,19 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   {uploadProgress[file.name] && (
                                     <span
                                       data-file-name={file.name}
-                                      className={`ml-2 text-xs ${
-                                        uploadProgress[file.name].phase === 'success'
-                                          ? 'text-green-500'
-                                          : uploadProgress[file.name].phase === 'error'
+                                      className={`ml-2 text-xs ${uploadProgress[file.name].phase === 'success'
+                                        ? 'text-green-500'
+                                        : uploadProgress[file.name].phase === 'error'
                                           ? 'text-red-500'
                                           : uploadProgress[file.name].phase ===
                                             'creating-collection'
-                                          ? 'text-yellow-500'
-                                          : uploadProgress[file.name].phase === 'processing'
-                                          ? 'text-purple-500'
-                                          : uploadProgress[file.name].phase === 'uploading'
-                                          ? 'text-blue-500'
-                                          : 'text-gray-500'
-                                      }`}
+                                            ? 'text-yellow-500'
+                                            : uploadProgress[file.name].phase === 'processing'
+                                              ? 'text-purple-500'
+                                              : uploadProgress[file.name].phase === 'uploading'
+                                                ? 'text-blue-500'
+                                                : 'text-gray-500'
+                                        }`}
                                     >
                                       {uploadProgress[file.name].phase === 'uploading' &&
                                         ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(
@@ -1034,34 +1298,32 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 uploadProgress[file.name].phase !== 'error' && (
                                   <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                                     <div
-                                      className={`h-2 rounded-full transition-all duration-300 ${
-                                        uploadProgress[file.name].phase === 'success'
-                                          ? 'bg-green-600'
-                                          : uploadProgress[file.name].phase ===
-                                            'creating-collection'
+                                      className={`h-2 rounded-full transition-all duration-300 ${uploadProgress[file.name].phase === 'success'
+                                        ? 'bg-green-600'
+                                        : uploadProgress[file.name].phase ===
+                                          'creating-collection'
                                           ? 'bg-yellow-600'
                                           : uploadProgress[file.name].phase === 'processing'
-                                          ? 'bg-purple-600'
-                                          : uploadProgress[file.name].phase === 'uploading'
-                                          ? 'bg-blue-600'
-                                          : 'bg-gray-600'
-                                      }`}
+                                            ? 'bg-purple-600'
+                                            : uploadProgress[file.name].phase === 'uploading'
+                                              ? 'bg-blue-600'
+                                              : 'bg-gray-600'
+                                        }`}
                                       style={{
                                         width:
                                           uploadProgress[file.name].phase === 'uploading'
-                                            ? `${
-                                                (uploadProgress[file.name].loaded /
-                                                  uploadProgress[file.name].total) *
-                                                100
-                                              }%`
+                                            ? `${(uploadProgress[file.name].loaded /
+                                              uploadProgress[file.name].total) *
+                                            100
+                                            }%`
                                             : uploadProgress[file.name].phase ===
                                               'creating-collection'
-                                            ? '60%'
-                                            : uploadProgress[file.name].phase === 'processing'
-                                            ? '80%'
-                                            : uploadProgress[file.name].phase === 'success'
-                                            ? '100%'
-                                            : '0%',
+                                              ? '60%'
+                                              : uploadProgress[file.name].phase === 'processing'
+                                                ? '80%'
+                                                : uploadProgress[file.name].phase === 'success'
+                                                  ? '100%'
+                                                  : '0%',
                                       }}
                                     ></div>
                                   </div>
@@ -1214,102 +1476,145 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
       {/* ASSIGN USERS MODAL */}
       {isAssigning && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div data-modal="assign-users" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
               Assign Users to {selectedProject.title}
             </h2>
+            
+            {/* Currently Assigned Users Section */}
             <div className="mb-6">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Currently Assigned
+                Currently Assigned Users
               </h3>
-              <div className="flex flex-wrap gap-2">
-                {selectedProject.assignedTo.map((user) => (
-                  <div
-                    key={user.username}
-                    className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                      user.role === 'transcriber'
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                        : user.role === 'translator'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                        : user.role === 'voiceOver'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                        : user.role === 'director'
-                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-sm">
-                      {user.username} ({user.role})
-                    </span>
-                    <button
-                      onClick={() => handleRemoveUser(selectedProject._id.toString(), user.username)}
-                      className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+                {selectedProject.assignedTo.length > 0 ? (
+                  selectedProject.assignedTo.map((user) => (
+                    <div
+                      key={user.username}
+                      className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                        user.role === 'transcriber'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                          : user.role === 'translator'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                          : user.role === 'voiceOver'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                          : user.role === 'director'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                {selectedProject.assignedTo.length === 0 && (
+                      <span className="text-sm">
+                        {user.username} ({user.role})
+                      </span>
+                      <button
+                        onClick={() => handleRemoveUser(selectedProject._id.toString(), user.username)}
+                        className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    No users assigned
+                    No users currently assigned
                   </span>
                 )}
               </div>
             </div>
+
+            {/* Available Users Section */}
             <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Available Users
-              </h3>
-              <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-lg">
-                {users
-                  .filter(
-                    (user) =>
-                      user.isActive &&
-                      !selectedProject.assignedTo.some(
-                        (assigned) => assigned.username === user.username
-                      )
-                  )
-                  .map((user) => (
-                    <label
-                      key={user._id.toString()}
-                      className="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedUsernames.includes(user.username)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedUsernames((prev) => [...prev, user.username]);
-                          } else {
-                            setSelectedUsernames((prev) =>
-                              prev.filter((name) => name !== user.username)
-                            );
-                          }
-                        }}
-                        className="rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
-                      />
-                      <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {user.username}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {user.email} • {user.role} • Last login:{' '}
-                          {user.lastLogin
-                            ? new Date(user.lastLogin).toLocaleDateString()
-                            : 'Never'}
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Available Users
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {selectedUsernames.length} selected
+                </span>
+              </div>
+              
+              {/* Replace the search input in assign users modal */}
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={assignUserSearchTerm}
+                  onChange={(e) => setAssignUserSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              </div>
+
+              <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+                {modalFilteredUsers.length > 0 ? (
+                  modalFilteredUsers.map((user) => {
+                    const isSelected = selectedUsernames.includes(user.username);
+                    return (
+                      <div
+                        key={user._id.toString()}
+                        className={`flex items-center px-4 py-2 cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-50 dark:bg-blue-900/20' 
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                        onClick={() => handleUserSelection(user.username)}
+                      >
+                        <div className="flex items-center flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleUserSelection(user.username)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                          />
+                          <div className="ml-3 flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {user.username}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {user.email}
+                                </div>
+                              </div>
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  user.role === 'transcriber'
+                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                                    : user.role === 'translator'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                                    : user.role === 'voiceOver'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                                    : user.role === 'director'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                }`}
+                              >
+                                {user.role}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </label>
-                  ))}
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                    {assignUserSearchTerm ? 'No users match your search' : 'No users available'}
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Action Buttons */}
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
                   setIsAssigning(false);
                   setSelectedProject(null);
                   setSelectedUsernames([]);
+                  setAssignUserSearchTerm('');
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
@@ -1320,7 +1625,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 disabled={selectedUsernames.length === 0}
                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Assign Selected Users
+                Assign Selected Users ({selectedUsernames.length})
               </button>
             </div>
           </div>
@@ -1495,36 +1800,39 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       {/* --------------------------------------------- */}
       {/* MODAL: EPISODES LIST FOR THE SELECTED PROJECT */}
       {/* --------------------------------------------- */}
-      {isEpisodesModalOpen && selectedProject && (
+      {isEpisodesModalOpen && selectedProjectForEpisodes && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[999]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full relative">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Episodes for: <span className="italic">{selectedProject.title}</span>
+              Episodes for: <span className="italic">{selectedProjectForEpisodes.title}</span>
             </h2>
 
             <button
-              onClick={() => setIsEpisodesModalOpen(false)}
+              onClick={() => {
+                setIsEpisodesModalOpen(false);
+                setSelectedProjectForEpisodes(null);
+              }}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               <span className="text-lg">×</span>
             </button>
 
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
-                selectedProject.episodes.map((episode) => (
+              {selectedProjectForEpisodes.episodes && selectedProjectForEpisodes.episodes.length > 0 ? (
+                selectedProjectForEpisodes.episodes.map((episode) => (
                   <div
+                    // Make sure to convert ObjectId to a string if needed
                     key={typeof episode._id === 'object' ? String(episode._id) : episode._id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
                     <div className="flex items-center space-x-3">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          episode.status === 'uploaded'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                            : episode.status === 'processing'
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${episode.status === 'uploaded'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                          : episode.status === 'processing'
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
-                        }`}
+                          }`}
                       >
                         {episode.status}
                       </span>
@@ -1535,7 +1843,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() =>
-                          router.push(`/admin/project/${selectedProject._id}/episodes/${episode.name}`)
+                          router.push(`/admin/project/${selectedProjectForEpisodes._id}/episodes/${episode.name}`)
                         }
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                       >

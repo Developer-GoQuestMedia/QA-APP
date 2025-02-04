@@ -11,17 +11,17 @@
   // Logging utility
   function logEpisodeEvent(event: string, data?: any) {
     const timestamp = new Date().toISOString();
-    console.log(`EpisodeView.tsx:${event}`, {
+    console.log(`AdminEpisodeView.tsx:${event}`, {
       timestamp,
       ...data
     });
   }
 
   /**
-   * Displays detailed info for a single episode.
+   * Displays detailed info for a single episode in the admin context.
    * Replace with your own styling & fields as needed.
    */
-  export default function EpisodeView({ episode }: EpisodeViewProps) {
+  export default function AdminEpisodeView({ episode }: EpisodeViewProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Log component mount

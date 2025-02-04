@@ -1513,7 +1513,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
                 selectedProject.episodes.map((episode) => (
                   <div
-                    // Make sure to convert ObjectId to a string if needed
                     key={typeof episode._id === 'object' ? String(episode._id) : episode._id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
@@ -1534,15 +1533,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       </span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedEpisode(episode);
-                          setIsEpisodeDetailsOpen(true);
-                        }}
-                        className="px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                      >
-                        View Details
-                      </button>
                       <button
                         onClick={() =>
                           router.push(`/admin/project/${selectedProject._id}/episodes/${episode.name}`)
@@ -1567,33 +1557,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   No episodes available
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --------------------------------------------- */}
-      {/* MODAL: INDIVIDUAL EPISODE DETAILS            */}
-      {/* --------------------------------------------- */}
-      {isEpisodeDetailsOpen && selectedEpisode && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full relative">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Episode Details
-            </h2>
-            <button
-              onClick={() => {
-                setSelectedEpisode(null);
-                setIsEpisodeDetailsOpen(false);
-              }}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span className="text-lg">×</span>
-            </button>
-
-            {/* Render your EpisodeView here. Adjust styling as needed. */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <EpisodeView episode={selectedEpisode} />
             </div>
           </div>
         </div>

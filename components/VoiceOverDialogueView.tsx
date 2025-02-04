@@ -10,6 +10,7 @@ import { useAudioRecording } from '../hooks/useAudioRecording'
 import axios from 'axios'
 import AudioVisualizer from './AudioVisualizer'
 import RecordingTimer from './RecordingTimer'
+import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
 // Add new type for recording status
 type RecordingStatus = 'available' | 'unavailable' | 'checking';
@@ -467,6 +468,9 @@ const extractSceneNumber = (dialogueNumber: string): string => {
 };
 
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId, episode, project }: DialogueViewProps) {
+  // Initialize cache cleaner
+  useCacheCleaner();
+
   // Sort dialogues by subtitleIndex before initializing state
   const sortedDialogues = [...initialDialogues].sort((a, b) => 
     (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)

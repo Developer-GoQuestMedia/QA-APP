@@ -1,54 +1,42 @@
+'use client'
+
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
+import { Dialogue as BaseDialogue } from '@/types/dialogue'
+import { Episode } from '@/types/project'
+import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  videoUrl: string
-  projectId?: string
-  episodeId?: string
-  collectionName?: string
-  uploadedAt?: string | Date
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  status: string
-}
-
-interface Episode {
-  _id: string
-  name: string
-  collectionName?: string
-  videoPath?: string
-  videoKey?: string
-  status: 'uploaded' | 'processing' | 'error'
-  uploadedAt?: string | Date
-  step?: 1 | 2 | 3
-  cleanedSpeechPath?: string
-  cleanedSpeechKey?: string
-  musicAndSoundEffectsPath?: string
-  musicAndSoundEffectsKey?: string
+// Extend the base dialogue type with additional fields needed for the transcriber view
+interface TranscriberDialogue extends BaseDialogue {
+  index: number;
+  character: string;
+  videoUrl: string;
+  collectionName?: string;
+  uploadedAt?: string | Date;
 }
 
 interface DialogueViewProps {
-  dialogues: Dialogue[]
+  dialogues: BaseDialogue[]
   projectId: string
   episodes: Episode[]
   currentEpisodeId?: string
 }
 
 type QueryData = {
-  data: Dialogue[];
+  data: BaseDialogue[];
   status: string;
   timestamp: number;
 };
+
+// Adapter function to convert BaseDialogue to TranscriberDialogue
+const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => ({
+  ...dialogue,
+  index: dialogue.subtitleIndex,
+  character: dialogue.characterName,
+  videoUrl: dialogue.videoClipUrl
+});
 
 export default function TranscriberDialogueView({ 
   dialogues: initialDialogues, 
@@ -56,10 +44,16 @@ export default function TranscriberDialogueView({
   episodes,
   currentEpisodeId 
 }: DialogueViewProps) {
+  // Initialize cache cleaner
+  useCacheCleaner();
+
+  // Convert dialogues using the adapter
+  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+  
   // State declarations
-  const [dialoguesList, setDialoguesList] = useState<Dialogue[]>(initialDialogues);
+  const [dialoguesList, setDialoguesList] = useState<TranscriberDialogue[]>(adaptedInitialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
-  const [currentDialogue, setCurrentDialogue] = useState<Dialogue | null>(dialoguesList[0] || null);
+  const [currentDialogue, setCurrentDialogue] = useState<TranscriberDialogue | null>(dialoguesList[0] || null);
   const [character, setCharacter] = useState('');
   const [pendingOriginalText, setPendingOriginalText] = useState('');
   const [timeStart, setTimeStart] = useState('');
@@ -91,8 +85,8 @@ export default function TranscriberDialogueView({
       setCurrentDialogue(dialogue);
       setCharacter(dialogue.character || '');
       setPendingOriginalText(dialogue.dialogue.original || '');
-      setTimeStart(dialogue.timeStart);
-      setTimeEnd(dialogue.timeEnd);
+      setTimeStart(dialogue.timeStart || '');
+      setTimeEnd(dialogue.timeEnd || '');
     }
   }, [currentDialogueIndex, dialoguesList]);
 
@@ -174,7 +168,7 @@ export default function TranscriberDialogueView({
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
-          data: oldData.data.map((d: Dialogue) => 
+          data: oldData.data.map((d: BaseDialogue) => 
             d._id === currentDialogue._id ? responseData : d
           )
         };
@@ -309,8 +303,8 @@ export default function TranscriberDialogueView({
     if (currentDialogue) {
       setCharacter(currentDialogue.character || '');
       setPendingOriginalText(currentDialogue.dialogue.original || '');
-      setTimeStart(currentDialogue.timeStart);
-      setTimeEnd(currentDialogue.timeEnd);
+      setTimeStart(currentDialogue.timeStart || '');
+      setTimeEnd(currentDialogue.timeEnd || '');
     }
   };
 
@@ -391,7 +385,8 @@ export default function TranscriberDialogueView({
         episodeName: episode.name
       });
 
-      setDialoguesList(response.data.data);
+      const adaptedDialogues = response.data.data.map(adaptDialogue);
+      setDialoguesList(adaptedDialogues);
       setCurrentDialogueIndex(0);
     } catch (error) {
       console.error('Failed to fetch dialogues for episode:', error);

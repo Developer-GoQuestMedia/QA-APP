@@ -18,6 +18,12 @@ const nextConfig = {
     }
     return config;
   },
+  // Add transpilePackages for socket.io-client
+  transpilePackages: ['socket.io-client'],
+  // Enable CSS imports
+  experimental: {
+    esmExternals: 'loose'
+  }
 };
 
 export default nextConfig;

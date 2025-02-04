@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { connectToDatabase } from '@/lib/mongodb'
 import { authOptions } from '@/lib/auth'
 import { ObjectId } from 'mongodb'
+import { Dialogue } from '@/types/dialogue'
 
 // Define interfaces based on the actual MongoDB document structure
 interface Episode {
@@ -40,15 +41,6 @@ interface Project {
     status: string
   }
   index: string
-}
-
-interface Dialogue {
-  id: string
-  text: string
-  startTime: number
-  endTime: number
-  speaker?: string
-  status?: string
 }
 
 interface Scene {

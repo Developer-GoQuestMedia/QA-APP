@@ -1,40 +1,48 @@
+'use client'
+
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
+import { Dialogue as BaseDialogue } from '@/types/dialogue'
+import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  videoClipUrl: string
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  status: string
-  voiceOverUrl?: string
-  voiceOverNotes?: string
-  directorNotes?: string
-  revisionRequested?: boolean
+// Extend the base dialogue type with additional fields needed for the director view
+interface DirectorDialogue extends BaseDialogue {
+  index: number;
+  character: string;
+  videoUrl: string;
+  revisionRequested?: boolean;
 }
 
 interface DialogueViewProps {
-  dialogues: Dialogue[]
+  dialogues: BaseDialogue[]
   projectId: string
 }
 
 type QueryData = {
-  data: Dialogue[];
+  data: BaseDialogue[];
   status: string;
   timestamp: number;
 };
 
+// Adapter function to convert BaseDialogue to DirectorDialogue
+const adaptDialogue = (dialogue: BaseDialogue): DirectorDialogue => ({
+  ...dialogue,
+  index: dialogue.subtitleIndex,
+  character: dialogue.characterName,
+  videoUrl: dialogue.videoClipUrl,
+  revisionRequested: dialogue.status === 'revision-requested'
+});
+
 export default function DirectorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
-  const [dialoguesList, setDialoguesList] = useState(initialDialogues);
+  // Initialize cache cleaner
+  useCacheCleaner();
+
+  // Convert dialogues using the adapter
+  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+  
+  const [dialoguesList, setDialoguesList] = useState(adaptedInitialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
@@ -122,7 +130,7 @@ export default function DirectorDialogueView({ dialogues: initialDialogues, proj
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
-          data: oldData.data.map((d: Dialogue) => 
+          data: oldData.data.map((d: BaseDialogue) => 
             d._id === currentDialogue._id ? responseData : d
           )
         };

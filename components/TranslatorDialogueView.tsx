@@ -1,36 +1,46 @@
+'use client'
+
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
+import { Dialogue as BaseDialogue } from '@/types/dialogue'
+import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
-interface Dialogue {
-  _id: string
-  index: number
-  timeStart: string
-  timeEnd: string
-  character: string
-  videoUrl: string
-  dialogue: {
-    original: string
-    translated: string
-    adapted: string
-  }
-  status: string
+// Extend the base dialogue type with additional fields needed for the translator view
+interface TranslatorDialogue extends BaseDialogue {
+  index: number;
+  character: string;
+  videoUrl: string;
 }
 
 interface DialogueViewProps {
-  dialogues: Dialogue[]
+  dialogues: BaseDialogue[]
   projectId: string
 }
 
 type QueryData = {
-  data: Dialogue[];
+  data: BaseDialogue[];
   status: string;
   timestamp: number;
 };
 
+// Adapter function to convert BaseDialogue to TranslatorDialogue
+const adaptDialogue = (dialogue: BaseDialogue): TranslatorDialogue => ({
+  ...dialogue,
+  index: dialogue.subtitleIndex,
+  character: dialogue.characterName,
+  videoUrl: dialogue.videoClipUrl
+});
+
 export default function TranslatorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
-  const [dialoguesList, setDialoguesList] = useState(initialDialogues);
+  // Initialize cache cleaner
+  useCacheCleaner();
+
+  // Convert dialogues using the adapter
+  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+  
+  const [dialoguesList, setDialoguesList] = useState<TranslatorDialogue[]>(adaptedInitialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
@@ -125,7 +135,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
-          data: oldData.data.map((d: Dialogue) => 
+          data: oldData.data.map((d: BaseDialogue) => 
             d._id === currentDialogue._id ? responseData : d
           )
         };

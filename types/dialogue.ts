@@ -16,6 +16,19 @@ export interface Word {
   numberOfLipMovementsForThisWord: number;
 }
 
+export interface WordDetail {
+  characterName: string;
+  wordSequenceNumber: number;
+  word: string;
+  wordTimestamp: string;
+  dialogNumber: number;
+  dialogStartTimestamp: string;
+  dialogEndTimestamp: string;
+  dialogVocalFile: string;
+  characterProfile: CharacterProfile;
+  numberOfLipMovementsForThisWord: number;
+}
+
 export interface DialogueText {
   original: string;
   translated: string;

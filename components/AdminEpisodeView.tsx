@@ -8,8 +8,21 @@
     episode: Episode;
   }
 
+  interface LogEventData {
+    timestamp?: string;
+    episodeName?: string;
+    episodeId?: string;
+    collectionName?: string;
+    hasId?: boolean;
+    status?: string;
+    uploadedAt?: string;
+    result?: unknown;
+    error?: unknown;
+    episodeData?: Omit<Episode, 'videoPath'> & { videoPath: string };
+  }
+
   // Logging utility
-  function logEpisodeEvent(event: string, data?: any) {
+  function logEpisodeEvent(event: string, data?: LogEventData) {
     const timestamp = new Date().toISOString();
     console.log(`AdminEpisodeView.tsx:${event}`, {
       timestamp,
@@ -54,7 +67,7 @@
         hasId: !!episode._id,
         status: episode.status,
         collectionName: episode.collectionName,
-        uploadedAt: episode.uploadedAt,
+        uploadedAt: episode.uploadedAt?.toISOString(),
         episodeData: {
           ...episode,
           videoPath: '[REDACTED]'

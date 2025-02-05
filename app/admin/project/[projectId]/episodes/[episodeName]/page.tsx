@@ -34,7 +34,7 @@ export default function EpisodeDetailsPage() {
   }, [projectId, episodeName]);
 
   // If needed, handle "go back" or other routing:
-  const goBack = () => router.push(`/admin/project/${projectId}`);
+  const goBack = () => router.push(`/allDashboards/admin`);
 
   return (
     <div className="max-w-7xl mx-auto p-4">

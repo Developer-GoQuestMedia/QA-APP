@@ -6,9 +6,9 @@ import { authOptions } from '@/app/api/auth/auth.config'
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { dialogueId: string } }
 ) {
-  console.log('GET /api/dialogues/[id] - Started', { id: params.id })
+  console.log('GET /api/dialogues/[dialogueId] - Started', { dialogueId: params.dialogueId })
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -16,8 +16,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!ObjectId.isValid(params.id)) {
-      console.error('Invalid dialogue ID format:', params.id)
+    if (!ObjectId.isValid(params.dialogueId)) {
+      console.error('Invalid dialogue ID format:', params.dialogueId)
       return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
     }
 
@@ -33,7 +33,7 @@ export async function GET(
     for (const project of projects) {
       if (project.dialogue_collection) {
         const tempDialogue = await db.collection(project.dialogue_collection).findOne({
-          _id: new ObjectId(params.id)
+          _id: new ObjectId(params.dialogueId)
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
@@ -45,12 +45,12 @@ export async function GET(
     // If still not found, try the default collection
     if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
-        _id: new ObjectId(params.id)
+        _id: new ObjectId(params.dialogueId)
       });
     }
 
     if (!dialogue) {
-      console.error('Dialogue not found:', params.id)
+      console.error('Dialogue not found:', params.dialogueId)
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 })
     }
 
@@ -88,9 +88,9 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { dialogueId: string } }
 ) {
-  console.log('PUT /api/dialogues/[id] - Started', { id: params.id })
+  console.log('PUT /api/dialogues/[dialogueId] - Started', { dialogueId: params.dialogueId })
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -98,8 +98,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!ObjectId.isValid(params.id)) {
-      console.error('Invalid dialogue ID format:', params.id)
+    if (!ObjectId.isValid(params.dialogueId)) {
+      console.error('Invalid dialogue ID format:', params.dialogueId)
       return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
     }
 
@@ -108,7 +108,7 @@ export async function PUT(
 
     // Handle voice-over deletion
     if (updates.deleteVoiceOver) {
-      console.log('Deleting voice-over for dialogue:', params.id);
+      console.log('Deleting voice-over for dialogue:', params.dialogueId);
       updates.voiceOverUrl = null;
       updates.status = 'pending';
     }
@@ -134,7 +134,7 @@ export async function PUT(
     for (const project of projects) {
       if (project.dialogue_collection) {
         const tempDialogue = await db.collection(project.dialogue_collection).findOne({
-          _id: new ObjectId(params.id)
+          _id: new ObjectId(params.dialogueId)
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
@@ -147,12 +147,12 @@ export async function PUT(
     // If still not found, try the default collection
     if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
-        _id: new ObjectId(params.id)
+        _id: new ObjectId(params.dialogueId)
       });
     }
 
     if (!dialogue) {
-      console.error('Dialogue not found:', params.id)
+      console.error('Dialogue not found:', params.dialogueId)
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 })
     }
 
@@ -170,7 +170,7 @@ export async function PUT(
     if (!project) {
       console.error('User not authorized to update this dialogue:', {
         username: session.user.username,
-        dialogueId: params.id,
+        dialogueId: params.dialogueId,
         projectId: dialogue.projectId
       })
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
@@ -191,14 +191,14 @@ export async function PUT(
 
     console.log('Applying updates:', updateData)
     const result = await db.collection(dialogueCollection).findOneAndUpdate(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(params.dialogueId) },
       { $set: updateData },
       { returnDocument: 'after' }
     )
 
     if (!result) {
       console.error('Failed to update dialogue:', {
-        id: params.id,
+        id: params.dialogueId,
         collection: dialogueCollection,
         updateData
       });
@@ -206,7 +206,7 @@ export async function PUT(
     }
 
     console.log('Update successful:', {
-      id: params.id,
+      id: params.dialogueId,
       collection: dialogueCollection,
       status: result.status,
       voiceOverUrl: result.voiceOverUrl
@@ -231,9 +231,9 @@ export async function PUT(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { dialogueId: string } }
 ) {
-  console.log('=== PATCH /api/dialogues/[id] Debug ===');
+  console.log('=== PATCH /api/dialogues/[dialogueId] Debug ===');
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
@@ -244,7 +244,7 @@ export async function PATCH(
 
     const { db } = await connectToDatabase();
     const data = await request.json();
-    const dialogueId = params.id;
+    const dialogueId = params.dialogueId;
 
     console.log('Request data:', {
       dialogueId,
@@ -362,9 +362,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { dialogueId: string } }
 ) {
-  console.log('DELETE /api/dialogues/[id] - Started', { id: params.id })
+  console.log('DELETE /api/dialogues/[dialogueId] - Started', { dialogueId: params.dialogueId })
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -372,8 +372,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!ObjectId.isValid(params.id)) {
-      console.error('Invalid dialogue ID format:', params.id)
+    if (!ObjectId.isValid(params.dialogueId)) {
+      console.error('Invalid dialogue ID format:', params.dialogueId)
       return NextResponse.json({ error: 'Invalid dialogue ID format' }, { status: 400 })
     }
 
@@ -389,7 +389,7 @@ export async function DELETE(
     for (const project of projects) {
       if (project.dialogue_collection) {
         const tempDialogue = await db.collection(project.dialogue_collection).findOne({
-          _id: new ObjectId(params.id)
+          _id: new ObjectId(params.dialogueId)
         });
         if (tempDialogue) {
           dialogue = tempDialogue;
@@ -401,12 +401,12 @@ export async function DELETE(
     // If still not found, try the default collection
     if (!dialogue) {
       dialogue = await db.collection('dialogues').findOne({
-        _id: new ObjectId(params.id)
+        _id: new ObjectId(params.dialogueId)
       });
     }
 
     if (!dialogue) {
-      console.error('Dialogue not found:', params.id)
+      console.error('Dialogue not found:', params.dialogueId)
       return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 })
     }
 
@@ -425,13 +425,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
-    console.log('Deleting dialogue:', params.id)
+    console.log('Deleting dialogue:', params.dialogueId)
     const result = await db.collection('dialogues').deleteOne({
-      _id: new ObjectId(params.id)
+      _id: new ObjectId(params.dialogueId)
     })
 
     if (result.deletedCount === 0) {
-      console.error('Failed to delete dialogue:', params.id)
+      console.error('Failed to delete dialogue:', params.dialogueId)
       return NextResponse.json({ error: 'Failed to delete dialogue' }, { status: 500 })
     }
 

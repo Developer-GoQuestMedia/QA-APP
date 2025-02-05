@@ -1821,18 +1821,18 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {selectedProjectForEpisodes.episodes && selectedProjectForEpisodes.episodes.length > 0 ? (
                 selectedProjectForEpisodes.episodes.map((episode) => (
                   <div
-                    // Make sure to convert ObjectId to a string if needed
                     key={typeof episode._id === 'object' ? String(episode._id) : episode._id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
                     <div className="flex items-center space-x-3">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${episode.status === 'uploaded'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                          : episode.status === 'processing'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
-                          }`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          episode.status === 'uploaded'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                            : episode.status === 'processing'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
+                        }`}
                       >
                         {episode.status}
                       </span>
@@ -1842,9 +1842,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() =>
-                          router.push(`/admin/project/${selectedProjectForEpisodes._id}/episodes/${episode.name}`)
-                        }
+                        onClick={() => {
+                          console.log('Opening episode:', {
+                            projectId: selectedProjectForEpisodes._id,
+                            episodeName: episode.name,
+                            timestamp: new Date().toISOString()
+                          });
+                          router.push(`/admin/project/${selectedProjectForEpisodes._id}/episodes/${encodeURIComponent(episode.name)}`);
+                        }}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                       >
                         Open

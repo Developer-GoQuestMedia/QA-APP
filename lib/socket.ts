@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import type { Server as HTTPServer } from 'http';
 
 let io: Server | null = null;
-let activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
+const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
 
 export function initSocketServer(server: HTTPServer) {
   io = new Server(server, {
@@ -135,7 +135,7 @@ export function getActiveConnections() {
 }
 
 export function disconnectUser(userId: string) {
-  for (const [socketId, connection] of activeConnections.entries()) {
+  Array.from(activeConnections.entries()).forEach(([socketId, connection]) => {
     if (connection.userId === userId) {
       const socket = io?.sockets.sockets.get(socketId);
       if (socket) {
@@ -147,5 +147,5 @@ export function disconnectUser(userId: string) {
         });
       }
     }
-  }
+  });
 }

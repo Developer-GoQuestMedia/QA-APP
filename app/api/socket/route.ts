@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
+// Set runtime config
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Map to store active connections
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
 

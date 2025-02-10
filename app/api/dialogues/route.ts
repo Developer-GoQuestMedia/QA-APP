@@ -5,6 +5,10 @@ import { authOptions } from '@/lib/auth'
 import { ObjectId } from 'mongodb'
 import { Dialogue } from '@/types/dialogue'
 
+// Set runtime config
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // Define interfaces based on the actual MongoDB document structure
 interface Episode {
   _id: ObjectId | string

@@ -29,19 +29,28 @@ export async function POST(
 
     const targetEpisode = episode.episodes[0];
 
-    // Verify episode has completed step 2
-    if (targetEpisode.steps?.step2?.status !== 'completed') {
+    // Verify episode has completed step 5
+    if (targetEpisode.steps?.step5?.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Episode must complete step 2 first' },
+        { error: 'Episode must complete step 5 first' },
         { status: 400 }
       );
     }
 
-    // Get scene data from step 2
-    const sceneData = targetEpisode.steps?.step2?.sceneData;
-    if (!sceneData || !sceneData.scenes || !Array.isArray(sceneData.scenes)) {
+    // Get translation data and voice assignments
+    const translationData = targetEpisode.steps?.step4?.translationData;
+    const characterVoices = targetEpisode.steps?.step5?.characterVoices;
+
+    if (!translationData?.dialogues || !Array.isArray(translationData.dialogues)) {
       return NextResponse.json(
-        { error: 'Invalid scene data from step 2' },
+        { error: 'Invalid translation data from step 4' },
+        { status: 400 }
+      );
+    }
+
+    if (!characterVoices || !Array.isArray(characterVoices)) {
+      return NextResponse.json(
+        { error: 'Invalid voice assignments from step 5' },
         { status: 400 }
       );
     }
@@ -51,46 +60,52 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'processing',
-          'episodes.$.step': 3,
+          'episodes.$.steps.step6.status': 'processing',
+          'episodes.$.step': 6,
+          'episodes.$.steps.step6.voiceConversions': translationData.dialogues.map((d: { id: string }) => ({
+            dialogueId: d.id,
+            status: 'pending'
+          }))
         }
       }
     );
 
-    // Call external API for video clip cutting
+    // Call external API for voice conversion
     const response = await axios.post(
-      'https://video-cutter-api.example.com/cut',
+      'https://voice-conversion-api.example.com/convert',
       {
-        videoPath: targetEpisode.videoPath,
-        videoKey: targetEpisode.videoKey,
+        dialogues: translationData.dialogues,
+        characterVoices,
         episodeId: params.episodeId,
-        scenes: sceneData.scenes,
       },
       {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 15, // 15 minutes timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.ELEVENLABS_API_KEY
+        },
+        timeout: 1000 * 60 * 60, // 60 minutes timeout
       }
     );
 
-    // Update episode with video clips data
+    // Update episode with voice conversion results
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.videoClips': response.data.clips,
-          'episodes.$.steps.step3.status': 'completed',
-          'episodes.$.steps.step3.updatedAt': new Date(),
-          'episodes.$.step': 4,
+          'episodes.$.steps.step6.voiceConversions': response.data.conversions,
+          'episodes.$.steps.step6.status': 'completed',
+          'episodes.$.steps.step6.updatedAt': new Date(),
+          'episodes.$.step': 7,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Video clip cutting started'
+      message: 'Voice conversion process started'
     });
   } catch (error: any) {
-    console.error('Error in step 3:', error);
+    console.error('Error in step 6:', error);
     
     // Update status to error
     const { db } = await connectToDatabase();
@@ -98,14 +113,14 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'error',
-          'episodes.$.steps.step3.error': error.message,
+          'episodes.$.steps.step6.status': 'error',
+          'episodes.$.steps.step6.error': error.message,
         }
       }
     );
 
     return NextResponse.json(
-      { error: 'Failed to process step 3' },
+      { error: 'Failed to process step 6' },
       { status: 500 }
     );
   }

@@ -29,19 +29,21 @@ export async function POST(
 
     const targetEpisode = episode.episodes[0];
 
-    // Verify episode has completed step 2
-    if (targetEpisode.steps?.step2?.status !== 'completed') {
+    // Verify episode has completed step 7
+    if (targetEpisode.steps?.step7?.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Episode must complete step 2 first' },
+        { error: 'Episode must complete step 7 first' },
         { status: 400 }
       );
     }
 
-    // Get scene data from step 2
-    const sceneData = targetEpisode.steps?.step2?.sceneData;
-    if (!sceneData || !sceneData.scenes || !Array.isArray(sceneData.scenes)) {
+    // Get merged audio and original video
+    const mergedAudioPath = targetEpisode.steps?.step7?.mergedAudioPath;
+    const mergedAudioKey = targetEpisode.steps?.step7?.mergedAudioKey;
+
+    if (!mergedAudioPath || !mergedAudioKey) {
       return NextResponse.json(
-        { error: 'Invalid scene data from step 2' },
+        { error: 'Missing merged audio from step 7' },
         { status: 400 }
       );
     }
@@ -51,46 +53,49 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'processing',
-          'episodes.$.step': 3,
+          'episodes.$.steps.step8.status': 'processing',
+          'episodes.$.step': 8,
         }
       }
     );
 
-    // Call external API for video clip cutting
+    // Call external API for final video merge
     const response = await axios.post(
-      'https://video-cutter-api.example.com/cut',
+      'https://video-merger-api.example.com/merge',
       {
         videoPath: targetEpisode.videoPath,
         videoKey: targetEpisode.videoKey,
+        mergedAudioPath,
+        mergedAudioKey,
         episodeId: params.episodeId,
-        scenes: sceneData.scenes,
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 15, // 15 minutes timeout
+        timeout: 1000 * 60 * 60, // 60 minutes timeout
       }
     );
 
-    // Update episode with video clips data
+    // Update episode with final video
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.videoClips': response.data.clips,
-          'episodes.$.steps.step3.status': 'completed',
-          'episodes.$.steps.step3.updatedAt': new Date(),
-          'episodes.$.step': 4,
+          'episodes.$.steps.step8.finalVideoPath': response.data.finalVideoPath,
+          'episodes.$.steps.step8.finalVideoKey': response.data.finalVideoKey,
+          'episodes.$.steps.step8.status': 'completed',
+          'episodes.$.steps.step8.updatedAt': new Date(),
+          'episodes.$.status': 'completed',
+          'episodes.$.step': 8,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Video clip cutting started'
+      message: 'Final video merge process started'
     });
   } catch (error: any) {
-    console.error('Error in step 3:', error);
+    console.error('Error in step 8:', error);
     
     // Update status to error
     const { db } = await connectToDatabase();
@@ -98,14 +103,14 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'error',
-          'episodes.$.steps.step3.error': error.message,
+          'episodes.$.steps.step8.status': 'error',
+          'episodes.$.steps.step8.error': error.message,
         }
       }
     );
 
     return NextResponse.json(
-      { error: 'Failed to process step 3' },
+      { error: 'Failed to process step 8' },
       { status: 500 }
     );
   }

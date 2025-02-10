@@ -29,19 +29,19 @@ export async function POST(
 
     const targetEpisode = episode.episodes[0];
 
-    // Verify episode has completed step 2
-    if (targetEpisode.steps?.step2?.status !== 'completed') {
+    // Verify episode has completed step 4
+    if (targetEpisode.steps?.step4?.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Episode must complete step 2 first' },
+        { error: 'Episode must complete step 4 first' },
         { status: 400 }
       );
     }
 
-    // Get scene data from step 2
-    const sceneData = targetEpisode.steps?.step2?.sceneData;
-    if (!sceneData || !sceneData.scenes || !Array.isArray(sceneData.scenes)) {
+    // Get translation data from step 4
+    const translationData = targetEpisode.steps?.step4?.translationData;
+    if (!translationData || !translationData.dialogues || !Array.isArray(translationData.dialogues)) {
       return NextResponse.json(
-        { error: 'Invalid scene data from step 2' },
+        { error: 'Invalid translation data from step 4' },
         { status: 400 }
       );
     }
@@ -51,46 +51,48 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'processing',
-          'episodes.$.step': 3,
+          'episodes.$.steps.step5.status': 'processing',
+          'episodes.$.step': 5,
         }
       }
     );
 
-    // Call external API for video clip cutting
+    // Extract unique characters from dialogues
+    const characters = Array.from(new Set(translationData.dialogues.map((d: { characterName: string }) => d.characterName)));
+
+    // Call external API for voice assignment
     const response = await axios.post(
-      'https://video-cutter-api.example.com/cut',
+      'https://voice-assignment-api.example.com/assign',
       {
-        videoPath: targetEpisode.videoPath,
-        videoKey: targetEpisode.videoKey,
+        characters,
         episodeId: params.episodeId,
-        scenes: sceneData.scenes,
+        targetLanguage: targetEpisode.targetLanguage,
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 15, // 15 minutes timeout
+        timeout: 1000 * 60 * 5, // 5 minutes timeout
       }
     );
 
-    // Update episode with video clips data
+    // Update episode with voice assignments
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.videoClips': response.data.clips,
-          'episodes.$.steps.step3.status': 'completed',
-          'episodes.$.steps.step3.updatedAt': new Date(),
-          'episodes.$.step': 4,
+          'episodes.$.steps.step5.characterVoices': response.data.voiceAssignments,
+          'episodes.$.steps.step5.status': 'completed',
+          'episodes.$.steps.step5.updatedAt': new Date(),
+          'episodes.$.step': 6,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Video clip cutting started'
+      message: 'Voice assignment completed'
     });
   } catch (error: any) {
-    console.error('Error in step 3:', error);
+    console.error('Error in step 5:', error);
     
     // Update status to error
     const { db } = await connectToDatabase();
@@ -98,14 +100,14 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'error',
-          'episodes.$.steps.step3.error': error.message,
+          'episodes.$.steps.step5.status': 'error',
+          'episodes.$.steps.step5.error': error.message,
         }
       }
     );
 
     return NextResponse.json(
-      { error: 'Failed to process step 3' },
+      { error: 'Failed to process step 5' },
       { status: 500 }
     );
   }

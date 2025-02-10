@@ -29,19 +29,28 @@ export async function POST(
 
     const targetEpisode = episode.episodes[0];
 
-    // Verify episode has completed step 2
-    if (targetEpisode.steps?.step2?.status !== 'completed') {
+    // Verify episode has completed step 6
+    if (targetEpisode.steps?.step6?.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Episode must complete step 2 first' },
+        { error: 'Episode must complete step 6 first' },
         { status: 400 }
       );
     }
 
-    // Get scene data from step 2
-    const sceneData = targetEpisode.steps?.step2?.sceneData;
-    if (!sceneData || !sceneData.scenes || !Array.isArray(sceneData.scenes)) {
+    // Get voice conversions and original SFX
+    const voiceConversions = targetEpisode.steps?.step6?.voiceConversions;
+    const sfxAudio = targetEpisode.steps?.step1?.musicAndSoundEffectsPath;
+
+    if (!voiceConversions || !Array.isArray(voiceConversions)) {
       return NextResponse.json(
-        { error: 'Invalid scene data from step 2' },
+        { error: 'Invalid voice conversion data from step 6' },
+        { status: 400 }
+      );
+    }
+
+    if (!sfxAudio) {
+      return NextResponse.json(
+        { error: 'Missing SFX audio from step 1' },
         { status: 400 }
       );
     }
@@ -51,46 +60,47 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'processing',
-          'episodes.$.step': 3,
+          'episodes.$.steps.step7.status': 'processing',
+          'episodes.$.step': 7,
         }
       }
     );
 
-    // Call external API for video clip cutting
+    // Call external API for audio merging
     const response = await axios.post(
-      'https://video-cutter-api.example.com/cut',
+      'https://audio-merger-api.example.com/merge',
       {
-        videoPath: targetEpisode.videoPath,
-        videoKey: targetEpisode.videoKey,
+        voiceConversions,
+        sfxAudioPath: sfxAudio,
+        sfxAudioKey: targetEpisode.steps?.step1?.musicAndSoundEffectsKey,
         episodeId: params.episodeId,
-        scenes: sceneData.scenes,
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 15, // 15 minutes timeout
+        timeout: 1000 * 60 * 30, // 30 minutes timeout
       }
     );
 
-    // Update episode with video clips data
+    // Update episode with merged audio
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.videoClips': response.data.clips,
-          'episodes.$.steps.step3.status': 'completed',
-          'episodes.$.steps.step3.updatedAt': new Date(),
-          'episodes.$.step': 4,
+          'episodes.$.steps.step7.mergedAudioPath': response.data.mergedAudioPath,
+          'episodes.$.steps.step7.mergedAudioKey': response.data.mergedAudioKey,
+          'episodes.$.steps.step7.status': 'completed',
+          'episodes.$.steps.step7.updatedAt': new Date(),
+          'episodes.$.step': 8,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Video clip cutting started'
+      message: 'Audio merging process started'
     });
   } catch (error: any) {
-    console.error('Error in step 3:', error);
+    console.error('Error in step 7:', error);
     
     // Update status to error
     const { db } = await connectToDatabase();
@@ -98,14 +108,14 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'error',
-          'episodes.$.steps.step3.error': error.message,
+          'episodes.$.steps.step7.status': 'error',
+          'episodes.$.steps.step7.error': error.message,
         }
       }
     );
 
     return NextResponse.json(
-      { error: 'Failed to process step 3' },
+      { error: 'Failed to process step 7' },
       { status: 500 }
     );
   }

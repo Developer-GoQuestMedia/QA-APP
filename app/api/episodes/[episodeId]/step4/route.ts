@@ -29,19 +29,19 @@ export async function POST(
 
     const targetEpisode = episode.episodes[0];
 
-    // Verify episode has completed step 2
-    if (targetEpisode.steps?.step2?.status !== 'completed') {
+    // Verify episode has completed step 3
+    if (targetEpisode.steps?.step3?.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Episode must complete step 2 first' },
+        { error: 'Episode must complete step 3 first' },
         { status: 400 }
       );
     }
 
-    // Get scene data from step 2
-    const sceneData = targetEpisode.steps?.step2?.sceneData;
-    if (!sceneData || !sceneData.scenes || !Array.isArray(sceneData.scenes)) {
+    // Get video clips data from step 3
+    const videoClips = targetEpisode.steps?.step3?.videoClips;
+    if (!videoClips || !Array.isArray(videoClips)) {
       return NextResponse.json(
-        { error: 'Invalid scene data from step 2' },
+        { error: 'Invalid video clips data from step 3' },
         { status: 400 }
       );
     }
@@ -51,46 +51,46 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'processing',
-          'episodes.$.step': 3,
+          'episodes.$.steps.step4.status': 'processing',
+          'episodes.$.step': 4,
         }
       }
     );
 
-    // Call external API for video clip cutting
+    // Call external API for translation
     const response = await axios.post(
-      'https://video-cutter-api.example.com/cut',
+      'https://translation-api.example.com/translate',
       {
-        videoPath: targetEpisode.videoPath,
-        videoKey: targetEpisode.videoKey,
+        videoClips,
         episodeId: params.episodeId,
-        scenes: sceneData.scenes,
+        sourceLanguage: targetEpisode.sourceLanguage,
+        targetLanguage: targetEpisode.targetLanguage,
       },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 15, // 15 minutes timeout
+        timeout: 1000 * 60 * 30, // 30 minutes timeout
       }
     );
 
-    // Update episode with video clips data
+    // Update episode with translation data
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.videoClips': response.data.clips,
-          'episodes.$.steps.step3.status': 'completed',
-          'episodes.$.steps.step3.updatedAt': new Date(),
-          'episodes.$.step': 4,
+          'episodes.$.steps.step4.translationData': response.data,
+          'episodes.$.steps.step4.status': 'completed',
+          'episodes.$.steps.step4.updatedAt': new Date(),
+          'episodes.$.step': 5,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Video clip cutting started'
+      message: 'Translation process started'
     });
   } catch (error: any) {
-    console.error('Error in step 3:', error);
+    console.error('Error in step 4:', error);
     
     // Update status to error
     const { db } = await connectToDatabase();
@@ -98,14 +98,14 @@ export async function POST(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
-          'episodes.$.steps.step3.status': 'error',
-          'episodes.$.steps.step3.error': error.message,
+          'episodes.$.steps.step4.status': 'error',
+          'episodes.$.steps.step4.error': error.message,
         }
       }
     );
 
     return NextResponse.json(
-      { error: 'Failed to process step 3' },
+      { error: 'Failed to process step 4' },
       { status: 500 }
     );
   }

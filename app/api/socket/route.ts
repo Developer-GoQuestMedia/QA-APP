@@ -1,5 +1,8 @@
-import { Server } from 'socket.io';
-import { NextResponse } from 'next/server';
+import { Server as NetServer } from 'http';
+import { NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
+import { Server as SocketIOServer } from 'socket.io';
+import { initSocketServer } from '@/lib/socket';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -11,9 +14,19 @@ export const dynamic = 'force-dynamic';
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
 
 // Socket.IO server instance
-let io: Server | null = null;
+let io: SocketIOServer | undefined;
 
-export async function GET(req: Request) {
+if (!io) {
+  const httpServer = new NetServer();
+  io = initSocketServer(httpServer);
+  httpServer.listen(3001); // Listen on a specific port
+}
+
+export async function GET(req: NextRequest) {
+  if (!io) {
+    return new Response('Socket.io server not initialized', { status: 500 });
+  }
+
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -24,7 +37,7 @@ export async function GET(req: Request) {
     if (!io) {
       // @ts-expect-error - WebSocket upgrade handler adds socket property to request
       const server = req.socket.server;
-      io = new Server(server, {
+      io = new SocketIOServer(server, {
         path: '/api/socket',
         addTrailingSlash: false,
         cors: {

@@ -166,7 +166,7 @@ export function getSocketClient() {
   if (!socket) {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app';
     socket = createSocketClient(socketUrl, {
-      path: '/api/socket',
+      path: '/socket.io',
       addTrailingSlash: false,
       autoConnect: true,
       reconnection: true,
@@ -174,7 +174,7 @@ export function getSocketClient() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
     });
 
     socket.on('connect', () => {

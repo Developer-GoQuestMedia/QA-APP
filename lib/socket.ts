@@ -165,8 +165,10 @@ export function disconnectUser(userId: string) {
 export function getSocketClient() {
   if (!socket) {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app';
+    console.log('Initializing socket client with URL:', socketUrl);
+    
     socket = createSocketClient(socketUrl, {
-      path: '/socket.io',
+      path: '/api/socket/io',  // Updated path to match Next.js API route convention
       addTrailingSlash: false,
       autoConnect: true,
       reconnection: true,
@@ -174,12 +176,15 @@ export function getSocketClient() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
     });
 
     socket.on('connect', () => {
-      console.log('Socket client connected:', {
+      console.log('Socket client connected successfully:', {
         socketId: socket?.id,
+        url: socketUrl,
+        path: '/api/socket/io',
         timestamp: new Date().toISOString()
       });
     });
@@ -187,7 +192,10 @@ export function getSocketClient() {
     socket.on('connect_error', (error) => {
       console.error('Socket connection error:', {
         error: error.message,
-        timestamp: new Date().toISOString()
+        url: socketUrl,
+        path: '/api/socket/io',
+        timestamp: new Date().toISOString(),
+        transportType: socket?.io?.engine?.transport?.name
       });
     });
 

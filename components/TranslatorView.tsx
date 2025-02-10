@@ -91,11 +91,12 @@ export default function TranslatorView({ projects }: TranslatorViewProps) {
       })
 
       if (response.data) {
-        const minimalUrl = `/allDashboards/translator/${projectId}/episodes/${episodeName}/dialogues`
-        router.push(minimalUrl)
+        const minimalUrl = `/allDashboards/translator/${projectId}/episodes/${episodeName}/dialogues` as const
+        router.push(minimalUrl as any)
       } else {
         console.error('No data returned from API')
       }
+
     } catch (error) {
       console.error('Error fetching dialogues:', error)
     } finally {

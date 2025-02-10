@@ -40,6 +40,7 @@ export interface Project {
   }
   dialogue_collection?: any
   index?: string
+  assignedUsers?: string[]
 }
 
 // Re-export the UserRole type from 'types/user'

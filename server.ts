@@ -1,23 +1,34 @@
 import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
-import { initSocketServer, setSocketInstance } from './lib/socket';
+import { initSocketServer } from './lib/socket';
 
 const dev = process.env.NODE_ENV !== 'production';
-const app = next({ dev });
+const hostname = 'localhost';
+const port = parseInt(process.env.PORT || '3000', 10);
+
+// Create the Next.js app
+const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url!, true);
-    handle(req, res, parsedUrl);
+  // Create HTTP server
+  const server = createServer(async (req, res) => {
+    try {
+      const parsedUrl = parse(req.url!, true);
+      await handle(req, res, parsedUrl);
+    } catch (err) {
+      console.error('Error occurred handling', req.url, err);
+      res.statusCode = 500;
+      res.end('Internal server error');
+    }
   });
 
-  // Initialize Socket.IO
-  const io = initSocketServer(server);
-  setSocketInstance(io);
+  // Initialize Socket.io
+  initSocketServer(server);
 
-  server.listen(3000, () => {
-    console.log('> Ready on http://localhost:3000');
+  // Start listening
+  server.listen(port, () => {
+    console.log(`> Ready on http://${hostname}:${port}`);
   });
 }); 

@@ -131,7 +131,7 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
          */
 
         // NEW APPROACH: Short path; the next page can fetch dialogues (again)
-        const minimalUrl = `/allDashboards/voice-over/${projectId}/episodes/${episodeName}/dialogues`
+        const minimalUrl = `/allDashboards/voice-over/${projectId}/episodes/${episodeName}/dialogues` as const
         router.push(minimalUrl)
       } else {
         console.error('No data returned from API')

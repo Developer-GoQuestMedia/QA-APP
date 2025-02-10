@@ -221,7 +221,7 @@ async function* streamFile(file: File, chunkSize = 5 * 1024 * 1024) {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  let io: Server | null = null;
+  let io: Server | { emit: (event: string, data: any) => void } | null = null;
   try {
     io = getSocketInstance();
   } catch (error) {
@@ -394,16 +394,30 @@ export async function POST(request: NextRequest) {
 
       // Emit partial progress (only if Socket.IO is available)
       if (io) {
-        io.to(`project-${projectId}`).emit('uploadProgress', {
-          projectId,
-          fileName: videoFile.name,
-          collectionName,
-          partNumber,
-          totalChunks,
-          progressPercent,
-          uploadedBytes,
-          totalBytes: videoFile.size,
-        });
+        // Check if io has room functionality
+        if ('to' in io) {
+          io.to(`project-${projectId}`).emit('uploadProgress', {
+            projectId,
+            fileName: videoFile.name,
+            collectionName,
+            partNumber,
+            totalChunks,
+            progressPercent,
+            uploadedBytes,
+            totalBytes: videoFile.size,
+          });
+        } else {
+          io.emit('uploadProgress', {
+            projectId,
+            fileName: videoFile.name,
+            collectionName,
+            partNumber,
+            totalChunks,
+            progressPercent,
+            uploadedBytes,
+            totalBytes: videoFile.size,
+          });
+        }
       }
 
       partNumber++;
@@ -486,7 +500,7 @@ export async function POST(request: NextRequest) {
     await sessionUpdate.endSession();
 
     // 8. Emit final/partial completion events (only if Socket.IO is available)
-    if (io) {
+    if (io && 'to' in io) {
       if (isLast) {
         io.to(`project-${projectId}`).emit('uploadComplete', {
           projectId,

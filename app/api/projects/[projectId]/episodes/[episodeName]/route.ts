@@ -214,7 +214,7 @@ export async function GET(
     
     return NextResponse.json({ 
       episode: {
-        id: episode._id.toString(),
+        _id: episode._id.toString(),
         name: episode.name,
         status: episode.status,
         projectId: episode.projectId,

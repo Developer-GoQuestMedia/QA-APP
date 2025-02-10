@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
 import { Dialogue as BaseDialogue } from '@/types/dialogue'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
@@ -34,6 +34,8 @@ const adaptDialogue = (dialogue: BaseDialogue): DirectorDialogue => ({
   videoUrl: dialogue.videoClipUrl,
   revisionRequested: dialogue.status === 'revision-requested'
 });
+
+const useTransform = motion.transform;
 
 export default function DirectorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   // Initialize cache cleaner

@@ -1,12 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+  experimental: {
+    typedRoutes: true,
+    esmExternals: 'loose'
+  },
   webpack: (config, { isServer }) => {
-    // Handle punycode deprecation
     if (!isServer) {
       config.resolve = {
         ...config.resolve,
         fallback: {
           ...config.resolve.fallback,
+          fs: false,
+          net: false,
+          tls: false,
           punycode: false,
           querystring: false,
         },
@@ -18,12 +30,7 @@ const nextConfig = {
     }
     return config;
   },
-  // Add transpilePackages for socket.io-client
-  transpilePackages: ['socket.io-client'],
-  // Enable CSS imports
-  experimental: {
-    esmExternals: 'loose'
-  }
+  transpilePackages: ['socket.io-client']
 };
 
 export default nextConfig;

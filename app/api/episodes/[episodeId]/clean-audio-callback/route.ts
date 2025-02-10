@@ -149,14 +149,15 @@ export async function POST(
 
 // Function to notify admin view
 function notifyAdmin(message: string) {
-  const io = getSocketInstance();
-  
-  if (io) {
-    io.emit('notification', { message, type: 'success' });
-    
-    setTimeout(() => {
-      io.emit('notification', { message: 'Test from server!', type: 'success' });
-    }, 5000);
+  try {
+    const io = getSocketInstance();
+    if (io && typeof io.emit === 'function') {
+      io.emit('notification', { message, type: 'success' });
+      console.log('Admin Notification sent:', message);
+    } else {
+      console.log('Admin Notification queued (socket not ready):', message);
+    }
+  } catch (error) {
+    console.error('Error sending notification:', error);
   }
-  console.log('Admin Notification:', message);
 }

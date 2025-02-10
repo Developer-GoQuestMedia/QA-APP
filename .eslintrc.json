@@ -1,11 +1,15 @@
 {
-  "extends": ["next/core-web-vitals"],
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
   "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-unused-vars": ["warn", {
       "argsIgnorePattern": "^_",
-      "varsIgnorePattern": "^(rotate|opacity|scale|animControls|autoResizeTextArea|checkMediaSupport|mediaRecorderRef|playbackRate|handleNext|handlePrevious|rewindFiveSeconds|changePlaybackRate|isLoadingUsers)$"
+      "varsIgnorePattern": "^(rotate|opacity|scale|animControls|autoResizeTextArea|checkMediaSupport|mediaRecorderRef|playbackRate|handleNext|handlePrevious|rewindFiveSeconds|changePlaybackRate|isLoadingUsers|err|error|session|Project|Dialogue|Episode|Document|AxiosResponse|FilteredProject|ProjectHandlers|UserHandlers|UserSelectionHandlers|getTimeStamp|selectedEpisode|setSelectedEpisode|isEpisodeDetailsOpen|setIsEpisodeDetailsOpen|LoadingSpinner|ErrorFallback|QueryData|processAudioWithNoiseReduction|currentRecordingDuration|voiceOverUrl|notifyAdmin)$"
     }],
     "react-hooks/exhaustive-deps": "warn",
-    "@typescript-eslint/no-explicit-any": "warn"
+    "prefer-const": "warn"
   }
 }

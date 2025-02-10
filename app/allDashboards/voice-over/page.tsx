@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import VoiceOverView from '@/components/VoiceOverView'
 import { useProjects } from '@/hooks/useProjects'
-import { Project } from '@/types/project'
+import { type Project } from '@/types/project'
 
 export default function VoiceOverDashboard() {
   const { data: session, status } = useSession()
@@ -31,19 +31,13 @@ export default function VoiceOverDashboard() {
   })
 
   // Ensure projects is an array and has all required properties
-  const validProjects: Project[] = (projects || []).map(project => ({
+  const validProjects: Project[] = (projects || []).map((project: Project) => ({
     ...project,
     dialogue_collection: project.dialogue_collection || null,
     updatedAt: project.updatedAt || new Date().toISOString(),
-    parentFolder: project.parentFolder || '',
-    databaseName: project.databaseName || '',
-    episodes: project.episodes || [],
-    uploadStatus: project.uploadStatus || {
-      totalFiles: 0,
-      completedFiles: 0,
-      currentFile: 0,
-      status: 'pending'
-    }
+    status: project.status || 'pending',
+    assignedUsers: project.assignedUsers || [],
+    episodes: project.episodes || []
   }))
 
   return (

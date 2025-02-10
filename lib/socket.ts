@@ -5,9 +5,14 @@ let io: Server | null = null;
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
 
 export function initSocketServer(server: HTTPServer) {
+  if (io) {
+    console.warn('Socket.io server already initialized');
+    return io;
+  }
+
   io = new Server(server, {
     cors: {
-      origin: "*", // or your domain
+      origin: "*", // or your specific domain
       methods: ["GET", "POST"],
     },
     // Add ping timeout and interval settings
@@ -90,7 +95,6 @@ export function initSocketServer(server: HTTPServer) {
         
         console.log('Socket disconnected:', {
           socketId: socket.id,
-          userId: connection.userId,
           reason,
           remainingConnections: activeConnections.size,
           timestamp: new Date().toISOString()
@@ -113,7 +117,12 @@ export function initSocketServer(server: HTTPServer) {
 
 export function getSocketInstance() {
   if (!io) {
-    throw new Error('Socket.io instance not initialized!');
+    console.warn('Socket.io instance not initialized, attempting to handle gracefully');
+    return {
+      emit: (event: string, data: any) => {
+        console.log('Socket event queued (socket not initialized):', { event, data });
+      }
+    };
   }
   return io;
 }

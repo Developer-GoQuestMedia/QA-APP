@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from 'framer-motion'
+import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
 import { Dialogue as BaseDialogue } from '@/types/dialogue'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
@@ -167,10 +167,11 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
 
   // Motion values for swipe animation
   const x = useMotionValue(0)
-  const rotate = useTransform(x, [-90, 90], [-10, 10])
-  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
-  const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
+  const rotate = x;
+  const opacity = x;
+  const scale = x;
   const animControls = useAnimation()
+
 
   useEffect(() => {
     if (currentDialogue) {

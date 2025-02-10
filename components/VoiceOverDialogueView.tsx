@@ -11,6 +11,8 @@ import axios from 'axios'
 import AudioVisualizer from './AudioVisualizer'
 import RecordingTimer from './RecordingTimer'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
+import { logEvent } from '@/utils/analytics'
+import { debounce } from 'lodash'
 
 // Add new type for recording status
 type RecordingStatus = 'available' | 'unavailable' | 'checking';
@@ -184,7 +186,8 @@ const RecordingControls = React.memo(({
   localAudioBlob,
   isProcessing,
   countdown,
-  isWaitingForVoice
+  isWaitingForVoice,
+  currentDialogue
 }: {
   isRecording: boolean,
   isPlayingRecording: boolean,
@@ -200,7 +203,8 @@ const RecordingControls = React.memo(({
   localAudioBlob: Blob | null,
   isProcessing: boolean,
   countdown: number,
-  isWaitingForVoice: boolean
+  isWaitingForVoice: boolean,
+  currentDialogue: Dialogue
 }) => {
   const handleStartRecording = async () => {
     if (isProcessing) return;
@@ -224,7 +228,7 @@ const RecordingControls = React.memo(({
     <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700">
       <div className="flex flex-col items-center py-4 space-y-4">
         <div className="flex items-center space-x-4">
-          {!isRecording && hasExistingRecording && !localAudioBlob && (
+          {!isRecording && !localAudioBlob && currentDialogue?.voiceOverUrl && (
             <button
               onClick={onReRecord}
               className="px-6 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-colors"
@@ -467,6 +471,59 @@ const extractSceneNumber = (dialogueNumber: string): string => {
   return '';
 };
 
+// Add new function for noise reduction
+const processAudioWithNoiseReduction = async (audioBlob: Blob): Promise<Blob> => {
+  try {
+    logEvent('Starting noise reduction process', {
+      originalBlobSize: audioBlob.size,
+      originalBlobType: audioBlob.type,
+      timestamp: new Date().toISOString()
+    });
+
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.wav');
+
+    // Use our proxy API route instead of calling the service directly
+    const response = await axios.post(
+      '/api/noise-reduction',
+      formData,
+      {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+        },
+        responseType: 'blob',
+        timeout: 60000,
+      }
+    );
+
+    logEvent('Noise reduction completed', {
+      processedBlobSize: response.data.size,
+      processedBlobType: response.data.type,
+      status: response.status,
+      timestamp: new Date().toISOString()
+    });
+
+    return new Blob([response.data], { type: 'audio/wav' });
+  } catch (error: any) {
+    logEvent('Noise reduction failed', {
+      error: error.message,
+      status: error.response?.status,
+      responseData: error.response?.data,
+      timestamp: new Date().toISOString()
+    }, 'error');
+    
+    logEvent('Falling back to original audio', {
+      timestamp: new Date().toISOString()
+    }, 'warn');
+    return audioBlob;
+  }
+};
+
+// Add debounced logging helper at the top level
+const debouncedLogEvent = debounce((event: string, data: any) => {
+  logEvent(event, data);
+}, 300);
+
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId, episode, project }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
@@ -517,6 +574,56 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
   // Add audio player ref for remote audio
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  // Move function declarations to the top
+  const updateAudioDuration = useCallback(async (blob: Blob | string) => {
+    try {
+      const audio = new Audio();
+      if (blob instanceof Blob) {
+        audio.src = URL.createObjectURL(blob);
+      } else {
+        audio.src = blob;
+      }
+
+      await new Promise((resolve) => {
+        audio.addEventListener('loadedmetadata', () => {
+          setAudioDuration(audio.duration);
+          resolve(true);
+        });
+        audio.addEventListener('error', () => {
+          console.error('Error loading audio duration');
+          setAudioDuration(0);
+          resolve(false);
+        });
+      });
+
+      if (blob instanceof Blob) {
+        URL.revokeObjectURL(audio.src);
+      }
+    } catch (error) {
+      console.error('Error getting audio duration:', error);
+      setAudioDuration(0);
+    }
+  }, []);
+
+  const cleanupAudioStates = useCallback(() => {
+    // Stop and cleanup audio playback
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    // Reset states
+    setIsPlaying(false);
+    setIsSyncedPlaying(false);
+    setLocalAudioBlob(null);
+    setPlayingState(false);
+    setAudioDuration(0);
+  }, [setPlayingState]);
 
   // Function to handle playing remote audio
   const handlePlayRemoteAudio = useCallback(() => {
@@ -667,6 +774,8 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
   const handleDiscardChanges = async () => {
     try {
+      cleanupAudioStates();
+
       if (confirmationType === 'navigation') {
         if (pendingNavigationIndex !== null) {
           setCurrentDialogueIndex(pendingNavigationIndex);
@@ -676,7 +785,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         await handleDeleteRecording();
       }
 
-      // Close confirmation modal
       setShowConfirmation(false);
       setNavigationDirection(undefined);
     } catch (error) {
@@ -733,277 +841,62 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     });
   }, []);
 
-  // Add dialogue change logging
+  // First, combine the duplicate useEffect for maxDuration and currentIndex
   useEffect(() => {
-    if (currentDialogue) {
-      logEvent('Current dialogue changed', {
-        dialogueId: currentDialogue.dialogNumber,
-        dialogueNumber: currentDialogue.dialogNumber,
-        characterName: currentDialogue.characterName,
-        hasVoiceOver: !!currentDialogue.voiceOverUrl,
-        timeStart: currentDialogue.timeStart,
-        timeEnd: currentDialogue.timeEnd,
-        index: currentDialogueIndex,
-        total: dialoguesList.length
-      });
+    if (!currentDialogue || !dialoguesList.length) return;
+    
+    // Update maxDuration based on current dialogue
+    const duration = calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd);
+    setMaxDuration(duration);
+    
+    // Only update index if it's different
+    const index = dialoguesList.findIndex(d => d._id === currentDialogue.dialogNumber);
+    if (index !== -1 && index !== currentDialogueIndex) {
+      setCurrentDialogueIndex(index);
     }
-  }, [currentDialogue?._id]);
+  }, [currentDialogue, dialoguesList, calculateDuration]); // Remove currentDialogueIndex from deps
 
-  // Add enhanced logging utility
-  const logEvent = useCallback((message: string, data?: Record<string, unknown>, level: 'info' | 'warn' | 'error' = 'info'): void => {
-    const timestamp = new Date().toISOString();
-    const logData = {
-      timestamp,
-      component: 'VoiceOverDialogueView',
-      message,
-      ...data,
-      dialogueInfo: data?.dialogueId ? {
-        id: data.dialogueId,
-        index: currentDialogueIndex,
-        total: dialoguesList?.length
-      } : undefined
+  // Update the dialogue change effect
+  useEffect(() => {
+    if (!currentDialogue || currentDialogue._id === undefined) return;
+
+    const dialogueId = currentDialogue._id;
+    
+    // Clean up previous audio states
+    cleanupAudioStates();
+    
+    // Update audio duration for new dialogue if it has a voiceOver
+    if (currentDialogue.voiceOverUrl) {
+      updateAudioDuration(currentDialogue.voiceOverUrl);
+    }
+
+    // Log dialogue change with debounce
+    debouncedLogEvent('Current dialogue changed', {
+      dialogueId: currentDialogue.dialogNumber,
+      dialogueNumber: currentDialogue.dialogNumber,
+      characterName: currentDialogue.characterName,
+      hasVoiceOver: !!currentDialogue.voiceOverUrl,
+      timeStart: currentDialogue.timeStart,
+      timeEnd: currentDialogue.timeEnd,
+      index: currentDialogueIndex,
+      total: dialoguesList.length
+    });
+
+    return () => {
+      cleanupAudioStates();
+      debouncedLogEvent.cancel(); // Cancel any pending logs on cleanup
     };
+  }, [
+    currentDialogue?._id, // Only depend on the ID change
+    cleanupAudioStates,
+    updateAudioDuration
+  ]); // Remove unnecessary dependencies
 
-    switch (level) {
-      case 'warn':
-        console.warn('VoiceOverDialogueView:', logData);
-        break;
-      case 'error':
-        console.error('VoiceOverDialogueView:', logData);
-        break;
-      default:
-        console.log('VoiceOverDialogueView:', logData);
-    }
-  }, [currentDialogueIndex, dialoguesList?.length]);
-
-  // Enhanced handleApproveAndSave with better logging
-  const handleApproveAndSave = async () => {
-    if (!currentDialogue || !currentDialogue.dialogNumber) {
-      logEvent('Save attempted with invalid dialogue', {
-        currentIndex: currentDialogueIndex,
-        dialoguesList: dialoguesList.length
-      }, 'error');
-      setError('Invalid dialogue data. Please try again.');
-      return;
-    }
-    
-    if (typeof currentDialogue.subtitleIndex !== 'number') {
-      logEvent('Invalid subtitle index', {
-        dialogueId: currentDialogue.dialogNumber,
-        subtitleIndex: currentDialogue.subtitleIndex
-      }, 'error');
-      setError('Invalid dialogue index. Please try again.');
-      return;
-    }
-
-    const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
-    if (!sceneNumber) {
-      logEvent('Invalid scene number', {
-        dialogueId: currentDialogue.dialogNumber,
-        sceneNumber
-      }, 'error');
-      setError('Invalid scene number format');
-      return;
-    }
-    
-    try {
-      setIsSaving(true);
-      logEvent('Starting save process', {
-        dialogueId: currentDialogue.dialogNumber,
-        sceneNumber,
-        dialogueNumber: currentDialogue.dialogNumber,
-        dialogueIndex: currentDialogue.subtitleIndex,
-        hasNewRecording: !!localAudioBlob,
-        hasExistingRecording: !!currentDialogue.voiceOverUrl,
-        blobSize: localAudioBlob?.size,
-        characterName: currentDialogue.characterName,
-        projectId
-      });
-      
-      let voiceOverUrl = currentDialogue.voiceOverUrl;
-      
-      // Upload audio if new recording exists
-      if (localAudioBlob) {
-        try {
-          logEvent('Preparing to upload audio', {
-            dialogueId: currentDialogue.dialogNumber,
-            sceneNumber,
-            dialogueNumber: currentDialogue.dialogNumber,
-            blobSize: localAudioBlob.size,
-            blobType: localAudioBlob.type,
-            duration: recordingDuration
-          });
-
-          const formData = new FormData();
-          formData.append('audio', localAudioBlob);
-          formData.append('dialogueId', currentDialogue.dialogNumber);
-          formData.append('sceneNumber', sceneNumber);
-          formData.append('dialogueIndex', String(currentDialogue.subtitleIndex));
-          formData.append('projectId', projectId);
-          
-          logEvent('Uploading audio file', {
-            dialogueId: currentDialogue.dialogNumber,
-            sceneNumber,
-            formDataKeys: Array.from(formData.keys())
-          });
-
-          const uploadResponse = await axios.post('/api/voice-over/upload', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-            timeout: 30000,
-            validateStatus: function (status) {
-              return status < 500;
-            }
-          });
-          
-          if (!uploadResponse.data?.url) {
-            logEvent('Upload failed', {
-              dialogueId: currentDialogue.dialogNumber,
-              sceneNumber,
-              status: uploadResponse.status,
-              error: uploadResponse.data?.error || 'No URL returned',
-              response: uploadResponse.data
-            }, 'error');
-            throw new Error(uploadResponse.data?.error || 'Failed to upload voice-over recording');
-          }
-          
-          voiceOverUrl = uploadResponse.data.url;
-          logEvent('Audio upload successful', {
-            dialogueId: currentDialogue.dialogNumber,
-            sceneNumber,
-            url: voiceOverUrl,
-            responseStatus: uploadResponse.status
-          });
-
-          // Clear local audio blob after successful upload
-          setLocalAudioBlob(null);
-
-          // Show success message
-          setShowSaveSuccess(true);
-          setTimeout(() => setShowSaveSuccess(false), 3000);
-
-          // Close confirmation modal if open
-          setShowConfirmation(false);
-
-          // Invalidate queries to refetch data
-          await queryClient.invalidateQueries({ queryKey: ['dialogues', projectId] });
-
-          // Handle navigation after save
-          if (pendingNavigationIndex !== null) {
-            logEvent('Navigating to next dialogue', {
-              from: currentDialogueIndex,
-              to: pendingNavigationIndex,
-              totalDialogues: dialoguesList.length
-            });
-            setCurrentDialogueIndex(pendingNavigationIndex);
-            setPendingNavigationIndex(null);
-          } else if (currentDialogueIndex < dialoguesList.length - 1) {
-            logEvent('Auto-advancing to next dialogue', {
-              from: currentDialogueIndex,
-              to: currentDialogueIndex + 1,
-              totalDialogues: dialoguesList.length
-            });
-            setCurrentDialogueIndex(prev => prev + 1);
-          }
-
-        } catch (error: any) {
-          logEvent('Upload failed', {
-            dialogueId: currentDialogue.dialogNumber,
-            sceneNumber,
-            error: error.message,
-            status: error.response?.status,
-            responseData: error.response?.data
-          }, 'error');
-          throw new Error('Failed to upload voice-over recording: ' + error.message);
-        }
-      }
-      
-    } catch (err) {
-      console.error('Error saving voice-over:', err);
-      const error = err as AppError;
-      logEvent('Save process failed', {
-        error: error.message,
-        dialogueId: currentDialogue.dialogNumber,
-        sceneNumber,
-        hasLocalBlob: !!localAudioBlob,
-        hasExistingUrl: !!currentDialogue.voiceOverUrl,
-        stack: error.stack
-      }, 'error');
-      setError(error.message || 'Failed to save voice-over');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setIsSaving(false);
-      setNavigationDirection(undefined);
-    }
-  };
-
-  const handleDragEnd = async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo): Promise<void> => {
-    const threshold = 100;
-    const velocity = info.velocity.x;
-    const offset = info.offset.x;
-
-    if (Math.abs(velocity) >= 500 || Math.abs(offset) >= threshold) {
-      if (velocity > 0 || offset > threshold) {
-        // Swipe right - go to previous
-        if (currentDialogueIndex > 0) {
-          if (hasChanges()) {
-            setConfirmationType('navigation');
-            setNavigationDirection('previous');
-            setPendingNavigationIndex(currentDialogueIndex - 1);
-            setShowConfirmation(true);
-          } else {
-            setCurrentDialogueIndex(prev => prev - 1);
-          }
-        }
-      } else {
-        // Swipe left - go to next
-        if (currentDialogueIndex < dialoguesList.length - 1) {
-          if (localAudioBlob) {
-            setConfirmationType('navigation');
-            setNavigationDirection('next');
-            setPendingNavigationIndex(currentDialogueIndex + 1);
-            setShowConfirmation(true);
-          } else {
-            setCurrentDialogueIndex(prev => prev + 1);
-          }
-        }
-      }
-    }
-    
-    await dragControls.start({ x: 0 });
-  };
-
-  // Add recording state logging
-  useEffect(() => {
-    if (isRecording) {
-      logEvent('Recording started', {
-        dialogueId: currentDialogue?._id,
-        maxDuration,
-        dialogueIndex: currentDialogueIndex + 1,
-        totalDialogues: dialoguesList.length
-      });
-    }
-  }, [isRecording, currentDialogue?._id, maxDuration, currentDialogueIndex, dialoguesList.length]);
-
-  // Add audio blob logging
-  useEffect(() => {
-    if (localAudioBlob) {
-      logEvent('New recording created', {
-        dialogueId: currentDialogue?._id,
-        blobSize: localAudioBlob.size,
-        blobType: localAudioBlob.type,
-        duration: recordingDuration
-      });
-    }
-  }, [localAudioBlob, currentDialogue?._id, recordingDuration]);
-
-  // Optimize audio blob state effect
+  // Update the audio blob state effect
   useEffect(() => {
     const hasLocalBlob = !!localAudioBlob;
     const hasExistingRecording = !!currentDialogue?.voiceOverUrl;
     
-    // Only log if there's an actual change in the state
     if (hasLocalBlob || hasExistingRecording) {
       logEvent('Audio blob state changed:', {
         hasLocalBlob,
@@ -1011,66 +904,20 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         hasExistingRecording
       });
     }
-  }, [localAudioBlob, currentDialogue?.voiceOverUrl]);
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl]); // Keep minimal dependencies
 
-  const handleReRecord = useCallback(() => {
-    try {
-      logEvent('Re-record button clicked', {
-        dialogueId: currentDialogue?._id,
-        existingUrl: currentDialogue?.voiceOverUrl
-      });
-
-      // Show confirmation modal before starting re-record
-      setConfirmationType('discard');
-      setShowConfirmation(true);
-    } catch (error) {
-      console.error('Failed to handle re-record:', error);
-      setError('Failed to start re-recording');
-    }
-  }, [currentDialogue, setConfirmationType, setShowConfirmation, setError]);
-
+  // Remove duplicate useEffect for recording duration
   useEffect(() => {
-    if (currentDialogue?._id && recordingDuration && maxDuration) {
-      const key = `recording_duration_${currentDialogue.dialogNumber}`;
-      localStorage.setItem(key, recordingDuration.toString());
+    if (currentDialogue?._id && recordingDuration) {
+      setCurrentRecordingDuration(recordingDuration);
+      
+      // Store in localStorage if needed
+      if (maxDuration) {
+        const key = `recording_duration_${currentDialogue.dialogNumber}`;
+        localStorage.setItem(key, recordingDuration.toString());
+      }
     }
   }, [currentDialogue?._id, recordingDuration, maxDuration]);
-
-  useEffect(() => {
-    if (currentDialogue?._id && currentDialogueIndex < dialoguesList.length) {
-      // Your existing effect logic
-      const handleKeyPress = (event: KeyboardEvent) => {
-        if (event.key === 'ArrowRight') {
-          handleNext();
-        } else if (event.key === 'ArrowLeft') {
-          handlePrevious();
-        }
-      };
-      window.addEventListener('keydown', handleKeyPress);
-      return () => window.removeEventListener('keydown', handleKeyPress);
-    }
-  }, [currentDialogue?._id, currentDialogueIndex, dialoguesList.length, maxDuration, handleNext, handlePrevious]);
-
-  // Add cleanup effect for dialogue changes
-  useEffect(() => {
-    // Clean up audio when switching dialogues
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current = null;
-    }
-    
-    // Reset states
-    setIsPlaying(false);
-    setLocalAudioBlob(null);
-    
-    return () => {
-      // Cleanup on unmount
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause();
-        audioPlayerRef.current = null;
-      }
-    };
-  }, [currentDialogue?._id]);
 
   // Add function to handle synced playback
   const handleSyncedPlayback = useCallback(() => {
@@ -1087,14 +934,14 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       setIsPlaying(false);
       return;
     }
-
+    
     const playSync = async () => {
       try {
         if (!videoRef.current) return;
 
         // Create audio element
         const audio = new Audio();
-        if (localAudioBlob) {
+      if (localAudioBlob) {
           audio.src = URL.createObjectURL(localAudioBlob);
         } else if (currentDialogue?.voiceOverUrl) {
           audio.src = currentDialogue.voiceOverUrl;
@@ -1156,70 +1003,260 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     };
   }, [currentDialogue?._id]);
 
-  // Add function to get audio duration
-  const updateAudioDuration = useCallback(async (blob: Blob | string) => {
-    try {
-      const audio = new Audio();
-      if (blob instanceof Blob) {
-        audio.src = URL.createObjectURL(blob);
-      } else {
-        audio.src = blob;
-      }
-
-      await new Promise((resolve) => {
-        audio.addEventListener('loadedmetadata', () => {
-          setAudioDuration(audio.duration);
-          resolve(true);
-        });
-        audio.addEventListener('error', () => {
-          console.error('Error loading audio duration');
-          setAudioDuration(0);
-          resolve(false);
-        });
+  // Add recording state logging
+  useEffect(() => {
+    if (isRecording) {
+      logEvent('Recording started', {
+        dialogueId: currentDialogue?._id,
+        maxDuration,
+        dialogueIndex: currentDialogueIndex + 1,
+        totalDialogues: dialoguesList.length
       });
-
-      if (blob instanceof Blob) {
-        URL.revokeObjectURL(audio.src);
-      }
-    } catch (error) {
-      console.error('Error getting audio duration:', error);
-      setAudioDuration(0);
     }
-  }, []);
+  }, [isRecording, currentDialogue?._id, maxDuration, currentDialogueIndex, dialoguesList.length]);
 
-  // Update audio duration when audio blob or URL changes
+  // Add audio blob logging
   useEffect(() => {
     if (localAudioBlob) {
-      updateAudioDuration(localAudioBlob);
-    } else if (currentDialogue?.voiceOverUrl) {
-      updateAudioDuration(currentDialogue.voiceOverUrl);
-    } else {
-      setAudioDuration(0);
+      logEvent('New recording created', {
+        dialogueId: currentDialogue?._id,
+        blobSize: localAudioBlob.size,
+        blobType: localAudioBlob.type,
+        duration: recordingDuration
+      });
     }
-  }, [localAudioBlob, currentDialogue?.voiceOverUrl, updateAudioDuration]);
+  }, [localAudioBlob, currentDialogue?._id, recordingDuration]);
 
-  // Fix useEffect dependencies in the main component
+  // Add cleanup effect for dialogue changes
   useEffect(() => {
-    if (!currentDialogue || !dialoguesList.length) return;
-    
-    // Update maxDuration based on current dialogue
-    const duration = calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd);
-    setMaxDuration(duration);
-    
-    // Update current index
-    const index = dialoguesList.findIndex(d => d._id === currentDialogue.dialogNumber);
-    if (index !== -1 && index !== currentDialogueIndex) {
-      setCurrentDialogueIndex(index);
+    // Clean up audio when switching dialogues
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current = null;
     }
-  }, [currentDialogue, dialoguesList, currentDialogueIndex, calculateDuration]);
-
-  // Fix useEffect dependencies for recording duration
-  useEffect(() => {
-    if (!currentDialogue || !recordingDuration) return;
     
-    // Update recording duration
-    setCurrentRecordingDuration(recordingDuration);
-  }, [currentDialogue, recordingDuration, setCurrentRecordingDuration]);
+    // Reset states
+    setIsPlaying(false);
+    setLocalAudioBlob(null);
+    
+    return () => {
+      // Cleanup on unmount
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current = null;
+      }
+    };
+  }, [currentDialogue?._id]);
+
+  // Update handleApproveAndSave to include processing and dual upload
+  const handleApproveAndSave = async () => {
+    if (!currentDialogue || !currentDialogue.dialogNumber) {
+      logEvent('Save attempted with invalid dialogue', {
+        currentIndex: currentDialogueIndex,
+        dialoguesList: dialoguesList.length
+      }, 'error');
+      setError('Invalid dialogue data. Please try again.');
+      return;
+    }
+    
+    if (typeof currentDialogue.subtitleIndex !== 'number') {
+      logEvent('Invalid subtitle index', {
+        dialogueId: currentDialogue.dialogNumber,
+        subtitleIndex: currentDialogue.subtitleIndex
+      }, 'error');
+      setError('Invalid dialogue index. Please try again.');
+      return;
+    }
+
+    const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
+    if (!sceneNumber) {
+      logEvent('Invalid scene number', {
+        dialogueId: currentDialogue.dialogNumber,
+        sceneNumber
+      }, 'error');
+      setError('Invalid scene number format');
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+
+      if (localAudioBlob) {
+        try {
+          logEvent('Starting save process with audio processing', {
+            originalBlobSize: localAudioBlob.size,
+            dialogueId: currentDialogue.dialogNumber,
+            timestamp: new Date().toISOString()
+          });
+
+          // Create formData for noise reduction
+          const noiseReductionFormData = new FormData();
+          noiseReductionFormData.append('file', localAudioBlob, 'audio.wav');
+
+          // Process audio with noise reduction
+          const processedAudioResponse = await axios.post(
+            '/api/noise-reduction',
+            noiseReductionFormData,
+            {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              responseType: 'blob'
+            }
+          );
+
+          // Prepare form data with both audio versions
+          const uploadFormData = new FormData();
+          uploadFormData.append('originalAudio', localAudioBlob);
+          uploadFormData.append('processedAudio', processedAudioResponse.data);
+          uploadFormData.append('dialogueId', currentDialogue.dialogNumber);
+          uploadFormData.append('projectId', projectId);
+          uploadFormData.append('sceneNumber', sceneNumber);
+
+          // Upload both versions
+          const uploadResponse = await axios.post('/api/voice-over/upload-both', uploadFormData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 30000
+          });
+
+          if (!uploadResponse.data?.processedUrl) {
+            throw new Error('Failed to upload audio');
+          }
+
+          // Update voiceOverUrl
+          const voiceOverUrl = uploadResponse.data.processedUrl;
+
+          // Clear local audio blob and reset states
+          setLocalAudioBlob(null);
+          setPlayingState(false);
+          if (audioPlayerRef.current) {
+            audioPlayerRef.current.pause();
+            audioPlayerRef.current = null;
+          }
+
+          // Show success message
+          setShowSaveSuccess(true);
+          setTimeout(() => setShowSaveSuccess(false), 3000);
+
+          // Close confirmation modal if open
+          setShowConfirmation(false);
+
+          // Invalidate queries to refetch data
+          await queryClient.invalidateQueries({ queryKey: ['dialogues', projectId] });
+
+          // Handle navigation after save
+          if (pendingNavigationIndex !== null) {
+            logEvent('Navigating to next dialogue', {
+              from: currentDialogueIndex,
+              to: pendingNavigationIndex,
+              totalDialogues: dialoguesList.length
+            });
+            setCurrentDialogueIndex(pendingNavigationIndex);
+            setPendingNavigationIndex(null);
+          } else if (currentDialogueIndex < dialoguesList.length - 1) {
+            logEvent('Auto-advancing to next dialogue', {
+              from: currentDialogueIndex,
+              to: currentDialogueIndex + 1,
+              totalDialogues: dialoguesList.length
+            });
+            setCurrentDialogueIndex(prev => prev + 1);
+          }
+
+        } catch (uploadError: any) {
+          logEvent('Upload process failed', {
+            dialogueId: currentDialogue.dialogNumber,
+            error: uploadError.message,
+            status: uploadError.response?.status,
+            timestamp: new Date().toISOString()
+          }, 'error');
+          throw new Error('Failed to process and upload voice-over recording: ' + uploadError.message);
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('Error saving voice-over:', error);
+      logEvent('Save process failed', {
+        error: error.message,
+        dialogueId: currentDialogue.dialogNumber,
+        sceneNumber,
+        hasLocalBlob: !!localAudioBlob,
+        hasExistingUrl: !!currentDialogue.voiceOverUrl,
+        stack: error.stack
+      }, 'error');
+      setError(error.message || 'Failed to save voice-over');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsSaving(false);
+      setNavigationDirection(undefined);
+    }
+  };
+
+  const handleDragEnd = async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo): Promise<void> => {
+    const threshold = 100;
+    const velocity = info.velocity.x;
+    const offset = info.offset.x;
+
+    if (Math.abs(velocity) >= 500 || Math.abs(offset) >= threshold) {
+      if (velocity > 0 || offset > threshold) {
+        // Swipe right - go to previous
+        if (currentDialogueIndex > 0) {
+          if (hasChanges()) {
+            setConfirmationType('navigation');
+            setNavigationDirection('previous');
+            setPendingNavigationIndex(currentDialogueIndex - 1);
+            setShowConfirmation(true);
+          } else {
+            // Clean up audio states before navigation
+            cleanupAudioStates();
+            setCurrentDialogueIndex(prev => prev - 1);
+          }
+        }
+      } else {
+        // Swipe left - go to next
+        if (currentDialogueIndex < dialoguesList.length - 1) {
+          if (localAudioBlob) {
+            setConfirmationType('navigation');
+            setNavigationDirection('next');
+            setPendingNavigationIndex(currentDialogueIndex + 1);
+            setShowConfirmation(true);
+          } else {
+            // Clean up audio states before navigation
+            cleanupAudioStates();
+            setCurrentDialogueIndex(prev => prev + 1);
+          }
+        }
+      }
+    }
+    
+    await dragControls.start({ x: 0 });
+  };
+
+  const handleReRecord = useCallback(() => {
+    try {
+      logEvent('Re-record button clicked', {
+        dialogueId: currentDialogue?._id,
+        existingUrl: currentDialogue?.voiceOverUrl
+      });
+
+      // Clear the local audio blob first
+    setLocalAudioBlob(null);
+    
+      // Reset recording states
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current = null;
+      }
+      setPlayingState(false);
+      
+      // Start new recording directly instead of showing confirmation
+      startRecording().catch(error => {
+        console.error('Failed to start recording:', error);
+        setError('Failed to start recording');
+      });
+
+      } catch (error) {
+      console.error('Failed to handle re-record:', error);
+      setError('Failed to start re-recording');
+    }
+  }, [currentDialogue, startRecording, setPlayingState, setError]);
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900">
@@ -1297,6 +1334,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         isProcessing={isProcessing}
         countdown={countdown}
         isWaitingForVoice={isWaitingForVoice}
+        currentDialogue={currentDialogue}
       />
 
       <ConfirmationModal 

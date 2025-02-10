@@ -91,8 +91,8 @@ export default function DirectorView({ projects }: DirectorViewProps) {
       })
 
       if (response.data) {
-        const minimalUrl = `/allDashboards/director/${projectId}/episodes/${episodeName}/dialogues`
-        router.push(minimalUrl)
+        const minimalUrl = `/allDashboards/director/${projectId}/episodes/${episodeName}/dialogues` as const
+        router.push(minimalUrl as any)
       } else {
         console.error('No data returned from API')
       }

@@ -816,7 +816,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700">
                                 <div className="py-1">
                                   <button
-                                    onClick={() => router.push(`/admin/project/${project._id}`)}
+                                    onClick={() => router.push(`/admin/project/${project._id}` as any)}
                                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                   >
                                     <Settings className="w-4 h-4 mr-2" />
@@ -1041,7 +1041,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {mainFilteredUsers.map((user) => (
+                {mainFilteredUsers.map((user: User) => (
                   <tr key={user._id.toString()}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">

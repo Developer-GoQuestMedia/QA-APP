@@ -92,7 +92,7 @@ export default function TranscriberView({ projects }: TranscriberViewProps) {
 
       if (response.data) {
         const minimalUrl = `/allDashboards/transcriber/${projectId}/episodes/${episodeName}/dialogues`
-        router.push(minimalUrl)
+        router.push(minimalUrl as any)
       } else {
         console.error('No data returned from API')
       }

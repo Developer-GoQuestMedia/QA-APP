@@ -214,12 +214,12 @@ export async function GET(
     
     return NextResponse.json({ 
       episode: {
-        _id: episode._id.toString(),
+        _id: episode._id?.toString() || projectId,
         name: episode.name,
         status: episode.status,
-        projectId: episode.projectId,
-        createdAt: episode.createdAt,
-        updatedAt: episode.updatedAt
+        projectId: projectId,
+        createdAt: episode.createdAt || new Date(),
+        updatedAt: episode.updatedAt || new Date()
       }
     });
 

@@ -1,8 +1,10 @@
 import { Server } from 'socket.io';
 import type { Server as HTTPServer } from 'http';
+import { io as createSocketClient } from 'socket.io-client';
 
 let io: Server | null = null;
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
+let socket: ReturnType<typeof createSocketClient> | null = null;
 
 export function initSocketServer(server: HTTPServer) {
   if (io) {
@@ -12,8 +14,9 @@ export function initSocketServer(server: HTTPServer) {
 
   io = new Server(server, {
     cors: {
-      origin: "*", // or your specific domain
+      origin: process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app",
       methods: ["GET", "POST"],
+      credentials: true
     },
     // Add ping timeout and interval settings
     pingTimeout: 60000,
@@ -157,4 +160,91 @@ export function disconnectUser(userId: string) {
       }
     }
   });
+}
+
+export function getSocketClient() {
+  if (!socket) {
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app';
+    socket = createSocketClient(socketUrl, {
+      path: '/api/socket',
+      addTrailingSlash: false,
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      transports: ['websocket'],
+    });
+
+    socket.on('connect', () => {
+      console.log('Socket client connected:', {
+        socketId: socket?.id,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', {
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('Socket client disconnected:', {
+        reason,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
+  return socket;
+}
+
+export function closeSocketConnection() {
+  if (socket) {
+    socket.close();
+    socket = null;
+  }
+}
+
+// Export a function to emit events
+export function emitSocketEvent(event: string, data: any) {
+  const client = getSocketClient();
+  if (client) {
+    client.emit(event, data);
+  }
+}
+
+// Export a function to listen to events
+export function onSocketEvent(event: string, callback: (data: any) => void) {
+  const client = getSocketClient();
+  if (client) {
+    client.on(event, callback);
+  }
+}
+
+// Export a function to join a project room
+export function joinProjectRoom(projectId: string) {
+  const client = getSocketClient();
+  if (client) {
+    client.emit('joinProjectRoom', { projectId });
+  }
+}
+
+// Export a function to leave a project room
+export function leaveProjectRoom(projectId: string) {
+  const client = getSocketClient();
+  if (client) {
+    client.emit('leaveProjectRoom', { projectId });
+  }
+}
+
+// Export a function to authenticate the socket connection
+export function authenticateSocket(userId: string) {
+  const client = getSocketClient();
+  if (client) {
+    client.emit('authenticate', { userId });
+  }
 }

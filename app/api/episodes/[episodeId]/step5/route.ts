@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
-import axios from 'axios';
 
 export async function POST(
   request: Request,
@@ -46,50 +45,42 @@ export async function POST(
       );
     }
 
-    // Update status to processing
+    // Extract unique characters and count their dialogues
+    const characterDialogues = new Map<string, number>();
+    const characterSamples = new Map<string, string>();
+    
+    translationData.dialogues.forEach((dialogue: { characterName: string; translatedText: string }) => {
+      const count = characterDialogues.get(dialogue.characterName) || 0;
+      characterDialogues.set(dialogue.characterName, count + 1);
+      
+      // Store first dialogue as sample if not already stored
+      if (!characterSamples.has(dialogue.characterName)) {
+        characterSamples.set(dialogue.characterName, dialogue.translatedText);
+      }
+    });
+
+    const characters = Array.from(characterDialogues.entries()).map(([characterName, dialogueCount]) => ({
+      characterName,
+      dialogueCount,
+      sampleDialogue: characterSamples.get(characterName),
+    }));
+
+    // Update status to processing and store character analysis
     await db.collection('projects').updateOne(
       { 'episodes._id': new ObjectId(params.episodeId) },
       {
         $set: {
           'episodes.$.steps.step5.status': 'processing',
           'episodes.$.step': 5,
-        }
-      }
-    );
-
-    // Extract unique characters from dialogues
-    const characters = Array.from(new Set(translationData.dialogues.map((d: { characterName: string }) => d.characterName)));
-
-    // Call external API for voice assignment
-    const response = await axios.post(
-      'https://voice-assignment-api.example.com/assign',
-      {
-        characters,
-        episodeId: params.episodeId,
-        targetLanguage: targetEpisode.targetLanguage,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 1000 * 60 * 5, // 5 minutes timeout
-      }
-    );
-
-    // Update episode with voice assignments
-    await db.collection('projects').updateOne(
-      { 'episodes._id': new ObjectId(params.episodeId) },
-      {
-        $set: {
-          'episodes.$.steps.step5.characterVoices': response.data.voiceAssignments,
-          'episodes.$.steps.step5.status': 'completed',
-          'episodes.$.steps.step5.updatedAt': new Date(),
-          'episodes.$.step': 6,
+          'episodes.$.steps.step5.characters': characters,
         }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: 'Voice assignment completed'
+      characters,
+      message: 'Character analysis completed'
     });
   } catch (error: any) {
     console.error('Error in step 5:', error);

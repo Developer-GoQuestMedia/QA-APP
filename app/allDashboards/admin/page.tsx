@@ -21,8 +21,8 @@ export default function Page() {
         userRole: session?.user?.role
       })
 
-      const { data } = await axios.get('/api/projects')
-      const projectsWithDates = data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
+      const { data } = await axios.get('/api/admin/projects')
+      const projectsWithDates = data.data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
         updatedAt: string;
         createdAt?: string;
         _id: string;

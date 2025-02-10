@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Tab } from '@headlessui/react';
 import clsx from 'clsx';
+import axios, { AxiosError } from 'axios';
+
 
 interface EpisodeViewProps {
   episode: Episode;
@@ -101,30 +103,63 @@ export default function AdminEpisodeView({ episode }: EpisodeViewProps) {
         episodeName: episode.name
       });
 
-      const response = await fetch(`/api/episodes/${episode._id}/step${stepNumber}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+
+      let response;
+      try {
+        response = await axios.post(`/api/episodes/${episode._id}/step${stepNumber}`, {
           name: episode.name,
           videoPath: episode.videoPath,
           videoKey: episode.videoKey,
           episodeId: episode._id,
           step: stepNumber
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
+        }, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (err) {
+        const error = err as AxiosError;
+        if (axios.isAxiosError(error)) {
+          logEpisodeEvent('api-error', {
+            episodeId: episode._id,
+            error: {
+              message: error.message,
+              status: error.response?.status,
+              data: error.response?.data,
+              code: error.code
+            }
+          });
+          throw new Error(
+            `API Error: ${(error.response?.data as {message?: string})?.message || error.message}`
+          );
+        }
+        
+        const unknownError = err as Error;
+        logEpisodeEvent('unknown-error', {
+          episodeId: episode._id,
+          error: {
+            message: unknownError.message,
+            name: unknownError.name,
+            stack: unknownError.stack
+          }
+        });
+        throw new Error(`Unexpected error: ${unknownError.message}`);
       }
 
-      const result = await response.json();
+      if (!response?.data) {
+        throw new Error('No data received from server');
+      }
+
+      if (response.status >= 400) {
+        const errorMessage = response.data?.error || response.statusText || 'Unknown error occurred';
+        throw new Error(errorMessage);
+      }
+
+      const data = response.data;
       toast.success(`Step ${stepNumber} process started`);
       logEpisodeEvent(`step${stepNumber}-started`, {
         episodeId: episode._id,
-        result
+        result: data
       });
     } catch (error) {
       console.error(`Error in step ${stepNumber}:`, error);

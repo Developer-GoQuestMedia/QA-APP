@@ -131,8 +131,8 @@ export async function GET(request: Request) {
         _id: proj._id.toString(),
         episodes: proj.episodes?.map((ep) => ({
           ...ep,
-          _id: ep._id.toString()
-        })),
+          _id: ep._id?.toString() || ep._id
+        })) || [],
       }))
 
       console.log(`Found ${serializedProjects.length} projects for user`)

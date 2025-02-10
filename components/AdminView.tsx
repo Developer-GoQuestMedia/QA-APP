@@ -17,6 +17,7 @@ import { User, UserRole } from '@/types/user';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import axios from 'axios';
 import {
   Search,
@@ -32,6 +33,9 @@ import {
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { io } from 'socket.io-client';
+
+// Add socket imports
+import { getSocketClient, authenticateSocket, joinProjectRoom, leaveProjectRoom } from '@/lib/socket';
 
 // ===============================
 // Type Definitions
@@ -146,6 +150,7 @@ const handleError = (error: Error): void => {
 // ===============================
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
+  const session = useSession();
   // Add debug logging at component mount
   useEffect(() => {
     console.log('AdminView - Component mounted with projects:', {
@@ -159,7 +164,32 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         assignedTo: p.assignedTo?.length || 0
       }))
     });
-  }, [projects]);
+
+    // Initialize socket connection
+    const socket = getSocketClient();
+
+    if (socket && session.data?.user?.id) {
+      authenticateSocket(session.data.user.id);
+
+      // Join project rooms for all projects
+      projects.forEach(project => {
+        if (project._id) {
+          joinProjectRoom(project._id.toString());
+        }
+      });
+    }
+
+    // Cleanup function
+    return () => {
+      if (socket) {
+        projects.forEach(project => {
+          if (project._id) {
+            leaveProjectRoom(project._id.toString());
+          }
+        });
+      }
+    };
+  }, [projects, session.data?.user?.id]);
 
   // =================
   // State Management
@@ -473,7 +503,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   /**
    * Handle project creation with file upload and processing
    */
-  const handleCreateProject = useCallback(async () => {
+  const handleCreateProject = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!newProject.title || !newProject.videoFiles.length) {
       setError('Please fill in all required fields and upload at least one video file');
       return;

@@ -233,130 +233,59 @@ export async function PATCH(
   request: Request,
   { params }: { params: { dialogueId: string } }
 ) {
-  console.log('=== PATCH /api/dialogues/[dialogueId] Debug ===');
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      console.log('Authentication failed: No session');
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { db } = await connectToDatabase();
-    const data = await request.json();
-    const dialogueId = params.dialogueId;
-
-    console.log('Request data:', {
-      dialogueId,
-      data,
-      userEmail: session.user?.email
-    });
-
-    // Validate required fields
-    if (!data.dialogue || !data.projectId) {
-      console.log('Validation failed:', { 
-        hasDialogue: !!data.dialogue, 
-        hasProjectId: !!data.projectId 
-      });
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // Verify director or sr director role
+    if (!['director', 'srDirector'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // First try to find the dialogue
-    let dialogue = null;
-    let dialogueCollection = 'dialogues';
-
-    console.log('Searching for dialogue in collections...');
-    
-    // Try to find the dialogue in any collection by checking all projects
-    const projects = await db.collection('projects').find().toArray();
-    
-    for (const project of projects) {
-      if (project.dialogue_collection) {
-        console.log('Checking collection:', project.dialogue_collection);
-        const tempDialogue = await db.collection(project.dialogue_collection).findOne({
-          _id: new ObjectId(dialogueId)
-        });
-        if (tempDialogue) {
-          dialogue = tempDialogue;
-          dialogueCollection = project.dialogue_collection;
-          console.log('Found dialogue in collection:', dialogueCollection);
-          break;
-        }
-      }
+    const { dialogueId } = params
+    if (!dialogueId || !ObjectId.isValid(dialogueId)) {
+      return NextResponse.json(
+        { error: 'Invalid dialogue ID' },
+        { status: 400 }
+      )
     }
 
-    // If still not found, try the default collection
-    if (!dialogue) {
-      dialogue = await db.collection('dialogues').findOne({
-        _id: new ObjectId(dialogueId)
-      });
-      console.log('Dialogue search result:', { found: !!dialogue });
-    }
+    const updateData = await request.json()
+    const { db } = await connectToDatabase()
 
-    if (!dialogue) {
-      console.log('Dialogue not found:', dialogueId);
-      return NextResponse.json({ error: 'Dialogue not found' }, { status: 404 });
-    }
-
-    // Get project to verify access
-    const project = await db.collection('projects').findOne({
-      _id: new ObjectId(dialogue.projectId),
-      'assignedTo': {
-        $elemMatch: {
-          username: session.user.username
-        }
-      }
-    });
-
-    console.log('Project access check:', {
-      projectFound: !!project,
-      username: session.user.username
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
-    }
-
-    // Prepare update data
-    const updateData = {
-      dialogue: data.dialogue,
-      character: data.character,
-      status: data.status,
-      timeStart: data.timeStart,
-      timeEnd: data.timeEnd,
-      index: data.index,
-      updatedAt: new Date(),
-      updatedBy: session.user.email
-    };
-
-    // Update the dialogue in the correct collection
-    const result = await db.collection(dialogueCollection).findOneAndUpdate(
+    // Update the dialogue
+    const result = await db.collection('dialogues').findOneAndUpdate(
       { _id: new ObjectId(dialogueId) },
-      { $set: updateData },
+      {
+        $set: {
+          ...updateData,
+          updatedAt: new Date(),
+          updatedBy: {
+            username: session.user.username,
+            role: session.user.role
+          }
+        }
+      },
       { returnDocument: 'after' }
-    );
+    )
 
     if (!result) {
       return NextResponse.json(
-        { error: 'Failed to update dialogue' },
-        { status: 400 }
-      );
+        { error: 'Dialogue not found' },
+        { status: 404 }
+      )
     }
 
-    // Transform ObjectIds to strings for response
-    const serializedDialogue = {
-      ...result,
-      _id: result._id.toString(),
-      projectId: result.projectId.toString()
-    };
-
-    return NextResponse.json(serializedDialogue);
-  } catch (error) {
-    console.error('Error updating dialogue:', error);
+    return NextResponse.json(result)
+  } catch (error: any) {
+    console.error('Error updating dialogue:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to update dialogue' },
       { status: 500 }
-    );
+    )
   }
 }
 

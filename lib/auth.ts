@@ -8,6 +8,16 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('Please define the NEXTAUTH_SECRET environment variable')
 }
 
+// Define available roles
+export const availableRoles = [
+  'admin',
+  'director',
+  'srDirector',
+  'voiceOver',
+  'transcriber',
+  'translator'
+] as const;
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -55,24 +65,36 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Invalid username or password')
           }
 
-          // Ensure role is in the correct format
-          const role = user.role as UserRole
-          console.log('Role validation:', {
-            role,
-            username: user.username,
-            timestamp: new Date().toISOString()
-          })
+          // Validate role is in available roles
+          if (!availableRoles.includes(user.role as any)) {
+            console.error('Invalid role mapping:', {
+              userRole: user.role,
+              availableRoles,
+              timestamp: new Date().toISOString()
+            })
+            throw new Error('Invalid role configuration')
+          }
 
-          // Update last login
+          // Update last login and session log
+          const now = new Date()
+          const updateData = {
+            lastLogin: now,
+            isActive: true,
+            [`sessionsLog.${now.getTime()}`]: {
+              loginTime: now,
+              userAgent: req.headers?.['user-agent'] || 'unknown'
+            }
+          }
+
           await db.collection('users').updateOne(
             { _id: user._id },
-            { $set: { lastLogin: new Date() } }
+            { $set: updateData }
           )
 
           const userData = {
             id: user._id.toString(),
             username: user.username,
-            role: role,
+            role: user.role,
             email: user.email
           }
 
@@ -138,4 +160,22 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development'
-} 
+}
+
+export const roles = [
+  'transcriber',
+  'translator',
+  'voiceOver',
+  'director',
+  'srDirector',
+  'admin'
+] as const;
+
+export const rolePermissions = {
+  transcriber: ['transcribe'],
+  translator: ['translate'],
+  voiceOver: ['record'],
+  director: ['review', 'approve', 'request-revision'],
+  srDirector: ['review', 'approve', 'request-revision'],
+  admin: ['manage-users', 'manage-projects', 'manage-roles', 'view-analytics']
+} as const; 

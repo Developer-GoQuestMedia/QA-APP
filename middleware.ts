@@ -7,6 +7,7 @@ import type { UserRole } from '@/types/user'
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin: ['/allDashboards/admin', '/api/admin'],
   director: ['/allDashboards/director'],
+  srDirector: ['/allDashboards/srDirector'],
   voiceOver: ['/allDashboards/voice-over'],
   transcriber: ['/allDashboards/transcriber'],
   translator: ['/allDashboards/translator']

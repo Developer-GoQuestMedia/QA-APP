@@ -281,4 +281,58 @@ REDIS_URL=
 ### Version Control
 - GitHub Repository
 - Branch Strategy
-- Release Process 
+- Release Process
+
+## Queue System
+
+### Redis Requirements
+- Minimum Redis version: 6.2.0 (recommended)
+- Redis configuration:
+  ```conf
+  maxmemory 128mb
+  maxmemory-policy allkeys-lru
+  ```
+
+### Queue Operations
+
+#### Adding Jobs
+```typescript
+import { addAudioCleaningJob } from '@/lib/queueJobs';
+
+// Add a new job
+const job = await addAudioCleaningJob({
+  episodeId: 'episode123',
+  name: 'example.mp4',
+  videoPath: 's3://bucket/path/example.mp4',
+  videoKey: 'unique-key'
+});
+
+// Get job status
+const status = await getJobStatus(job.id);
+```
+
+#### Monitoring
+- REST API endpoints:
+  - `GET /api/queue/status`: Get overall queue metrics
+  - `GET /api/queue/jobs/[jobId]`: Get specific job status
+
+#### Queue Metrics
+- Active jobs count
+- Waiting jobs count
+- Completed jobs count
+- Failed jobs count
+- Job processing time
+- Error rates
+
+#### Job Lifecycle
+1. Job Added → Waiting
+2. Worker Picks Up → Active
+3. Processing → Updates Progress
+4. Completion → Success/Failure
+5. Cleanup → After retention period
+
+#### Error Handling
+- Automatic retries (3 attempts)
+- Exponential backoff
+- Failed job retention (7 days)
+- Error logging and monitoring 

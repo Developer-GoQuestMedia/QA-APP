@@ -1,0 +1,38 @@
+<service>
+	<id>audiocleanerworker.exe</id>
+	<name>AudioCleanerWorker</name>
+	<description>Audio Cleaner Queue Worker Service</description>
+	<executable>C:\Users\vivekkumar\Desktop\repo\QA-APP\npx tsx</executable>
+	<argument>--harmony</argument>
+	<argument>C:\Users\vivekkumar\Desktop\repo\QA-APP\node_modules\node-windows\lib\wrapper.js</argument>
+	<argument>--file</argument>
+	<argument>C:\Users\vivekkumar\Desktop\repo\QA-APP\scripts\start-worker.ts</argument>
+	<argument>--scriptoptions=</argument>
+	<argument>--log</argument>
+	<argument>AudioCleanerWorker wrapper</argument>
+	<argument>--grow</argument>
+	<argument>0.25</argument>
+	<argument>--wait</argument>
+	<argument>1</argument>
+	<argument>--maxrestarts</argument>
+	<argument>3</argument>
+	<argument>--abortonerror</argument>
+	<argument>n</argument>
+	<argument>--stopparentfirst</argument>
+	<argument>undefined</argument>
+	<logmode>rotate</logmode>
+	<logpath>C:\Users\vivekkumar\Desktop\repo\QA-APP\logs</logpath>
+	<stoptimeout>30sec</stoptimeout>
+	<env name="NODE_ENV" value="production"/>
+	<env name="MONGODB_URI" value="mongodb+srv://vivekkumarsingh:dGeuK817ItxjmUb4@cluster0.vir7o.mongodb.net/?retryWrites=true&amp;w=majority&amp;appName=Cluster0"/>
+	<env name="MONGODB_DB" value="TestDB"/>
+	<env name="REDIS_URL" value="https://decent-tadpole-13663.upstash.io"/>
+	<env name="REDIS_TOKEN" value="ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA"/>
+	<env name="REDIS_TLS_URL" value="redis://default:ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA@decent-tadpole-13663.upstash.io:6379"/>
+	<serviceaccount>
+		<domain>GQM-IT-LTP-048</domain>
+		<user>LocalSystem</user>
+		<password></password>
+	</serviceaccount>
+	<workingdirectory>C:\Users\vivekkumar\Desktop\repo\QA-APP</workingdirectory>
+</service>

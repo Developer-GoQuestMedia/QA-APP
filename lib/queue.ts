@@ -6,20 +6,45 @@ import type { Redis } from 'ioredis';
 /**
  * Redis connection configuration
  */
-const redisConfig = {
-  host: '127.0.0.1',
-  port: 6379,
-  maxRetriesPerRequest: null, // Required by BullMQ
-  enableReadyCheck: false,    // Recommended for better performance
-  retryStrategy: (times: number) => {
-    if (times > 3) {
-      console.error('Redis connection failed after 3 retries');
-      return null;
-    }
-    const delay = Math.min(times * 200, 1000);
-    return delay;
+function getRedisConfig() {
+  if (process.env.NODE_ENV === 'production') {
+    // Production configuration (Upstash)
+    return {
+      url: process.env.REDIS_URL,
+      token: process.env.REDIS_TOKEN,
+      tls: {
+        url: process.env.REDIS_TLS_URL,
+        rejectUnauthorized: false
+      },
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      retryStrategy: (times: number) => {
+        if (times > 3) {
+          console.error('Redis connection failed after 3 retries');
+          return null;
+        }
+        const delay = Math.min(times * 200, 1000);
+        return delay;
+      }
+    };
+  } else {
+    // Local development configuration
+    return {
+      host: '127.0.0.1',
+      port: 6379,
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      retryStrategy: (times: number) => {
+        if (times > 3) {
+          console.error('Redis connection failed after 3 retries');
+          return null;
+        }
+        const delay = Math.min(times * 200, 1000);
+        return delay;
+      }
+    };
   }
-};
+}
 
 let connection: Redis | null = null;
 
@@ -29,10 +54,20 @@ let connection: Redis | null = null;
 export const getRedisConnection = () => {
   if (!connection) {
     try {
-      // Try to use REDIS_URL from environment if available
-      const redisUrl = process.env.REDIS_URL;
-      connection = redisUrl ? new IORedis(redisUrl, { maxRetriesPerRequest: null }) : new IORedis(redisConfig);
+      const config = getRedisConfig();
       
+      if (process.env.NODE_ENV === 'production') {
+        // For Upstash in production
+        connection = new IORedis(config.url!, {
+          tls: config.tls,
+          maxRetriesPerRequest: null,
+          retryStrategy: config.retryStrategy
+        });
+      } else {
+        // For local development
+        connection = new IORedis(config);
+      }
+
       connection.on('error', (error: Error) => {
         console.error('Redis connection error:', error);
       });
@@ -73,8 +108,13 @@ export const createAudioCleanerQueue = () => {
           type: 'exponential',
           delay: 1000
         },
-        removeOnComplete: true,
-        removeOnFail: false
+        removeOnComplete: {
+          age: 24 * 3600, // Keep completed jobs for 24 hours
+          count: 100 // Keep last 100 completed jobs
+        },
+        removeOnFail: {
+          age: 7 * 24 * 3600 // Keep failed jobs for 7 days
+        }
       }
     });
   } catch (error) {

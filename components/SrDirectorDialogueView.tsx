@@ -42,7 +42,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   const router = useRouter()
   useCacheCleaner()
 
-  // Session validation
+  // Add session validation
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -51,10 +51,23 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
   }, [status, session, router])
 
-  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue)
+  // Convert dialogues using the adapter
+  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
   
-  const [dialoguesList, setDialoguesList] = useState(adaptedInitialDialogues);
+  const sortedDialogues = [...adaptedInitialDialogues].sort((a, b) => 
+    (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
+  );
+
+  console.log('SrDirectorDialogueView - Initial state:', {
+    totalDialogues: sortedDialogues.length,
+    firstDialogue: sortedDialogues[0],
+    lastDialogue: sortedDialogues[sortedDialogues.length - 1]
+  });
+  
+  // State declarations
+  const [dialoguesList, setDialoguesList] = useState<SrDirectorDialogue[]>(sortedDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
+  const [currentDialogue, setCurrentDialogue] = useState<SrDirectorDialogue | null>(sortedDialogues[0] || null);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [error, setError] = useState<string>('');
@@ -66,7 +79,22 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
 
-  const currentDialogue = dialoguesList[currentDialogueIndex];
+  // Update current dialogue when index changes
+  useEffect(() => {
+    const dialogue = dialoguesList[currentDialogueIndex];
+    if (dialogue) {
+      console.log('Updating dialogue:', {
+        dialogueNumber: dialogue.dialogNumber,
+        character: dialogue.character,
+        timeStart: dialogue.timeStart,
+        timeEnd: dialogue.timeEnd
+      });
+      
+      setCurrentDialogue(dialogue);
+      setDirectorNotes(dialogue.directorNotes || '');
+      setRevisionRequested(dialogue.revisionRequested || false);
+    }
+  }, [currentDialogueIndex, dialoguesList]);
 
   const hasChanges = () => {
     if (!currentDialogue) return false;
@@ -103,10 +131,20 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   };
 
   const handleApproveAndSave = async () => {
-    if (!currentDialogue || !session) return
-
+    if (!currentDialogue || !session) return;
+    
     try {
-      setIsSaving(true)
+      setIsSaving(true);
+      
+      console.log('Saving dialogue:', {
+        dialogueNumber: currentDialogue.dialogNumber,
+        projectId,
+        updateData: {
+          status: revisionRequested ? 'revision-requested' : 'approved',
+          directorNotes,
+          revisionRequested
+        }
+      });
       
       const updateData = {
         dialogue: currentDialogue.dialogue,
@@ -119,7 +157,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         voiceOverNotes: currentDialogue.voiceOverNotes,
         directorNotes,
         revisionRequested,
-      }
+      };
       
       const { data: responseData } = await axios.patch(
         `/api/dialogues/${currentDialogue._id}`,
@@ -129,45 +167,60 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
             'Content-Type': 'application/json',
           }
         }
-      )
+      );
+
+      console.log('Save response:', {
+        status: 'success',
+        dialogueId: responseData._id,
+        updatedStatus: responseData.status
+      });
       
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
           d._id === currentDialogue._id ? responseData : d
         )
-      )
+      );
 
       queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
-        if (!oldData?.data) return oldData
+        if (!oldData?.data) return oldData;
         return {
           ...oldData,
           data: oldData.data.map((d: BaseDialogue) => 
             d._id === currentDialogue._id ? responseData : d
           )
-        }
-      })
+        };
+      });
 
-      setShowSaveSuccess(true)
-      setShowConfirmation(false)
-      setTimeout(() => setShowSaveSuccess(false), 2000)
+      setShowSaveSuccess(true);
+      setShowConfirmation(false);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
 
       if (currentDialogueIndex < dialoguesList.length - 1) {
-        setCurrentDialogueIndex(prev => prev + 1)
+        setCurrentDialogueIndex(prev => prev + 1);
       }
     } catch (error) {
-      console.error('Error saving review:', error)
-      setError(error instanceof Error ? error.message : 'Failed to save review')
+      console.error('Error saving review:', {
+        error,
+        dialogue: currentDialogue,
+        projectContext: {
+          projectId,
+          dialogueId: currentDialogue._id,
+          dialogueNumber: currentDialogue.dialogNumber
+        }
+      });
+      
+      setError(error instanceof Error ? error.message : 'Failed to save review');
       
       // Handle session expiration
       if (axios.isAxiosError(error) && error.response?.status === 401) {
-        router.push('/login')
+        router.push('/login');
       }
       
-      setTimeout(() => setError(''), 3000)
+      setTimeout(() => setError(''), 3000);
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
-  }
+  };
 
   const togglePlayPause = () => {
     if (videoRef.current) {
@@ -192,13 +245,6 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       setPlaybackRate(rate);
     }
   };
-
-  useEffect(() => {
-    if (currentDialogue) {
-      setDirectorNotes(currentDialogue.directorNotes || '');
-      setRevisionRequested(currentDialogue.revisionRequested || false);
-    }
-  }, [currentDialogue]);
 
   useEffect(() => {
     const video = videoRef.current;

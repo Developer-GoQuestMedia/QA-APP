@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import axios from 'axios'
 import { Dialogue as BaseDialogue } from '@/types/dialogue'
+import { Episode } from '@/types/project'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
 // Extend the base dialogue type with additional fields needed for the translator view
@@ -12,11 +13,44 @@ interface TranslatorDialogue extends BaseDialogue {
   index: number;
   character: string;
   videoUrl: string;
+  collectionName?: string;
+  uploadedAt?: string | Date;
+  dialogue: {
+    original: string;
+    translated: string;
+    adapted: string;
+  };
+  emotions: {
+    primary: {
+      emotion?: string;
+      intensity?: number;
+    };
+    secondary?: {
+      emotion?: string;
+      intensity?: number;
+    };
+  };
+  characterProfile: {
+    age?: string;
+    gender?: string;
+    occupation?: string;
+    accents?: string[];
+    otherNotes?: string;
+  };
+  scenario?: {
+    name?: string;
+    description?: string;
+    location?: string;
+    timeOfDay?: string;
+    otherScenarioNotes?: string;
+  };
 }
 
 interface DialogueViewProps {
   dialogues: BaseDialogue[]
   projectId: string
+  episodes?: Episode[]
+  currentEpisodeId?: string
 }
 
 type QueryData = {
@@ -26,21 +60,43 @@ type QueryData = {
 };
 
 // Adapter function to convert BaseDialogue to TranslatorDialogue
-const adaptDialogue = (dialogue: BaseDialogue): TranslatorDialogue => ({
-  ...dialogue,
-  index: dialogue.subtitleIndex,
-  character: dialogue.characterName,
-  videoUrl: dialogue.videoClipUrl
-});
+const adaptDialogue = (dialogue: BaseDialogue): TranslatorDialogue => {
+  return {
+    ...dialogue,
+    index: dialogue.subtitleIndex || 0,
+    character: dialogue.characterName || '',
+    videoUrl: dialogue.videoClipUrl || '',
+    dialogue: {
+      original: dialogue.dialogue?.original || '',
+      translated: dialogue.dialogue?.translated || '',
+      adapted: dialogue.dialogue?.adapted || ''
+    },
+    emotions: dialogue.emotions || {
+      primary: {},
+      secondary: {}
+    },
+    characterProfile: dialogue.characterProfile || {},
+    scenario: dialogue.scenario || {}
+  };
+};
 
-export default function TranslatorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
+export default function TranslatorDialogueView({ 
+  dialogues: initialDialogues, 
+  projectId,
+  episodes = [],
+  currentEpisodeId 
+}: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
 
   // Convert dialogues using the adapter
   const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+
+  const sortedDialogues = [...adaptedInitialDialogues].sort((a, b) => 
+    (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
+  );
   
-  const [dialoguesList, setDialoguesList] = useState<TranslatorDialogue[]>(adaptedInitialDialogues);
+  const [dialoguesList, setDialoguesList] = useState<TranslatorDialogue[]>(sortedDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
@@ -100,6 +156,11 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
     try {
       setIsSaving(true);
       
+      const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
+      if (!sceneNumber) {
+        throw new Error('Invalid scene number format');
+      }
+      
       const updateData = {
         dialogue: {
           original: currentDialogue.dialogue.original || '',
@@ -111,23 +172,36 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         timeStart: currentDialogue.timeStart || '',
         timeEnd: currentDialogue.timeEnd || '',
         index: currentDialogue.index,
-        projectId
+        projectId,
+        sceneNumber
       };
       
       console.log('Translation save attempt:', {
-        dialogueId: currentDialogue._id,
+        dialogueNumber: currentDialogue.dialogNumber,
         projectId,
         updateData
       });
       
       const { data: responseData } = await axios.patch(
-        `/api/dialogues/${currentDialogue._id}`,
+        `/api/dialogues/update/${encodeURIComponent(currentDialogue.dialogNumber)}`,
         updateData
       );
       
+      console.log('Save response:', responseData);
+
+      // Create an adapted dialogue from the response
+      const updatedDialogue = adaptDialogue({
+        ...currentDialogue,
+        dialogue: responseData.dialogue,
+        characterName: responseData.characterName,
+        timeStart: responseData.timeStart,
+        timeEnd: responseData.timeEnd,
+        status: responseData.status
+      });
+
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
-          d._id === currentDialogue._id ? responseData : d
+          d.dialogNumber === currentDialogue.dialogNumber ? updatedDialogue : d
         )
       );
 
@@ -136,33 +210,47 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         return {
           ...oldData,
           data: oldData.data.map((d: BaseDialogue) => 
-            d._id === currentDialogue._id ? responseData : d
+            d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
           )
         };
       });
 
       setShowSaveSuccess(true);
       setShowConfirmation(false);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
-
-      if (currentDialogueIndex < dialoguesList.length - 1) {
-        setCurrentDialogueIndex(prev => prev + 1);
-      }
+      setTimeout(() => {
+        setShowSaveSuccess(false);
+        if (currentDialogueIndex < dialoguesList.length - 1) {
+          setCurrentDialogueIndex(prev => prev + 1);
+        }
+      }, 1000);
     } catch (error) {
       console.error('Translation save error:', {
         error,
         dialogue: currentDialogue,
-        projectId,
+        projectContext: {
+          componentProjectId: projectId,
+          dialogueProjectId: currentDialogue.projectId,
+          dialogueId: currentDialogue._id,
+          dialogueNumber: currentDialogue.dialogNumber
+        },
         requestData: {
           translated: pendingTranslatedText,
           adapted: pendingAdaptedText
         }
       });
-      setError(error instanceof Error ? error.message : 'Failed to save translation');
-      setTimeout(() => setError(''), 3000);
+      setError(error instanceof Error ? `Save failed: ${error.message}` : 'Failed to save translation');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Add helper function to extract scene number
+  const extractSceneNumber = (dialogueNumber: string): string => {
+    const parts = dialogueNumber.split('.');
+    if (parts.length >= 3) {
+      return parts.slice(0, -1).join('.');
+    }
+    return '';
   };
 
   // Motion values for swipe animation
@@ -181,35 +269,58 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
   }, [currentDialogue])
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const SWIPE_THRESHOLD = 50;
+    const SWIPE_THRESHOLD = 10;
     const velocity = Math.abs(info.velocity.x);
     const offset = Math.abs(info.offset.x);
 
     if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
-      animControls.start({ x: 0, opacity: 1 })
+      animControls.start({ x: 0, opacity: 1, scale: 1 });
       return;
     }
 
-    const direction = info.offset.x > 0 ? 'right' : 'left'
+    const direction = info.offset.x > 0 ? 'right' : 'left';
     
-    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-      animControls.start({ 
-        x: -200, 
-        opacity: 0,
-        transition: { duration: 0.2 }
-      }).then(() => {
-        handleNext();
-        animControls.set({ x: 0, opacity: 1 });
-      });
+    if (direction === 'left') {
+      // Right to left swipe
+      if (hasChanges()) {
+        // Show confirmation modal for saving if there are changes
+        animControls.start({ 
+          x: -200, 
+          opacity: 0.5,
+          scale: 0.95,
+          transition: { duration: 0.2 }
+        }).then(() => {
+          setShowConfirmation(true);
+          animControls.start({ x: 0, opacity: 1, scale: 1 });
+        });
+      } else {
+        // If no changes, move to next dialogue
+        animControls.start({ 
+          x: -200, 
+          opacity: 0,
+          scale: 0.95,
+          transition: { duration: 0.2 }
+        }).then(() => {
+          if (currentDialogueIndex < dialoguesList.length - 1) {
+            setCurrentDialogueIndex(prev => prev + 1);
+          }
+          animControls.set({ x: 0, opacity: 1, scale: 1 });
+        });
+      }
     } else if (direction === 'right' && currentDialogueIndex > 0) {
+      // Left to right swipe - Go to previous dialogue
       animControls.start({ 
         x: 200, 
         opacity: 0,
+        scale: 0.95,
         transition: { duration: 0.2 }
       }).then(() => {
         handlePrevious();
-        animControls.set({ x: 0, opacity: 1 });
+        animControls.set({ x: 0, opacity: 1, scale: 1 });
       });
+    } else {
+      // Reset animation if conditions not met
+      animControls.start({ x: 0, opacity: 1, scale: 1 });
     }
   };
 
@@ -320,7 +431,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         <div className="relative">
           <video
             ref={videoRef}
-            src={currentDialogue.videoUrl}
+            src={currentDialogue?.videoUrl}
             className="w-full"
           />
           {isVideoLoading && (
@@ -356,7 +467,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
                 key={rate}
                 onClick={() => changePlaybackRate(rate)}
                 className={`px-2 py-1 rounded ${
-                  playbackRate === rate
+                  videoRef.current?.playbackRate === rate
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                 }`}
@@ -368,14 +479,21 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
         </div>
       </div>
 
-      {/* Main Content Card */}
+      {/* Dialogue Information Card */}
       <motion.div
         className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700"
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.2}
         animate={animControls}
-        style={{ x, rotate, opacity, scale }}
+        initial={{ opacity: 1, scale: 1 }}
+        style={{
+          x,
+          rotate,
+          transformOrigin: "50% 50% 0px",
+          userSelect: "none",
+          touchAction: "pan-y"
+        }}
         onDragEnd={handleDragEnd}
         whileTap={{ cursor: 'grabbing' }}
         transition={{ 
@@ -402,7 +520,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
             <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
               Original Text
             </label>
-            <div className="w-full p-2 text-gray-900 dark:text-white">
+            <div className="w-full p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white min-h-[100px]">
               {currentDialogue.dialogue.original}
             </div>
           </div>
@@ -417,7 +535,8 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
               id="translatedText"
               value={pendingTranslatedText}
               onChange={(e) => setPendingTranslatedText(e.target.value)}
-              className="w-full p-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+              className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y min-h-[100px]"
+              placeholder="Enter translation here..."
             />
           </div>
 
@@ -431,7 +550,8 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
               id="adaptedText"
               value={pendingAdaptedText}
               onChange={(e) => setPendingAdaptedText(e.target.value)}
-              className="w-full p-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+              className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y min-h-[100px]"
+              placeholder="Enter adapted text here..."
             />
           </div>
 
@@ -442,7 +562,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
                 Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                {currentDialogue.timeStart} - {currentDialogue.timeEnd}
+                {currentDialogue?.timeStart} - {currentDialogue?.timeEnd}
               </div>
             </div>
           </div>
@@ -455,7 +575,7 @@ export default function TranslatorDialogueView({ dialogues: initialDialogues, pr
           <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
             <p className="mb-4">You have unsaved changes. What would you like to do?</p>
-            <div className="flex justify-end gap-2 sm:gap-4">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
               <button
                 onClick={handleDiscardChanges}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white text-sm"

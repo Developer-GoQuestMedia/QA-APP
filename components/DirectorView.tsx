@@ -14,7 +14,7 @@ interface AssignedUser {
 }
 
 interface DirectorViewProps {
-  projects: Project[]
+  projects?: Project[] | null
 }
 
 // Utility function to validate MongoDB ObjectId format
@@ -23,7 +23,7 @@ function isValidObjectId(id: string): boolean {
   return objectIdPattern.test(id);
 }
 
-export default function DirectorView({ projects }: DirectorViewProps) {
+export default function DirectorView({ projects = [] }: DirectorViewProps) {
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -32,21 +32,38 @@ export default function DirectorView({ projects }: DirectorViewProps) {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false)
   const [loadingEpisodeId, setLoadingEpisodeId] = useState<string | null>(null)
+  const [error, setError] = useState<string>('')
+
+  console.log('DirectorView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: Array.isArray(projects) ? projects.length : 0,
+    projectsType: typeof projects
+  })
 
   // Filter projects assigned to current user as director
-  const assignedProjects = projects.filter((project) =>
-    project.assignedTo.some(
-      (assignment: AssignedUser) =>
-        assignment.username === session?.user?.username &&
-        assignment.role === 'director'
-    )
-  )
+  const assignedProjects = Array.isArray(projects) 
+    ? projects.filter((project) =>
+        Array.isArray(project?.assignedTo) &&
+        project.assignedTo.some(
+          (assignment: AssignedUser) =>
+            assignment.username === session?.user?.username &&
+            assignment.role === 'director'
+        )
+      )
+    : [];
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    project?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project?.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map((p) => p.title)
+  })
 
   // Handle user logout
   const handleLogout = async () => {
@@ -80,6 +97,11 @@ export default function DirectorView({ projects }: DirectorViewProps) {
   ) => {
     try {
       setLoadingEpisodeId(episodeId)
+      console.log('Fetching dialogues for episode:', {
+        projectId,
+        episodeName,
+        episodeId
+      })
 
       const response = await axios.get(`/api/dialogues`, {
         params: {
@@ -91,13 +113,26 @@ export default function DirectorView({ projects }: DirectorViewProps) {
       })
 
       if (response.data) {
+        console.log('Fetched data:', {
+          dialoguesCount: response.data.data?.length || 0,
+          episode: response.data.episode?.name,
+          project: response.data.project?.title
+        })
+
         const minimalUrl = `/allDashboards/director/${projectId}/episodes/${episodeName}/dialogues` as const
-        router.push(minimalUrl as any)
+        router.push(minimalUrl)
       } else {
         console.error('No data returned from API')
       }
     } catch (error) {
-      console.error('Error fetching dialogues:', error)
+      console.error('Error fetching dialogues:', {
+        error,
+        params: {
+          projectId,
+          episodeName,
+          episodeId
+        }
+      })
     } finally {
       setLoadingEpisodeId(null)
     }

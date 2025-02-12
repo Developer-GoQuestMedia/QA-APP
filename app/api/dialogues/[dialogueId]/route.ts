@@ -265,12 +265,18 @@ export async function PATCH(
 
     // 2. Parse request body
     const body = await request.json();
-    const { dialogue, character, status, timeStart, timeEnd, projectId, sceneNumber } = body;
+    const { dialogue, character, status, timeStart, timeEnd, projectId, sceneNumber, databaseName, collectionName } = body;
 
-    if (!dialogue || !projectId || !sceneNumber) {
+    if (!dialogue || !projectId || !sceneNumber || !databaseName || !collectionName) {
       return NextResponse.json({ 
         error: 'Missing required fields',
-        details: { dialogue: !!dialogue, projectId, sceneNumber }
+        details: { 
+          dialogue: !!dialogue, 
+          projectId, 
+          sceneNumber,
+          databaseName,
+          collectionName 
+        }
       }, { status: 400 });
     }
 
@@ -290,21 +296,10 @@ export async function PATCH(
     }
 
     // 6. Connect to project's database
-    const projectDb = client.db(projectDoc.databaseName);
+    const projectDb = client.db(databaseName);
     
-    // 7. Find episode collection
-    const paddedEpisodeNumber = padNumber(dialogueComponents.episodeNumber);
-    const episode = projectDoc.episodes.find((ep: any) => {
-      const match = ep.collectionName.match(/_Ep_(\d+)$/);
-      return match && match[1] === paddedEpisodeNumber;
-    });
-
-    if (!episode) {
-      throw new Error(`Episode ${paddedEpisodeNumber} not found in project`);
-    }
-
-    // 8. Update dialogue in database
-    const updateResult = await projectDb.collection(episode.collectionName).updateOne(
+    // 7. Update dialogue in database
+    const updateResult = await projectDb.collection(collectionName).updateOne(
       { 
         'dialogues.dialogNumber': params.dialogueId
       },
@@ -312,9 +307,11 @@ export async function PATCH(
         $set: {
           'dialogues.$.dialogue': dialogue,
           'dialogues.$.characterName': character,
-          'dialogues.$.status': status || 'transcribed',
+          'dialogues.$.status': status || 'approved',
           'dialogues.$.timeStart': timeStart,
           'dialogues.$.timeEnd': timeEnd,
+          'dialogues.$.directorNotes': body.directorNotes,
+          'dialogues.$.revisionRequested': body.revisionRequested,
           'dialogues.$.updatedAt': new Date(),
           'dialogues.$.updatedBy': session.user.id
         }
@@ -322,18 +319,18 @@ export async function PATCH(
     );
 
     if (updateResult.matchedCount === 0) {
-      throw new Error(`Dialogue ${params.dialogueId} not found in episode collection ${episode.collectionName}`);
+      throw new Error(`Dialogue ${params.dialogueId} not found in episode collection ${collectionName}`);
     }
 
-    // 9. Fetch the updated dialogue
-    const updatedDoc = await projectDb.collection(episode.collectionName).findOne(
+    // 8. Fetch the updated dialogue
+    const updatedDoc = await projectDb.collection(collectionName).findOne(
       { 'dialogues.dialogNumber': params.dialogueId },
       { projection: { 'dialogues.$': 1 } }
     );
 
     const updatedDialogue = updatedDoc?.dialogues[0];
 
-    // 10. Return success response
+    // 9. Return success response
     return NextResponse.json(updatedDialogue);
 
   } catch (error: any) {

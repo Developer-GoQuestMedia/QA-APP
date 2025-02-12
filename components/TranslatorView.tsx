@@ -14,7 +14,7 @@ interface AssignedUser {
 }
 
 interface TranslatorViewProps {
-  projects: Project[]
+  projects?: Project[] // Make projects optional
 }
 
 // Utility function to validate MongoDB ObjectId format
@@ -23,7 +23,7 @@ function isValidObjectId(id: string): boolean {
   return objectIdPattern.test(id);
 }
 
-export default function TranslatorView({ projects }: TranslatorViewProps) {
+export default function TranslatorView({ projects = [] }: TranslatorViewProps) { // Add default empty array
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -33,20 +33,32 @@ export default function TranslatorView({ projects }: TranslatorViewProps) {
   const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false)
   const [loadingEpisodeId, setLoadingEpisodeId] = useState<string | null>(null)
 
+  console.log('TranslatorView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: projects.length
+  })
+
   // Filter projects assigned to current user as translator
   const assignedProjects = projects.filter((project) =>
-    project.assignedTo.some(
+    project.assignedTo?.some?.(
       (assignment: AssignedUser) =>
         assignment.username === session?.user?.username &&
         assignment.role === 'translator'
-    )
+    ) ?? false
   )
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map((p) => p.title)
+  })
 
   // Handle user logout
   const handleLogout = async () => {

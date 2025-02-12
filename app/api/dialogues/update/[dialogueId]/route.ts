@@ -86,9 +86,16 @@ export async function PATCH(
         $set: {
           'dialogues.$.dialogue': dialogue,
           'dialogues.$.characterName': character,
-          'dialogues.$.status': status || 'transcribed',
+          'dialogues.$.status': status || (body.needsReRecord ? 'needs-rerecord' : body.revisionRequested ? 'revision-requested' : 'approved'),
           'dialogues.$.timeStart': timeStart,
           'dialogues.$.timeEnd': timeEnd,
+          'dialogues.$.directorNotes': body.directorNotes,
+          'dialogues.$.revisionRequested': body.revisionRequested,
+          'dialogues.$.needsReRecord': body.needsReRecord,
+          'dialogues.$.voiceOverUrl': body.voiceOverUrl,
+          'dialogues.$.voiceOverNotes': body.voiceOverNotes,
+          'dialogues.$.subtitleIndex': body.subtitleIndex,
+          'dialogues.$.index': body.index,
           'dialogues.$.updatedAt': new Date(),
           'dialogues.$.updatedBy': session.user.id
         }
@@ -112,10 +119,17 @@ export async function PATCH(
       dialogueId: params.dialogueId,
       collection: episode.collectionName,
       projectId,
-      sceneNumber
+      sceneNumber,
+      updatedFields: updatedDialogue
     });
 
-    return NextResponse.json(updatedDialogue);
+    return NextResponse.json({
+      ...updatedDialogue,
+      dialogNumber: params.dialogueId,
+      projectId,
+      databaseName: projectDoc.databaseName,
+      collectionName: episode.collectionName
+    });
 
   } catch (error: any) {
     console.error('Error updating dialogue:', {

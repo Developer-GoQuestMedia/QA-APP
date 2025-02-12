@@ -32,20 +32,32 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
 
   useCacheCleaner()
 
+  console.log('SrDirectorView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: projects.length
+  })
+
   // Filter projects assigned to current user as sr director
   const assignedProjects = projects.filter((project) =>
-    project.assignedTo.some(
+    project.assignedTo?.some?.(
       (assignment: { username: string; role: string }) =>
         assignment.username === session?.user?.username &&
         assignment.role === 'srDirector'
-    )
+    ) ?? false
   )
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map((p) => p.title)
+  })
 
   // Handle user logout
   const handleLogout = async () => {
@@ -79,6 +91,11 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
   ) => {
     try {
       setLoadingEpisodeId(episodeId)
+      console.log('Fetching dialogues for episode:', {
+        projectId,
+        episodeName,
+        episodeId
+      })
 
       const response = await axios.get(`/api/dialogues`, {
         params: {
@@ -90,14 +107,26 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
       })
 
       if (response.data) {
+        console.log('Fetched data:', {
+          dialoguesCount: response.data.data?.length || 0,
+          episode: response.data.episode?.name,
+          project: response.data.project?.title
+        })
+
         const minimalUrl = `/allDashboards/srDirector/${projectId}/episodes/${episodeName}/dialogues` as const
         router.push(minimalUrl)
       } else {
         console.error('No data returned from API')
       }
     } catch (error) {
-      console.error('Error fetching dialogues:', error)
-      setError(error instanceof Error ? error.message : 'Failed to fetch dialogues')
+      console.error('Error fetching dialogues:', {
+        error,
+        params: {
+          projectId,
+          episodeName,
+          episodeId
+        }
+      })
     } finally {
       setLoadingEpisodeId(null)
     }

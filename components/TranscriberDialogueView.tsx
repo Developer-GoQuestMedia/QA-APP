@@ -61,11 +61,11 @@ type QueryData = {
 
 // Adapter function to convert BaseDialogue to TranscriberDialogue
 const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => {
-  console.log('Adapting dialogue:', {
-    original: dialogue,
-    characterName: dialogue.characterName,
-    dialogueText: dialogue.dialogue
-  });
+  // console.log('Adapting dialogue:', {
+  //   original: dialogue,
+  //   characterName: dialogue.characterName,
+  //   dialogueText: dialogue.dialogue
+  // });
   
   return {
     ...dialogue,
@@ -207,10 +207,6 @@ export default function TranscriberDialogueView({
       setNetworkStatus('saving');
       setIsSaving(true);
       
-      if (currentDialogue.projectId !== projectId) {
-        throw new Error('Project ID mismatch');
-      }
-      
       const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
       if (!sceneNumber) {
         throw new Error('Invalid scene number format');
@@ -230,35 +226,60 @@ export default function TranscriberDialogueView({
         projectId,
         sceneNumber
       };
-      
+
+      console.log('Saving dialogue:', {
+        dialogueNumber: currentDialogue.dialogNumber,
+        projectId,
+        updateData
+      });
+
+      // Fix the API endpoint URL
       const { data: responseData } = await axios.patch(
-        `/api/dialogues/${sceneNumber}/${currentDialogue.dialogNumber}`,
+        `/api/dialogues/update/${encodeURIComponent(currentDialogue.dialogNumber)}`,
         updateData
       );
       
+      console.log('Save response:', responseData);
+
+      // Create an adapted dialogue from the response
+      const updatedDialogue = adaptDialogue({
+        ...currentDialogue,
+        dialogue: responseData.dialogue,
+        characterName: responseData.characterName,
+        timeStart: responseData.timeStart,
+        timeEnd: responseData.timeEnd,
+        status: responseData.status
+      });
+
+      // Update the dialogues list with the new dialogue
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
-          d._id === currentDialogue._id ? responseData : d
+          d.dialogNumber === currentDialogue.dialogNumber ? updatedDialogue : d
         )
       );
 
+      // Update the query cache
       queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
           data: oldData.data.map((d: BaseDialogue) => 
-            d._id === currentDialogue._id ? responseData : d
+            d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
           )
         };
       });
 
       setNetworkStatus('success');
       setShowConfirmation(false);
-      setTimeout(() => setNetworkStatus('idle'), 2000);
-
-      if (currentDialogueIndex < dialoguesList.length - 1) {
-        setCurrentDialogueIndex(prev => prev + 1);
-      }
+      setShowSaveSuccess(true);
+      setTimeout(() => {
+        setNetworkStatus('idle');
+        setShowSaveSuccess(false);
+        // Move to next dialogue after successful save
+        if (currentDialogueIndex < dialoguesList.length - 1) {
+          setCurrentDialogueIndex(prev => prev + 1);
+        }
+      }, 1000);
     } catch (error) {
       console.error('Save error details:', {
         error,
@@ -266,7 +287,8 @@ export default function TranscriberDialogueView({
         projectContext: {
           componentProjectId: projectId,
           dialogueProjectId: currentDialogue.projectId,
-          dialogueId: currentDialogue._id
+          dialogueId: currentDialogue._id,
+          dialogueNumber: currentDialogue.dialogNumber
         },
         requestData: {
           character,
@@ -300,7 +322,8 @@ export default function TranscriberDialogueView({
     setShowConfirmation,
     setCurrentDialogueIndex,
     setError,
-    setIsSaving
+    setIsSaving,
+    setShowSaveSuccess
   ]);
 
   // Key press event handler
@@ -529,35 +552,58 @@ export default function TranscriberDialogueView({
   );
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const SWIPE_THRESHOLD = 50;
+    const SWIPE_THRESHOLD = 10;
     const velocity = Math.abs(info.velocity.x);
     const offset = Math.abs(info.offset.x);
 
     if (offset < SWIPE_THRESHOLD || velocity < 0.5) {
-      animControls.start({ x: 0, opacity: 1 })
+      animControls.start({ x: 0, opacity: 1, scale: 1 });
       return;
     }
 
-    const direction = info.offset.x > 0 ? 'right' : 'left'
+    const direction = info.offset.x > 0 ? 'right' : 'left';
     
-    if (direction === 'left' && currentDialogueIndex < dialoguesList.length - 1) {
-      animControls.start({ 
-        x: -200, 
-        opacity: 0,
-        transition: { duration: 0.2 }
-      }).then(() => {
-        handleNext();
-        animControls.set({ x: 0, opacity: 1 });
-      });
+    if (direction === 'left') {
+      // Right to left swipe
+      if (hasChanges()) {
+        // Show confirmation modal for saving if there are changes
+        animControls.start({ 
+          x: -200, 
+          opacity: 0.5,
+          scale: 0.95,
+          transition: { duration: 0.2 }
+        }).then(() => {
+          setShowConfirmation(true);
+          animControls.start({ x: 0, opacity: 1, scale: 1 });
+        });
+      } else {
+        // If no changes, move to next dialogue
+        animControls.start({ 
+          x: -200, 
+          opacity: 0,
+          scale: 0.95,
+          transition: { duration: 0.2 }
+        }).then(() => {
+          if (currentDialogueIndex < dialoguesList.length - 1) {
+            setCurrentDialogueIndex(prev => prev + 1);
+          }
+          animControls.set({ x: 0, opacity: 1, scale: 1 });
+        });
+      }
     } else if (direction === 'right' && currentDialogueIndex > 0) {
+      // Left to right swipe - Go to previous dialogue
       animControls.start({ 
         x: 200, 
         opacity: 0,
+        scale: 0.95,
         transition: { duration: 0.2 }
       }).then(() => {
         handlePrevious();
-        animControls.set({ x: 0, opacity: 1 });
+        animControls.set({ x: 0, opacity: 1, scale: 1 });
       });
+    } else {
+      // Reset animation if conditions not met
+      animControls.start({ x: 0, opacity: 1, scale: 1 });
     }
   };
 

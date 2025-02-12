@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/auth.config'
+import { NextRequest } from 'next/server'
 
 export async function GET(
   request: Request,
@@ -229,63 +230,119 @@ export async function PUT(
   }
 }
 
+// Configure request handling
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Helper function to parse dialogue number
+function parseDialogueNumber(dialogueNumber: string) {
+  const parts = dialogueNumber.split('.');
+  if (parts.length !== 4) {
+    throw new Error('Invalid dialogue number format. Expected format: projectNumber.episodeNumber.sceneNumber.dialogueNumber');
+  }
+  return {
+    projectNumber: parts[0],
+    episodeNumber: parts[1],
+    sceneNumber: parts[2],
+    dialogueNumber: parts[3]
+  };
+}
+
+function padNumber(num: string | number): string {
+  return num.toString().padStart(2, '0');
+}
+
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { dialogueId: string } }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 1. Authorization check
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify director or sr director role
-    if (!['director', 'srDirector'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // 2. Parse request body
+    const body = await request.json();
+    const { dialogue, character, status, timeStart, timeEnd, projectId, sceneNumber } = body;
+
+    if (!dialogue || !projectId || !sceneNumber) {
+      return NextResponse.json({ 
+        error: 'Missing required fields',
+        details: { dialogue: !!dialogue, projectId, sceneNumber }
+      }, { status: 400 });
     }
 
-    const { dialogueId } = params
-    if (!dialogueId || !ObjectId.isValid(dialogueId)) {
-      return NextResponse.json(
-        { error: 'Invalid dialogue ID' },
-        { status: 400 }
-      )
+    // 3. Parse dialogue number
+    const dialogueComponents = parseDialogueNumber(params.dialogueId);
+
+    // 4. Connect to master database
+    const { db: masterDb, client } = await connectToDatabase();
+    
+    // 5. Get project details
+    const projectDoc = await masterDb.collection('projects').findOne(
+      { _id: new ObjectId(projectId) }
+    );
+
+    if (!projectDoc) {
+      throw new Error('Project not found in master database');
     }
 
-    const updateData = await request.json()
-    const { db } = await connectToDatabase()
+    // 6. Connect to project's database
+    const projectDb = client.db(projectDoc.databaseName);
+    
+    // 7. Find episode collection
+    const paddedEpisodeNumber = padNumber(dialogueComponents.episodeNumber);
+    const episode = projectDoc.episodes.find((ep: any) => {
+      const match = ep.collectionName.match(/_Ep_(\d+)$/);
+      return match && match[1] === paddedEpisodeNumber;
+    });
 
-    // Update the dialogue
-    const result = await db.collection('dialogues').findOneAndUpdate(
-      { _id: new ObjectId(dialogueId) },
+    if (!episode) {
+      throw new Error(`Episode ${paddedEpisodeNumber} not found in project`);
+    }
+
+    // 8. Update dialogue in database
+    const updateResult = await projectDb.collection(episode.collectionName).updateOne(
+      { 
+        'dialogues.dialogNumber': params.dialogueId
+      },
       {
         $set: {
-          ...updateData,
-          updatedAt: new Date(),
-          updatedBy: {
-            username: session.user.username,
-            role: session.user.role
-          }
+          'dialogues.$.dialogue': dialogue,
+          'dialogues.$.characterName': character,
+          'dialogues.$.status': status || 'transcribed',
+          'dialogues.$.timeStart': timeStart,
+          'dialogues.$.timeEnd': timeEnd,
+          'dialogues.$.updatedAt': new Date(),
+          'dialogues.$.updatedBy': session.user.id
         }
-      },
-      { returnDocument: 'after' }
-    )
+      }
+    );
 
-    if (!result) {
-      return NextResponse.json(
-        { error: 'Dialogue not found' },
-        { status: 404 }
-      )
+    if (updateResult.matchedCount === 0) {
+      throw new Error(`Dialogue ${params.dialogueId} not found in episode collection ${episode.collectionName}`);
     }
 
-    return NextResponse.json(result)
+    // 9. Fetch the updated dialogue
+    const updatedDoc = await projectDb.collection(episode.collectionName).findOne(
+      { 'dialogues.dialogNumber': params.dialogueId },
+      { projection: { 'dialogues.$': 1 } }
+    );
+
+    const updatedDialogue = updatedDoc?.dialogues[0];
+
+    // 10. Return success response
+    return NextResponse.json(updatedDialogue);
+
   } catch (error: any) {
-    console.error('Error updating dialogue:', error)
-    return NextResponse.json(
-      { error: 'Failed to update dialogue' },
-      { status: 500 }
-    )
+    console.error('Error updating dialogue:', error);
+    return NextResponse.json({ 
+      error: 'Failed to update dialogue',
+      details: error.message,
+      stack: error.stack
+    }, { status: 500 });
   }
 }
 

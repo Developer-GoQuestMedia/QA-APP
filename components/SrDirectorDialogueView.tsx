@@ -6,6 +6,8 @@ import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motio
 import axios from 'axios'
 import { Dialogue as BaseDialogue } from '@/types/dialogue'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
 interface SrDirectorDialogue extends BaseDialogue {
   index: number;
@@ -36,9 +38,20 @@ const adaptDialogue = (dialogue: BaseDialogue): SrDirectorDialogue => ({
 const useTransform = motion.transform;
 
 export default function SrDirectorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
-  useCacheCleaner();
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  useCacheCleaner()
 
-  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+  // Session validation
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login')
+    } else if (session?.user?.role !== 'srDirector') {
+      router.push('/unauthorized')
+    }
+  }, [status, session, router])
+
+  const adaptedInitialDialogues = initialDialogues.map(adaptDialogue)
   
   const [dialoguesList, setDialoguesList] = useState(adaptedInitialDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
@@ -90,10 +103,10 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   };
 
   const handleApproveAndSave = async () => {
-    if (!currentDialogue) return;
-    
+    if (!currentDialogue || !session) return
+
     try {
-      setIsSaving(true);
+      setIsSaving(true)
       
       const updateData = {
         dialogue: currentDialogue.dialogue,
@@ -106,41 +119,55 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         voiceOverNotes: currentDialogue.voiceOverNotes,
         directorNotes,
         revisionRequested,
-      };
+      }
       
-      const { data: responseData } = await axios.patch(`/api/dialogues/${currentDialogue._id}`, updateData);
+      const { data: responseData } = await axios.patch(
+        `/api/dialogues/${currentDialogue._id}`,
+        updateData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      )
       
       setDialoguesList(prevDialogues => 
         prevDialogues.map(d => 
           d._id === currentDialogue._id ? responseData : d
         )
-      );
+      )
 
       queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
-        if (!oldData?.data) return oldData;
+        if (!oldData?.data) return oldData
         return {
           ...oldData,
           data: oldData.data.map((d: BaseDialogue) => 
             d._id === currentDialogue._id ? responseData : d
           )
-        };
-      });
+        }
+      })
 
-      setShowSaveSuccess(true);
-      setShowConfirmation(false);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
+      setShowSaveSuccess(true)
+      setShowConfirmation(false)
+      setTimeout(() => setShowSaveSuccess(false), 2000)
 
       if (currentDialogueIndex < dialoguesList.length - 1) {
-        setCurrentDialogueIndex(prev => prev + 1);
+        setCurrentDialogueIndex(prev => prev + 1)
       }
     } catch (error) {
-      console.error('Error saving review:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save review');
-      setTimeout(() => setError(''), 3000);
+      console.error('Error saving review:', error)
+      setError(error instanceof Error ? error.message : 'Failed to save review')
+      
+      // Handle session expiration
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        router.push('/login')
+      }
+      
+      setTimeout(() => setError(''), 3000)
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const togglePlayPause = () => {
     if (videoRef.current) {

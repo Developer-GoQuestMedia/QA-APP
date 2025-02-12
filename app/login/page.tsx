@@ -12,7 +12,7 @@ const dashboardRoutes = {
   srDirector: '/allDashboards/srDirector',
   transcriber: '/allDashboards/transcriber',
   translator: '/allDashboards/translator',
-  voiceOver: '/allDashboards/voiceOver'
+  voiceOver: '/allDashboards/voice-over'
 } as const
 
 type UserRole = keyof typeof dashboardRoutes
@@ -79,7 +79,7 @@ export default function Login() {
       } else {
         console.log('Login successful, redirecting to dashboard')
         // Redirect based on role
-        const response = await axios.get('/api/auth/me')
+        const response = await axios.get('/api/users/me')
         const userRole = response.data.role as UserRole
 
         if (userRole in dashboardRoutes) {

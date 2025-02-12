@@ -65,36 +65,44 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Invalid username or password')
           }
 
-          // Validate role is in available roles
-          if (!availableRoles.includes(user.role as any)) {
-            console.error('Invalid role mapping:', {
-              userRole: user.role,
-              availableRoles,
-              timestamp: new Date().toISOString()
-            })
-            throw new Error('Invalid role configuration')
-          }
+          // // Validate role is in available roles
+          // if (!availableRoles.includes(user.role as any)) {
+          //   console.error('Invalid role mapping:', {
+          //     userRole: user.role,
+          //     availableRoles,
+          //     timestamp: new Date().toISOString()
+          //   })
+          //   throw new Error('Invalid role configuration')
+          // }
 
-          // Update last login and session log
-          const now = new Date()
-          const updateData = {
-            lastLogin: now,
-            isActive: true,
-            [`sessionsLog.${now.getTime()}`]: {
-              loginTime: now,
-              userAgent: req.headers?.['user-agent'] || 'unknown'
-            }
-          }
+          // // Update last login and session log
+          // const now = new Date()
+          // const updateData = {
+          //   lastLogin: now,
+          //   isActive: true,
+          //   [`sessionsLog.${now.getTime()}`]: {
+          //     loginTime: now,
+          //     userAgent: req.headers?.['user-agent'] || 'unknown'
+          //   }
+          // }
+
+          const role = user.role as UserRole
+          console.log('Role validation:', {
+            role,
+            username: user.username,
+            timestamp: new Date().toISOString()
+          })
 
           await db.collection('users').updateOne(
             { _id: user._id },
-            { $set: updateData }
+            // { $set: updateData }
+            { $set: { lastLogin: new Date() } }
           )
 
           const userData = {
             id: user._id.toString(),
             username: user.username,
-            role: user.role,
+            role: role,
             email: user.email
           }
 

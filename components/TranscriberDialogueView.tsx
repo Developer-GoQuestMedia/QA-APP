@@ -15,12 +15,41 @@ interface TranscriberDialogue extends BaseDialogue {
   videoUrl: string;
   collectionName?: string;
   uploadedAt?: string | Date;
+  dialogue: {
+    original: string;
+    translated: string;
+    adapted: string;
+  };
+  emotions: {
+    primary: {
+      emotion?: string;
+      intensity?: number;
+    };
+    secondary?: {
+      emotion?: string;
+      intensity?: number;
+    };
+  };
+  characterProfile: {
+    age?: string;
+    gender?: string;
+    occupation?: string;
+    accents?: string[];
+    otherNotes?: string;
+  };
+  scenario?: {
+    name?: string;
+    description?: string;
+    location?: string;
+    timeOfDay?: string;
+    otherScenarioNotes?: string;
+  };
 }
 
 interface DialogueViewProps {
   dialogues: BaseDialogue[]
   projectId: string
-  episodes: Episode[]
+  episodes?: Episode[]
   currentEpisodeId?: string
 }
 
@@ -31,33 +60,58 @@ type QueryData = {
 };
 
 // Adapter function to convert BaseDialogue to TranscriberDialogue
-const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => ({
-  ...dialogue,
-  index: dialogue.subtitleIndex,
-  character: dialogue.characterName,
-  videoUrl: dialogue.videoClipUrl
-});
+const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => {
+  console.log('Adapting dialogue:', {
+    original: dialogue,
+    characterName: dialogue.characterName,
+    dialogueText: dialogue.dialogue
+  });
+  
+  return {
+    ...dialogue,
+    index: dialogue.subtitleIndex || 0,
+    character: dialogue.characterName || '',
+    videoUrl: dialogue.videoClipUrl || '',
+    dialogue: {
+      original: dialogue.dialogue?.original || '',
+      translated: dialogue.dialogue?.translated || '',
+      adapted: dialogue.dialogue?.adapted || ''
+    },
+    emotions: dialogue.emotions || {
+      primary: {},
+      secondary: {}
+    },
+    characterProfile: dialogue.characterProfile || {},
+    scenario: dialogue.scenario || {}
+  };
+};
 
 export default function TranscriberDialogueView({ 
   dialogues: initialDialogues, 
   projectId,
-  episodes,
+  episodes = [],
   currentEpisodeId 
 }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
 
+  
+
   // Convert dialogues using the adapter
   const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
+
+  const sortedDialogues = [...adaptedInitialDialogues].sort((a, b) => 
+    (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
+  );
   
   // State declarations
-  const [dialoguesList, setDialoguesList] = useState<TranscriberDialogue[]>(adaptedInitialDialogues);
+  const [dialoguesList, setDialoguesList] = useState<TranscriberDialogue[]>(sortedDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
-  const [currentDialogue, setCurrentDialogue] = useState<TranscriberDialogue | null>(dialoguesList[0] || null);
-  const [character, setCharacter] = useState('');
-  const [pendingOriginalText, setPendingOriginalText] = useState('');
-  const [timeStart, setTimeStart] = useState('');
-  const [timeEnd, setTimeEnd] = useState('');
+  const [currentDialogue, setCurrentDialogue] = useState<TranscriberDialogue | null>(sortedDialogues[0] || null);
+  const [character, setCharacter] = useState(sortedDialogues[0]?.character || '');
+  const [pendingOriginalText, setPendingOriginalText] = useState(sortedDialogues[0]?.dialogue?.original || '');
+  const [timeStart, setTimeStart] = useState(sortedDialogues[0]?.timeStart || '');
+  const [timeEnd, setTimeEnd] = useState(sortedDialogues[0]?.timeEnd || '');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
   const [networkStatus, setNetworkStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -82,6 +136,13 @@ export default function TranscriberDialogueView({
   useEffect(() => {
     const dialogue = dialoguesList[currentDialogueIndex];
     if (dialogue) {
+      console.log('Updating dialogue:', {
+        character: dialogue.character,
+        originalText: dialogue.dialogue.original,
+        timeStart: dialogue.timeStart,
+        timeEnd: dialogue.timeEnd
+      });
+      
       setCurrentDialogue(dialogue);
       setCharacter(dialogue.character || '');
       setPendingOriginalText(dialogue.dialogue.original || '');
@@ -89,6 +150,17 @@ export default function TranscriberDialogueView({
       setTimeEnd(dialogue.timeEnd || '');
     }
   }, [currentDialogueIndex, dialoguesList]);
+
+  // Add debug logging for initial values
+  useEffect(() => {
+    console.log('Initial dialogue values:', {
+      totalDialogues: dialoguesList.length,
+      currentIndex: currentDialogueIndex,
+      character,
+      pendingOriginalText,
+      currentDialogue
+    });
+  }, []);
 
   // Navigation handlers
   const handleNext = useCallback(() => {
@@ -139,6 +211,11 @@ export default function TranscriberDialogueView({
         throw new Error('Project ID mismatch');
       }
       
+      const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
+      if (!sceneNumber) {
+        throw new Error('Invalid scene number format');
+      }
+      
       const updateData = {
         dialogue: {
           original: pendingOriginalText || currentDialogue.dialogue.original,
@@ -150,11 +227,12 @@ export default function TranscriberDialogueView({
         timeStart: timeStart || currentDialogue.timeStart,
         timeEnd: timeEnd || currentDialogue.timeEnd,
         index: currentDialogue.index,
-        projectId
+        projectId,
+        sceneNumber
       };
       
       const { data: responseData } = await axios.patch(
-        `/api/dialogues/${currentDialogue._id}`,
+        `/api/dialogues/${sceneNumber}/${currentDialogue.dialogNumber}`,
         updateData
       );
       
@@ -326,9 +404,9 @@ export default function TranscriberDialogueView({
   // Add status indicator component
   const NetworkStatusIndicator = () => {
     const statusConfig = {
-      saving: { bg: 'bg-blue-500', text: 'Saving...' },
-      error: { bg: 'bg-red-500', text: 'Error saving' },
-      success: { bg: 'bg-green-500', text: 'Saved!' },
+      saving: { bg: 'bg-blue-500', text: 'Saving...', icon: '💾' },
+      error: { bg: 'bg-red-500', text: 'Error saving', icon: '❌' },
+      success: { bg: 'bg-green-500', text: 'Saved!', icon: '✅' },
     };
 
     if (networkStatus === 'idle') return null;
@@ -336,8 +414,11 @@ export default function TranscriberDialogueView({
     const config = statusConfig[networkStatus as keyof typeof statusConfig];
     
     return (
-      <div className={`fixed bottom-20 left-1/2 transform -translate-x-1/2 ${config.bg} text-white px-4 py-2 rounded-full shadow-lg text-sm`}>
-        {config.text}
+      <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium text-base animate-fade-in-up">
+        <div className={`${config.bg} px-4 py-2 rounded-lg flex items-center gap-2`}>
+          <span>{config.icon}</span>
+          <span>{config.text}</span>
+        </div>
       </div>
     );
   };
@@ -357,6 +438,12 @@ export default function TranscriberDialogueView({
 
   // Add episode selection handler
   const handleEpisodeChange = async (episodeId: string) => {
+    if (!episodes || episodes.length === 0) {
+      console.error('No episodes available');
+      setError('No episodes available');
+      return;
+    }
+
     const episode = episodes.find(ep => ep._id === episodeId);
     if (!episode) {
       console.error('Episode not found:', episodeId);
@@ -413,21 +500,27 @@ export default function TranscriberDialogueView({
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Current Episode
           </label>
-          <select
-            value={currentDialogue?._id || ''}
-            onChange={(e) => handleEpisodeChange(e.target.value)}
-            className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          >
-            {episodes.map((episode) => (
-              <option key={episode._id} value={episode._id}>
-                {episode.name} ({episode.status})
-              </option>
-            ))}
-          </select>
+          {episodes && episodes.length > 0 ? (
+            <select
+              value={currentDialogue?._id || ''}
+              onChange={(e) => handleEpisodeChange(e.target.value)}
+              className="w-full p-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              {episodes.map((episode) => (
+                <option key={episode._id} value={episode._id}>
+                  {episode.name} ({episode.status})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              No episodes available
+            </div>
+          )}
         </div>
         {currentDialogue && (
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            <div>Collection: {currentDialogue.collectionName}</div>
+            <div>Collection: {currentDialogue.collectionName || 'N/A'}</div>
             <div>Uploaded: {currentDialogue.uploadedAt ? (typeof currentDialogue.uploadedAt === 'string' ? new Date(currentDialogue.uploadedAt).toLocaleDateString() : currentDialogue.uploadedAt.toLocaleDateString()) : 'Not available'}</div>
           </div>
         )}
@@ -468,8 +561,18 @@ export default function TranscriberDialogueView({
     }
   };
 
+  // Add helper function to extract scene number
+  const extractSceneNumber = (dialogueNumber: string): string => {
+    const parts = dialogueNumber.split('.');
+    if (parts.length >= 3) {
+      return parts.slice(0, -1).join('.');
+    }
+    return '';
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
+    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6 relative">
+      <NetworkStatusIndicator />
       <EpisodeInfo />
       
       {/* Video Player Card */}
@@ -532,7 +635,14 @@ export default function TranscriberDialogueView({
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.2}
         animate={animControls}
-        style={{ x, rotate, opacity, scale }}
+        initial={{ opacity: 1, scale: 1 }}
+        style={{
+          x,
+          rotate,
+          transformOrigin: "50% 50% 0px",
+          userSelect: "none",
+          touchAction: "pan-y"
+        }}
         onDragEnd={handleDragEnd}
         whileTap={{ cursor: 'grabbing' }}
         transition={{ 
@@ -638,9 +748,6 @@ export default function TranscriberDialogueView({
           </div>
         )}
       </div>
-
-      {/* Network status indicator */}
-      <NetworkStatusIndicator />
     </div>
   )
 } 

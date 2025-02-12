@@ -14,7 +14,7 @@ interface AssignedUser {
 }
 
 interface TranscriberViewProps {
-  projects: Project[]
+  projects?: Project[] // Make projects optional
 }
 
 // Utility function to validate MongoDB ObjectId format
@@ -23,7 +23,7 @@ function isValidObjectId(id: string): boolean {
   return objectIdPattern.test(id);
 }
 
-export default function TranscriberView({ projects }: TranscriberViewProps) {
+export default function TranscriberView({ projects = [] }: TranscriberViewProps) { // Add default empty array
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -33,24 +33,37 @@ export default function TranscriberView({ projects }: TranscriberViewProps) {
   const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false)
   const [loadingEpisodeId, setLoadingEpisodeId] = useState<string | null>(null)
 
+  console.log('TranscriberView Component:', {
+    sessionExists: !!session,
+    userRole: session?.user?.role,
+    username: session?.user?.username,
+    totalProjects: projects.length
+  })
+
   // Filter projects assigned to current user as transcriber
   const assignedProjects = projects.filter((project) =>
-    project.assignedTo.some(
+    project.assignedTo?.some?.(
       (assignment: AssignedUser) =>
         assignment.username === session?.user?.username &&
         assignment.role === 'transcriber'
-    )
+    ) ?? false
   )
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
   )
+
+  console.log('Filtered projects:', {
+    totalAssigned: assignedProjects.length,
+    assignedProjectTitles: assignedProjects.map((p) => p.title)
+  })
 
   // Handle user logout
   const handleLogout = async () => {
     try {
+      console.log('Initiating logout')
       setIsLoggingOut(true)
       if (typeof window !== 'undefined') {
         window.localStorage.clear()
@@ -80,19 +93,46 @@ export default function TranscriberView({ projects }: TranscriberViewProps) {
   ) => {
     try {
       setLoadingEpisodeId(episodeId)
+      console.log('Fetching dialogues for episode:', {
+        projectId,
+        episodeName,
+        episodeId
+      })
 
+      // 1) Fetch from /api/dialogues
       const response = await axios.get(`/api/dialogues`, {
         params: {
           projectId,
           episodeName,
-          databaseName: project.databaseName,
+          databaseName: project.databaseName,   // If your server needs them
           collectionName: episode.collectionName
         }
       })
 
       if (response.data) {
-        const minimalUrl = `/allDashboards/transcriber/${projectId}/episodes/${episodeName}/dialogues`
-        router.push(minimalUrl as any)
+        // The server returns { data: dialogues[], episode, project }
+        const { data: dialogues, episode: responseEpisode, project: responseProject } = response.data
+        console.log('Fetched data:', {
+          dialoguesCount: dialogues.length,
+          episode: responseEpisode?.name,
+          project: responseProject?.title
+        })
+
+        /*
+         * OLD APPROACH (commented out to avoid 431 errors when JSON is huge):
+         *
+         * const queryParams = new URLSearchParams({
+         *   dialogues: JSON.stringify(dialogues),
+         *   episode: JSON.stringify(episode),
+         *   project: JSON.stringify(project)
+         * })
+         * const url = `/allDashboards/transcriber/${projectId}/episodes/${episodeName}/dialogues?${queryParams}`
+         * router.push(url)
+         */
+
+        // NEW APPROACH: Short path; the next page can fetch dialogues (again)
+        const minimalUrl = `/allDashboards/transcriber/${projectId}/episodes/${episodeName}/dialogues` as const
+        router.push(minimalUrl)
       } else {
         console.error('No data returned from API')
       }
@@ -217,6 +257,14 @@ export default function TranscriberView({ projects }: TranscriberViewProps) {
                     <div
                       key={episodeIdStr}
                       onClick={() => {
+                        console.log('Episode Clicked:', {
+                          projectId: projectIdStr,
+                          projectTitle: selectedProject.title,
+                          episodeId: episodeIdStr,
+                          episodeName: episodeNameStr,
+                          episodeStatus: episode.status
+                        })
+
                         handleEpisodeClick(
                           projectIdStr,
                           episodeNameStr,

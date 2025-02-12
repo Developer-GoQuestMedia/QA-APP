@@ -35,8 +35,6 @@ const adaptDialogue = (dialogue: BaseDialogue): DirectorDialogue => ({
   revisionRequested: dialogue.status === 'revision-requested'
 });
 
-const useTransform = motion.transform;
-
 export default function DirectorDialogueView({ dialogues: initialDialogues, projectId }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
@@ -156,9 +154,9 @@ export default function DirectorDialogueView({ dialogues: initialDialogues, proj
 
   // Motion values for swipe animation
   const x = useMotionValue(0)
-  const rotate = useTransform(x, [-200, 200], [-10, 10])
-  const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
-  const scale = useTransform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
+  const rotate = motion.transform(x, [-200, 200], [-10, 10])
+  const opacity = motion.transform(x, [-200, -150, 0, 150, 200], [0.5, 1, 1, 1, 0.5])
+  const scale = motion.transform(x, [-200, -150, 0, 150, 200], [0.8, 0.9, 1, 0.9, 0.8])
   const animControls = useAnimation()
 
   useEffect(() => {

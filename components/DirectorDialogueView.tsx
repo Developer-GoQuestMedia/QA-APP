@@ -13,11 +13,14 @@ interface DirectorDialogue extends BaseDialogue {
   character: string;
   videoUrl: string;
   revisionRequested?: boolean;
+  needsReRecord?: boolean;
 }
 
 interface DialogueViewProps {
   dialogues: BaseDialogue[]
   projectId: string
+  project?: {
+    databaseName: string;
     title: string;
   }
   episode?: {

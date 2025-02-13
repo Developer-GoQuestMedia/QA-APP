@@ -7,6 +7,8 @@ import { connectToDatabase } from '@/lib/mongodb';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const REQUIRED_MODEL = 'eleven_multilingual_sts_v2';
+
 interface VoiceModel {
   voice_id: string;
   name: string;
@@ -42,9 +44,11 @@ export async function GET(request: Request) {
     // Connect to database
     const { db } = await connectToDatabase();
     
-    // Fetch voice models with relevant fields
+    // Fetch voice models with relevant fields and filter for supported model
     const voiceModels = await db.collection('elevenLabVoiceModel')
-      .find({})
+      .find({
+        high_quality_base_model_ids: REQUIRED_MODEL // Filter for models that support our required model
+      })
       .project({
         voice_id: 1,
         name: 1,

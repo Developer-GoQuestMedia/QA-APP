@@ -55,6 +55,7 @@ export interface Scenario {
 }
 
 export interface Dialogue {
+  recordedAudioUrl: null;
   dialogNumber: string;
   timeStart: string;
   timeEnd: string;

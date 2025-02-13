@@ -8,6 +8,7 @@ import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
 // Extend the base dialogue type with additional fields needed for the director view
 interface SrDirectorDialogue extends BaseDialogue {
+  recordedAudioUrl: any
   index: number;
   character: string;
   videoUrl: string;
@@ -72,7 +73,8 @@ const adaptDialogue = (dialogue: BaseDialogue): SrDirectorDialogue => ({
   character: dialogue.characterName,
   videoUrl: dialogue.videoClipUrl,
   revisionRequested: dialogue.status === 'revision-requested',
-  needsReRecord: dialogue.status === 'needs-rerecord'
+  needsReRecord: dialogue.status === 'needs-rerecord',
+  recordedAudioUrl: dialogue.recordedAudioUrl || null
 });
 
 export default function SrDirectorDialogueView({ dialogues: initialDialogues, projectId, project, episode }: DialogueViewProps) {
@@ -159,6 +161,13 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [dialogueFilter, setDialogueFilter] = useState<string>('all');
 
+  // Add state for voice processing
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+
+  // Add state for converted audio playback
+  const [isPlayingConverted, setIsPlayingConverted] = useState(false);
+  const convertedAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Get dialogues for selected character or all dialogues if no character selected
   const activeDialogues = useMemo(() => {
     if (!selectedCharacter) return dialoguesList;
@@ -192,7 +201,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
   const handlePrevious = useCallback(() => {
     if (currentDialogueIndex > 0) {
-      setCurrentDialogueIndex(prev => prev - 1);
+        setCurrentDialogueIndex(prev => prev - 1);
       setCurrentDialogue(filteredDialogues[currentDialogueIndex - 1]);
     }
   }, [currentDialogueIndex, filteredDialogues]);
@@ -247,7 +256,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         timeStart: currentDialogue.timeStart,
         timeEnd: currentDialogue.timeEnd,
         index: currentDialogue.index,
-        voiceOverUrl: currentDialogue.voiceOverUrl,
+        recordedAudioUrl: currentDialogue.recordedAudioUrl,
         voiceOverNotes: currentDialogue.voiceOverNotes,
         revisionRequested,
         needsReRecord,
@@ -274,7 +283,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
           }
         }
       );
-
+      
       setDialogues(prevDialogues => 
         prevDialogues.map(d => 
           d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
@@ -310,13 +319,13 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   // Update audio duration when dialogue changes
   useEffect(() => {
     const updateAudioDuration = async () => {
-      if (!currentDialogue?.voiceOverUrl) {
+      if (!currentDialogue?.recordedAudioUrl) {
         setAudioDuration(0);
         return;
       }
 
       try {
-        const audio = new Audio(currentDialogue.voiceOverUrl);
+        const audio = new Audio(currentDialogue.recordedAudioUrl);
         await new Promise((resolve) => {
           audio.addEventListener('loadedmetadata', () => {
             setAudioDuration(audio.duration);
@@ -334,7 +343,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     };
 
     updateAudioDuration();
-  }, [currentDialogue?.voiceOverUrl]);
+  }, [currentDialogue?.recordedAudioUrl]);
 
   // Update video duration when video loads
   useEffect(() => {
@@ -363,7 +372,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
   // Handle synced playback
   const handleSyncedPlayback = async () => {
-    if (!currentDialogue?.voiceOverUrl || !videoRef.current) return;
+    if (!currentDialogue?.recordedAudioUrl || !videoRef.current) return;
 
     if (isSyncedPlaying) {
       // Stop both video and audio
@@ -381,7 +390,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
     try {
       // Create audio element
-      const audio = new Audio(currentDialogue.voiceOverUrl);
+      const audio = new Audio(currentDialogue.recordedAudioUrl);
       audioRef.current = audio;
 
       // Set up cleanup on audio end
@@ -418,6 +427,161 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         videoRef.current.pause();
         videoRef.current.muted = false;
       }
+    }
+  };
+
+  // Handle synced playback with converted audio
+  const handleConvertedAudioPlayback = async () => {
+    if (!currentDialogue?.voiceId || !videoRef.current) return;
+
+    if (isPlayingConverted) {
+      // Stop both video and converted audio
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+      }
+      setIsPlayingConverted(false);
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      // Create audio element for converted audio
+      const audio = new Audio(`https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`);
+      convertedAudioRef.current = audio;
+
+      // Set up cleanup on audio end
+      audio.addEventListener('ended', () => {
+        setIsPlayingConverted(false);
+        setIsPlaying(false);
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.muted = false;
+        }
+      });
+
+      // Mute video audio
+      videoRef.current.muted = true;
+
+      // Start playback
+      videoRef.current.currentTime = 0;
+      await Promise.all([
+        videoRef.current.play(),
+        audio.play()
+      ]);
+
+      setIsPlayingConverted(true);
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('Failed to start converted audio playback:', error);
+      setIsPlayingConverted(false);
+      setIsPlaying(false);
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.muted = false;
+      }
+    }
+  };
+
+  // Clean up converted audio on unmount or dialogue change
+  useEffect(() => {
+    return () => {
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+      }
+    };
+  }, [currentDialogue?._id]);
+
+  // Add function to handle voice selection
+  const handleVoiceSelection = async (voiceId: string) => {
+    if (!currentDialogue?.recordedAudioUrl) {
+      setError('No recorded audio available for this dialogue');
+      return;
+    }
+
+    try {
+      setIsProcessingVoice(true);
+      
+      const response = await fetch('/api/voice-models/speech-to-speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          voiceId,
+          recordedAudioUrl: currentDialogue.recordedAudioUrl,
+          dialogueNumber: currentDialogue.dialogNumber
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process voice conversion');
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error('Failed to process voice conversion');
+      }
+
+      // Update the dialogue with new voice ID and converted audio
+      const dialogueId = currentDialogue.dialogNumber;
+      const updateData = {
+        ...currentDialogue,
+        voiceId,
+        recordedAudioUrl: data.audioUrl
+      };
+
+      const { data: responseData } = await axios.patch(
+        `/api/dialogues/update/${dialogueId}`,
+        updateData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          params: {
+            databaseName: project?.databaseName,
+            collectionName: episode?.collectionName,
+            projectId
+          }
+        }
+      );
+
+      // Update local state
+      setDialogues(prevDialogues => 
+        prevDialogues.map(d => 
+          d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
+        )
+      );
+
+      // Update query cache
+      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
+        if (!oldData?.data) return oldData;
+        return {
+          ...oldData,
+          data: oldData.data.map((d: BaseDialogue) => 
+            d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
+          )
+        };
+      });
+
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+
+    } catch (error) {
+      console.error('Error processing voice:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process voice conversion');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsProcessingVoice(false);
     }
   };
 
@@ -631,16 +795,18 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         {/* Action Buttons */}
                         <div className="flex justify-end gap-2 mt-3">
                           <button
-                            onClick={() => {
-                              if (currentDialogue) {
-                                // Handle voice selection logic here
-                                console.log(`Selected voice ${model.id} for dialogue ${currentDialogue.dialogNumber}`);
-                              }
-                            }}
-                            disabled={!currentDialogue}
-                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            onClick={() => handleVoiceSelection(model.id)}
+                            disabled={!currentDialogue || !currentDialogue.recordedAudioUrl || isProcessingVoice}
+                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                           >
-                            Select Voice
+                            {isProcessingVoice ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Processing...
+                              </>
+                            ) : (
+                              'Select Voice'
+                            )}
                           </button>
                         </div>
                       </div>
@@ -739,11 +905,20 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         className={`px-2 py-1 text-xs rounded-md truncate hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors ${
                           currentDialogue?.dialogNumber === dialogue.dialogNumber
                             ? 'bg-blue-200 dark:bg-blue-700 font-medium'
-                            : 'bg-white dark:bg-gray-700'
+                            : dialogue.recordedAudioUrl 
+                              ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100'
+                              : 'bg-white dark:bg-gray-700'
                         }`}
-                        title={`Scene: ${dialogue.dialogNumber.split('.')[2]}, Index: ${dialogue.subtitleIndex}`}
+                        title={`Scene: ${dialogue.dialogNumber.split('.')[2]}, Index: ${dialogue.subtitleIndex}${dialogue.recordedAudioUrl ? ' (Recorded)' : ''}`}
                       >
-                        {dialogue.dialogNumber}
+                        <div className="flex items-center justify-between gap-1">
+                          <span>{dialogue.dialogNumber}</span>
+                          {dialogue.recordedAudioUrl && (
+                            <svg className="w-3 h-3 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -798,14 +973,37 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         {isPlaying ? 'Pause' : 'Play'}
                       </button>
                     </div>
-                    {currentDialogue?.voiceOverUrl && (
+                    {currentDialogue?.recordedAudioUrl && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleSyncedPlayback}
                           className="px-4 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
                         >
-                          {isSyncedPlaying ? 'Stop Synced' : 'Play with Audio'}
+                          {isSyncedPlaying ? 'Stop Recorded' : 'Play Recorded'}
                         </button>
+                        {currentDialogue.voiceId && (
+                          <>
+                            <button
+                              onClick={handleConvertedAudioPlayback}
+                              className="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                            >
+                              {isPlayingConverted ? 'Stop Converted' : 'Play Converted'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                const audioUrl = `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`;
+                                window.open(audioUrl, '_blank');
+                              }}
+                              className="px-4 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm flex items-center gap-1"
+                              title="Open converted audio in new tab"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Converted Audio
+                            </button>
+                          </>
+                        )}
                         <div 
                           className={`w-3 h-3 rounded-full ${
                             Math.abs(audioDuration - videoDuration) < 0.1 
@@ -826,6 +1024,12 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                           onClick={() => {
                             if (videoRef.current) {
                               videoRef.current.playbackRate = rate;
+                              if (convertedAudioRef.current) {
+                                convertedAudioRef.current.playbackRate = rate;
+                              }
+                              if (audioRef.current) {
+                                audioRef.current.playbackRate = rate;
+                              }
                               setPlaybackRate(rate);
                             }
                           }}
@@ -897,12 +1101,42 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                     </div>
                   </div>
 
-                  {/* Voice-over Player */}
-                  {currentDialogue.voiceOverUrl && (
-                    <div className="flex items-center justify-center">
-                      <audio controls src={currentDialogue.voiceOverUrl} className="w-64" />
-                    </div>
-                  )}
+                  {/* Voice-over Players */}
+                  <div className="space-y-4">
+                    {/* Original Recording Player */}
+                    {currentDialogue.recordedAudioUrl && (
+                      <div className="flex flex-col items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                          <span className="font-medium text-gray-900 dark:text-white">Original Recording</span>
+                        </div>
+                        <audio 
+                          controls 
+                          src={currentDialogue.recordedAudioUrl} 
+                          className="w-full max-w-md audio-player"
+                        />
+                      </div>
+                    )}
+
+                    {/* Converted Audio Player */}
+                    {currentDialogue.voiceId && (
+                      <div className="flex flex-col items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                          </svg>
+                          <span className="font-medium text-gray-900 dark:text-white">AI Converted Audio</span>
+                        </div>
+                        <audio 
+                          controls 
+                          src={`https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`}
+                          className="w-full max-w-md audio-player"
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Voice-over Notes Display */}
                   {currentDialogue.voiceOverNotes && (

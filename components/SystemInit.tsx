@@ -18,31 +18,39 @@ export default function SystemInit() {
       })
 
       if (status === 'loading') {
-        console.log('Session is still loading, waiting for authentication...');
+        console.log('Session is still loading, waiting for authentication...')
         return
       }
 
       try {
-        // Only clear auth tokens if the session is unauthenticated
-        if (status === 'unauthenticated' && !hasCleared) {
-          console.log('Unauthenticated session detected, clearing session tokens.')
-
-          // Clear any existing auth tokens from localStorage
-          localStorage.removeItem('next-auth.session-token')
-          localStorage.removeItem('next-auth.callback-url')
-          localStorage.removeItem('next-auth.csrf-token')
-
-          // Prevent repeated signouts
-          setHasCleared(true) // Prevent further calls
-          await signOut({ redirect: false })
-          router.push('/login') // Redirect to login page
-
-          console.log('Previous session cleared')
-        } else if (status === 'authenticated') {
+        // Check if we're on a protected route
+        const isProtectedRoute = window.location.pathname.includes('/allDashboards')
+        const isLoginPage = window.location.pathname === '/login'
+        
+        if (status === 'authenticated') {
           console.log('Authenticated session detected:', {
             user: session.user,
             expires: session.expires
           })
+
+          // If we're on login page and authenticated, redirect to dashboard or callback URL
+          if (isLoginPage) {
+            const callbackUrl = localStorage.getItem('next-auth.callback-url') || `/allDashboards/${session.user.role}`
+            router.push(callbackUrl)
+            localStorage.removeItem('next-auth.callback-url') // Clear after use
+          }
+        } else if (status === 'unauthenticated' && isProtectedRoute && !hasCleared) {
+          console.log('Unauthenticated session detected on protected route, redirecting to login.')
+          
+          // Store the current URL as the callback URL
+          const callbackUrl = window.location.pathname
+          localStorage.setItem('next-auth.callback-url', callbackUrl)
+          
+          // Prevent repeated redirects
+          setHasCleared(true)
+          
+          // Redirect to login
+          router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
         }
 
         console.log('System initialization completed:', {
@@ -57,10 +65,8 @@ export default function SystemInit() {
       }
     }
 
-    if (status !== 'loading' && !hasCleared) {
-      initSystem()
-    }
-  }, [status, session, router, hasCleared]) // Track the session state and prevent multiple initializations
+    initSystem()
+  }, [status, session, router, hasCleared])
 
   return null
 }

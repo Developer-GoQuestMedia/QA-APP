@@ -1,16 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Project, Episode } from '@/types/project'
 import { Search, ChevronRight, Loader2 } from 'lucide-react'
 import axios from 'axios'
-import { useCacheCleaner } from '@/hooks/useCacheCleaner'
+
+// Define AssignedUser type
+interface AssignedUser {
+  username: string
+  role: string
+}
 
 interface SrDirectorViewProps {
-  projects: Project[]
+  projects?: Project[] | null
 }
 
 // Utility function to validate MongoDB ObjectId format
@@ -19,7 +23,7 @@ function isValidObjectId(id: string): boolean {
   return objectIdPattern.test(id);
 }
 
-export default function SrDirectorView({ projects }: SrDirectorViewProps) {
+export default function SrDirectorView({ projects = [] }: SrDirectorViewProps) {
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -30,28 +34,30 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
   const [loadingEpisodeId, setLoadingEpisodeId] = useState<string | null>(null)
   const [error, setError] = useState<string>('')
 
-  useCacheCleaner()
-
   console.log('SrDirectorView Component:', {
     sessionExists: !!session,
     userRole: session?.user?.role,
     username: session?.user?.username,
-    totalProjects: projects.length
+    totalProjects: Array.isArray(projects) ? projects.length : 0,
+    projectsType: typeof projects
   })
 
-  // Filter projects assigned to current user as sr director
-  const assignedProjects = projects.filter((project) =>
-    project.assignedTo?.some?.(
-      (assignment: { username: string; role: string }) =>
-        assignment.username === session?.user?.username &&
-        assignment.role === 'srDirector'
-    ) ?? false
-  )
+  // Filter projects assigned to current user as srDirector
+  const assignedProjects = Array.isArray(projects) 
+    ? projects.filter((project) =>
+        Array.isArray(project?.assignedTo) &&
+        project.assignedTo.some(
+          (assignment: AssignedUser) =>
+            assignment.username === session?.user?.username &&
+            assignment.role === 'srDirector'
+        )
+      )
+    : [];
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
-    project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
+    project?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project?.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false
   )
 
   console.log('Filtered projects:', {
@@ -137,7 +143,7 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Sr. Director Dashboard</h1>
+          <h1 className="text-2xl font-bold text-white">SrDirector Dashboard</h1>
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
@@ -166,7 +172,7 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
         {/* Projects Grid */}
         {filteredProjects.length === 0 ? (
           <div className="text-center p-8 bg-gray-800 rounded-lg">
-            <p className="text-gray-400">No projects assigned to you as a sr. director.</p>
+              <p className="text-gray-400">No projects assigned to you as a srDirector.</p>
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -289,4 +295,5 @@ export default function SrDirectorView({ projects }: SrDirectorViewProps) {
       )}
     </div>
   )
-} 
+}
+

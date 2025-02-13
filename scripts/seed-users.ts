@@ -89,6 +89,18 @@ async function seedUsers() {
         updatedAt: new Date()
       },
       {
+        username: 'srdirector1',
+        email: 'srdirector1@email.com',
+        password: await bcrypt.hash('srdir123', 10),
+        role: 'srDirector',
+        lastLogin: null,
+        lastLogout: null,
+        sessionsLog: [],
+        assignedProjects: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
         username: 'admin1',
         email: 'admin1@email.com',
         password: await bcrypt.hash('admin123', 10),

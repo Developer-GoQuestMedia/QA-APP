@@ -22,28 +22,19 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionCleared, setSessionCleared] = useState(false)
   const router = useRouter()
   const { data: session, status } = useSession()
 
   useEffect(() => {
-    // Only clear session once and if we're not already logged out
-    if (!sessionCleared && status !== 'unauthenticated') {
-      const clearOldSession = async () => {
-        try {
-          setSessionCleared(true) // Mark as cleared to prevent loops
-          await signOut({ redirect: false })
-          await axios.post('/api/auth/logout')
-          localStorage.clear()
-          sessionStorage.clear()
-        } catch (error) {
-          console.error('Error clearing session:', error)
-        }
+    // If we're already authenticated, redirect to the appropriate dashboard
+    if (status === 'authenticated' && session?.user?.role) {
+      const userRole = session.user.role as UserRole
+      if (userRole in dashboardRoutes) {
+        const route = dashboardRoutes[userRole]
+        router.push(route)
       }
-
-      clearOldSession()
     }
-  }, [status, sessionCleared])
+  }, [status, session, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,14 +68,24 @@ export default function Login() {
         })
         setError('Invalid username or password')
       } else {
-        console.log('Login successful, redirecting to dashboard')
-        // Redirect based on role
+        console.log('Login successful, fetching user data')
+        // Get user data including session ID
         const response = await axios.get('/api/users/me')
         const userRole = response.data.role as UserRole
+        const sessionId = response.data.sessionId
+
+        console.log('User data fetched:', {
+          role: userRole,
+          sessionId,
+          timestamp: new Date().toISOString()
+        })
 
         if (userRole in dashboardRoutes) {
           const route = dashboardRoutes[userRole]
-          window.location.href = route
+          // Store session ID in localStorage for session tracking
+          localStorage.setItem('sessionId', sessionId)
+          // Use router.push for navigation
+          router.push(route)
         } else {
           setError('Invalid role configuration')
         }

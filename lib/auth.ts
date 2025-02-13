@@ -65,26 +65,23 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Invalid username or password')
           }
 
-          // // Validate role is in available roles
-          // if (!availableRoles.includes(user.role as any)) {
-          //   console.error('Invalid role mapping:', {
-          //     userRole: user.role,
-          //     availableRoles,
-          //     timestamp: new Date().toISOString()
-          //   })
-          //   throw new Error('Invalid role configuration')
-          // }
+          // Validate role is in available roles
+          if (!availableRoles.includes(user.role as any)) {
+            console.error('Invalid role mapping:', {
+              userRole: user.role,
+              availableRoles,
+              timestamp: new Date().toISOString()
+            })
+            throw new Error('Invalid role configuration')
+          }
 
-          // // Update last login and session log
-          // const now = new Date()
-          // const updateData = {
-          //   lastLogin: now,
-          //   isActive: true,
-          //   [`sessionsLog.${now.getTime()}`]: {
-          //     loginTime: now,
-          //     userAgent: req.headers?.['user-agent'] || 'unknown'
-          //   }
-          // }
+          // Update last login and session log
+          const now = new Date()
+          const sessionLog = {
+            loginTime: now,
+            userAgent: req.headers?.['user-agent'] || 'unknown',
+            sessionId: crypto.randomUUID() // Add unique session ID
+          }
 
           const role = user.role as UserRole
           console.log('Role validation:', {
@@ -93,22 +90,47 @@ export const authOptions: NextAuthOptions = {
             timestamp: new Date().toISOString()
           })
 
+          // First ensure sessionsLog exists and user is active
           await db.collection('users').updateOne(
             { _id: user._id },
-            // { $set: updateData }
-            { $set: { lastLogin: new Date() } }
+            { 
+              $set: { 
+                lastLogin: now,
+                isActive: true,
+                lastActivityAt: now
+              },
+              $setOnInsert: { 
+                sessionsLog: [] 
+              }
+            },
+            { upsert: true }
+          )
+
+          // Then update the session log
+          await db.collection('users').updateOne(
+            { _id: user._id },
+            { 
+              $push: { 
+                sessionsLog: {
+                  $each: [sessionLog],
+                  $slice: -100 // Keep only the last 100 sessions
+                }
+              }
+            }
           )
 
           const userData = {
             id: user._id.toString(),
             username: user.username,
             role: role,
-            email: user.email
+            email: user.email,
+            sessionId: sessionLog.sessionId // Include session ID in user data
           }
 
           console.log('Authentication successful:', {
             username: userData.username,
             role: userData.role,
+            sessionId: userData.sessionId,
             timestamp: new Date().toISOString()
           })
 
@@ -131,12 +153,14 @@ export const authOptions: NextAuthOptions = {
         console.log('JWT generation:', {
           username: user.username,
           role: user.role,
+          sessionId: user.sessionId,
           timestamp: new Date().toISOString()
         })
         token.id = user.id
         token.username = user.username
         token.role = user.role
         token.email = user.email
+        token.sessionId = user.sessionId
       }
       return token
     },
@@ -145,6 +169,7 @@ export const authOptions: NextAuthOptions = {
         console.log('Session creation:', {
           username: token.username,
           role: token.role,
+          sessionId: token.sessionId,
           timestamp: new Date().toISOString()
         })
         session.user = {
@@ -152,7 +177,8 @@ export const authOptions: NextAuthOptions = {
           id: token.id as string,
           username: token.username as string,
           role: token.role as string,
-          email: token.email as string
+          email: token.email as string,
+          sessionId: token.sessionId as string
         }
       }
       return session
@@ -167,10 +193,28 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     error: '/login'
   },
-
-  
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development'
+  debug: process.env.NODE_ENV === 'development',
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  }
 }
 
 export const roles = [

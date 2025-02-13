@@ -101,16 +101,17 @@ export interface Episode {
 export interface Project {
   _id: string
   title: string
-  description: string
+  description?: string
+  status: 'completed' | 'in-progress' | 'on-hold' | 'pending'
   sourceLanguage: string
   targetLanguage: string
-  status: ProjectStatus
-  assignedTo: AssignedUser[]
-  updatedAt: Date | string
-  createdAt: Date | string
+  episodes?: Episode[]
+  assignedTo?: { username: string; role: string }[]
+  databaseName?: string
+  completedEpisodes?: number
+  createdAt?: Date
+  updatedAt?: Date
   parentFolder: string
-  databaseName: string
-  episodes: Episode[]
   uploadStatus: {
     totalFiles: number
     completedFiles: number

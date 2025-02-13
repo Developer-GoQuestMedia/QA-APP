@@ -645,7 +645,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // ------------------------------
   //  ASSIGN USERS TO PROJECT
   // ------------------------------
-  const handleAssignUsers = useCallback(async () => {
+  /*const handleAssignUsers = useCallback(async () => {
     if (!selectedProject || !selectedUsernames.length) return;
 
     try {
@@ -663,6 +663,30 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       notify('Failed to assign users', 'error');
     }
   }, [selectedProject, selectedUsernames, refetchProjects, notify]);
+  */
+  const handleAssignUsers = useCallback(async () => {
+    if (!selectedProject || !selectedUsernames.length) return;
+  
+    try {
+      // Include existing assigned users and new ones
+      const currentAssignedUsernames = selectedProject.assignedTo.map(user => user.username);
+      const updatedUsernames = [...new Set([...currentAssignedUsernames, ...selectedUsernames])]; // Merge and remove duplicates
+  
+      await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
+        usernames: updatedUsernames
+      });
+  
+      await refetchProjects();
+      setIsAssigning(false);
+      setSelectedUsernames([]);
+      setSelectedProject(null);
+      notify('Users assigned successfully', 'success');
+    } catch (error) {
+      console.error('Error assigning users:', error);
+      notify('Failed to assign users', 'error');
+    }
+  }, [selectedProject, selectedUsernames, refetchProjects, notify]);
+  
 
   // ----------------------------------------
   // RENDER

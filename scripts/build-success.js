@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+const chalk = require('chalk');
 
 // Function to create a visual separator
 const separator = () => {

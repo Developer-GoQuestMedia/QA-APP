@@ -107,16 +107,22 @@ export const authOptions: NextAuthOptions = {
           )
 
           // Then update the session log
+          const sessionLogEntry = {
+            loginTime: new Date(),
+            userAgent: req.headers?.['user-agent'] || 'unknown',
+            sessionId: sessionLog.sessionId
+          };
+
           await db.collection('users').updateOne(
             { _id: user._id },
             { 
               $push: { 
                 sessionsLog: {
-                  $each: [sessionLog],
+                  $each: [sessionLogEntry],
                   $slice: -100 // Keep only the last 100 sessions
                 }
               }
-            }
+            } as any // Type assertion needed for MongoDB operation
           )
 
           const userData = {

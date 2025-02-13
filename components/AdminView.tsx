@@ -425,7 +425,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           return a.status.localeCompare(b.status);
         case 'date':
         default:
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          return dateB - dateA;
       }
     });
   }, [projects, searchTerm, filterStatus, sortBy]);
@@ -645,32 +647,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // ------------------------------
   //  ASSIGN USERS TO PROJECT
   // ------------------------------
-  /*const handleAssignUsers = useCallback(async () => {
-    if (!selectedProject || !selectedUsernames.length) return;
-
-    try {
-      await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
-        usernames: selectedUsernames
-      });
-
-      await refetchProjects();
-      setIsAssigning(false);
-      setSelectedUsernames([]);
-      setSelectedProject(null);
-      notify('Users assigned successfully', 'success');
-    } catch (error) {
-      console.error('Error assigning users:', error);
-      notify('Failed to assign users', 'error');
-    }
-  }, [selectedProject, selectedUsernames, refetchProjects, notify]);
-  */
   const handleAssignUsers = useCallback(async () => {
     if (!selectedProject || !selectedUsernames.length) return;
   
     try {
-      // Include existing assigned users and new ones
-      const currentAssignedUsernames = selectedProject.assignedTo.map(user => user.username);
-      const updatedUsernames = [...new Set([...currentAssignedUsernames, ...selectedUsernames])]; // Merge and remove duplicates
+      // Fix the selectedProject.assignedTo and Set iteration issues
+      const currentAssignedUsernames = selectedProject?.assignedTo?.map(user => user.username) ?? [];
+      const uniqueUsernames = [...currentAssignedUsernames, ...selectedUsernames];
+      const updatedUsernames = Array.from(new Set(uniqueUsernames));
   
       await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
         usernames: updatedUsernames
@@ -937,7 +921,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             Folder Path: {project.parentFolder}
                           </div>
                           <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Last Updated: {new Date(project.updatedAt).toLocaleDateString()}
+                            Last Updated: {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'Never'}
                           </div>
 
                           {/* Project Status Control */}
@@ -970,7 +954,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               }}
                               className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                             >
-                              <span>Assigned Team ({project.assignedTo.length})</span>
+                              <span>Assigned Team ({project.assignedTo?.length || 0})</span>
                               <svg
                                 className={`w-5 h-5 transition-transform duration-200 ${selectedProjectForTeam?._id === project._id ? 'transform rotate-180' : ''
                                   }`}
@@ -990,8 +974,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 />
                                 <div className="absolute left-0 mt-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700 max-h-60 overflow-y-auto">
                                   <div className="p-2 space-y-1">
-                                    {project.assignedTo.length > 0 ? (
-                                      project.assignedTo.map((user) => (
+                                    {(project.assignedTo?.length || 0) > 0 ? (
+                                      project.assignedTo?.map((user) => (
                                         <div
                                           key={user.username}
                                           className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1543,8 +1527,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 Currently Assigned Users
               </h3>
               <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-                {selectedProject.assignedTo.length > 0 ? (
-                  selectedProject.assignedTo.map((user) => (
+                {(selectedProject.assignedTo?.length || 0) > 0 ? (
+                  selectedProject.assignedTo?.map((user) => (
                     <div
                       key={user.username}
                       className={`flex items-center gap-2 px-3 py-1 rounded-full ${

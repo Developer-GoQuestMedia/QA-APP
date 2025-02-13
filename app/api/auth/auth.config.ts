@@ -2,6 +2,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { connectToDatabase } from '@/lib/mongodb'
 import bcrypt from 'bcryptjs'
 import type { NextAuthOptions } from 'next-auth'
+import crypto from 'crypto'
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('Please define the NEXTAUTH_SECRET environment variable')
@@ -40,9 +41,11 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Update last login and sessions log
+          const sessionId = crypto.randomUUID();
           const sessionLog = {
             loginTime: new Date(),
-            userAgent: req.headers?.['user-agent'] || 'unknown'
+            userAgent: req.headers?.['user-agent'] || 'unknown',
+            sessionId
           }
 
           await db.collection('users').updateOne(
@@ -60,7 +63,8 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             role: user.role,
             username: user.username,
-            name: user.username
+            name: user.username,
+            sessionId
           }
         } catch (error) {
           console.error('Authentication error:', error)
@@ -76,6 +80,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email
         token.role = user.role
         token.username = user.username
+        token.sessionId = user.sessionId
       }
       return token
     },
@@ -86,6 +91,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string
         session.user.username = token.username as string
         session.user.name = token.name as string
+        session.user.sessionId = token.sessionId as string
       }
       return session
     }

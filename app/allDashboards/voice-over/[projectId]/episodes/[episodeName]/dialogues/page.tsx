@@ -20,27 +20,7 @@ interface Episode {
 interface PageData {
   data: Dialogue[]
   episode: Episode
-  project: {
-    _id: string
-    title: string
-    sourceLanguage: string
-    targetLanguage: string
-    status: ProjectStatus
-    databaseName: string
-    description: string
-    dialogue_collection: any
-    assignedTo: { username: string; role: string }[]
-    updatedAt: string | Date
-    createdAt: string | Date
-    parentFolder: string
-    episodes: ProjectEpisode[]
-    uploadStatus: {
-      totalFiles: number
-      completedFiles: number
-      currentFile: number
-      status: string
-    }
-  }
+  project: Project
 }
 
 export default function DialoguesPage() {
@@ -120,6 +100,29 @@ export default function DialoguesPage() {
 
         // Ensure the data matches the expected types
         const responseData = dialoguesResp.data
+        // Create a properly typed project object
+        const typedProject: Project = {
+          _id: projectDoc._id.toString(),
+          title: projectDoc.title,
+          sourceLanguage: projectDoc.sourceLanguage,
+          targetLanguage: projectDoc.targetLanguage,
+          status: projectDoc.status as ProjectStatus,
+          databaseName: projectDoc.databaseName || '',
+          description: projectDoc.description || '',
+          dialogue_collection: projectDoc.dialogue_collection || null,
+          assignedTo: projectDoc.assignedTo || [],
+          parentFolder: projectDoc.parentFolder || '',
+          episodes: projectDoc.episodes || [],
+          uploadStatus: {
+            totalFiles: projectDoc.uploadStatus?.totalFiles || 0,
+            completedFiles: projectDoc.uploadStatus?.completedFiles || 0,
+            currentFile: projectDoc.uploadStatus?.currentFile || 0,
+            status: projectDoc.uploadStatus?.status || ''
+          },
+          createdAt: projectDoc.createdAt ? new Date(projectDoc.createdAt) : undefined,
+          updatedAt: projectDoc.updatedAt ? new Date(projectDoc.updatedAt) : undefined
+        }
+
         setData({
           data: responseData.data,
           episode: {
@@ -129,11 +132,7 @@ export default function DialoguesPage() {
             step: responseData.episode.step,
             collectionName: foundEpisode.collectionName
           },
-          project: {
-            ...projectDoc,
-            _id: projectDoc._id.toString(),
-            status: projectDoc.status as ProjectStatus
-          }
+          project: typedProject
         })
       } catch (err: unknown) {
         console.error('Error fetching dialogues page data:', err)

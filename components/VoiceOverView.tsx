@@ -42,17 +42,17 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
 
   // Filter projects assigned to current user as voice-over
   const assignedProjects = projects.filter((project) =>
-    project.assignedTo.some(
+    project.assignedTo?.some(
       (assignment: AssignedUser) =>
         assignment.username === session?.user?.username &&
         assignment.role === 'voiceOver'
-    )
+    ) ?? false
   )
 
   // Filter by search term
   const filteredProjects = assignedProjects.filter((project) =>
     project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (project.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
   )
 
   console.log('Filtered projects:', {

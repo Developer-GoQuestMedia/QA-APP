@@ -36,7 +36,7 @@ export default function SystemInit() {
           // If we're on login page and authenticated, redirect to dashboard or callback URL
           if (isLoginPage) {
             const callbackUrl = localStorage.getItem('next-auth.callback-url') || `/allDashboards/${session.user.role}`
-            router.push(callbackUrl)
+            router.push(callbackUrl as any)
             localStorage.removeItem('next-auth.callback-url') // Clear after use
           }
         } else if (status === 'unauthenticated' && isProtectedRoute && !hasCleared) {
@@ -49,8 +49,8 @@ export default function SystemInit() {
           // Prevent repeated redirects
           setHasCleared(true)
           
-          // Redirect to login
-          router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+          // Redirect to login with proper type assertion
+          router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}` as any)
         }
 
         console.log('System initialization completed:', {

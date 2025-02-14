@@ -1,49 +1,49 @@
 [
-    {
+      {
         "voice_id": "9BWtsMINqrJLrRacOk9x",
         "name": "Aria",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "expressive",
-            "age": "middle-aged",
-            "gender": "female",
-            "use_case": "social media"
+          "accent": "American",
+          "description": "expressive",
+          "age": "middle-aged",
+          "gender": "female",
+          "use_case": "social media"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/9BWtsMINqrJLrRacOk9x/405766b8-1f4e-4d3c-aba1-6f25333823ec.mp3",
@@ -51,74 +51,74 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "CwhRBWXzGAHq8TQ4Fs17",
         "name": "Roger",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "failed",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "failed",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "confident",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "social media"
+          "accent": "American",
+          "description": "confident",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "social media"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/CwhRBWXzGAHq8TQ4Fs17/58ee3ff5-f6f2-4628-93b8-e38eb31806b0.mp3",
@@ -126,56 +126,56 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "EXAVITQu4vr4xnSDxMaL",
         "name": "Sarah",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {},
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {},
-            "message": {},
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {},
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "american",
-            "description": "soft",
-            "age": "young",
-            "gender": "female",
-            "use_case": "news"
+          "accent": "american",
+          "description": "soft",
+          "age": "young",
+          "gender": "female",
+          "use_case": "news"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/EXAVITQu4vr4xnSDxMaL/01a3e33c-6e99-4ee7-8543-ff2216a32186.mp3",
@@ -183,70 +183,70 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_turbo_v2",
-            "eleven_multilingual_v2",
-            "eleven_turbo_v2_5"
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_turbo_v2_5"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "FGY2WhTYpPnrIDTdsKH5",
         "name": "Laura",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "upbeat",
-            "age": "young",
-            "gender": "female",
-            "use_case": "social media"
+          "accent": "American",
+          "description": "upbeat",
+          "age": "young",
+          "gender": "female",
+          "use_case": "social media"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/FGY2WhTYpPnrIDTdsKH5/67341759-ad08-41a5-be6e-de12fe448618.mp3",
@@ -254,73 +254,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "IKne3meq5aSn9XLyUdCD",
         "name": "Charlie",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "Australian",
-            "description": "natural",
-            "age": "middle aged",
-            "gender": "male",
-            "use_case": "conversational"
+          "accent": "Australian",
+          "description": "natural",
+          "age": "middle aged",
+          "gender": "male",
+          "use_case": "conversational"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/IKne3meq5aSn9XLyUdCD/102de6f2-22ed-43e0-a1f1-111fa75c5481.mp3",
@@ -328,68 +328,68 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "JBFqnCBsd6RMkjVDRZzb",
         "name": "George",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_v2_flash": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_turbo_v2": "",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_v2_flash": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_turbo_v2": "",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "British",
-            "description": "warm",
-            "age": "middle aged",
-            "gender": "male",
-            "use_case": "narration"
+          "accent": "British",
+          "description": "warm",
+          "age": "middle aged",
+          "gender": "male",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/JBFqnCBsd6RMkjVDRZzb/e6206d1a-0721-4787-aafb-06a6e705cac5.mp3",
@@ -397,73 +397,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "N2lVS1w4EtoT3dr4eOWO",
         "name": "Callum",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "Transatlantic",
-            "description": "intense",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "characters"
+          "accent": "Transatlantic",
+          "description": "intense",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "characters"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/N2lVS1w4EtoT3dr4eOWO/ac833bd8-ffda-4938-9ebc-b0f99ca25481.mp3",
@@ -471,76 +471,76 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "SAz9YHcvj6GT2YYXdXww",
         "name": "River",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_multilingual_sts_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "confident",
-            "age": "middle-aged",
-            "gender": "non-binary",
-            "use_case": "social media"
+          "accent": "American",
+          "description": "confident",
+          "age": "middle-aged",
+          "gender": "non-binary",
+          "use_case": "social media"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/SAz9YHcvj6GT2YYXdXww/e6c95f0b-2227-491a-b3d7-2249240decb7.mp3",
@@ -548,68 +548,68 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_sts_v2",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
         "name": "Liam",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_v2_flash": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_turbo_v2": "",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_v2_flash": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_turbo_v2": "",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "articulate",
-            "age": "young",
-            "gender": "male",
-            "use_case": "narration"
+          "accent": "American",
+          "description": "articulate",
+          "age": "young",
+          "gender": "male",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/TX3LPaxmHKxFdv7VOQHJ/63148076-6363-42db-aea8-31424308b92c.mp3",
@@ -617,76 +617,76 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "XB0fDUnXU5powFXDhCwa",
         "name": "Charlotte",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_multilingual_v2": "",
-                "eleven_turbo_v2_5": "",
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "Swedish",
-            "description": "seductive",
-            "age": "young",
-            "gender": "female",
-            "use_case": "characters"
+          "accent": "Swedish",
+          "description": "seductive",
+          "age": "young",
+          "gender": "female",
+          "use_case": "characters"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/XB0fDUnXU5powFXDhCwa/942356dc-f10d-4d89-bda5-4f8505ee038b.mp3",
@@ -694,74 +694,74 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "Xb7hH8MSUJpSbSDYk0k2",
         "name": "Alice",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "British",
-            "description": "confident",
-            "age": "middle-aged",
-            "gender": "female",
-            "use_case": "news"
+          "accent": "British",
+          "description": "confident",
+          "age": "middle-aged",
+          "gender": "female",
+          "use_case": "news"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/Xb7hH8MSUJpSbSDYk0k2/d10f7534-11f6-41fe-a012-2de1e482d336.mp3",
@@ -769,67 +769,67 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "XrExE9yKIg1WjnnlVkGX",
         "name": "Matilda",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_v2_flash": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_turbo_v2": "",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_v2_flash": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_turbo_v2": "",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "friendly",
-            "age": "middle-aged",
-            "gender": "female",
-            "use_case": "narration"
+          "accent": "American",
+          "description": "friendly",
+          "age": "middle-aged",
+          "gender": "female",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/XrExE9yKIg1WjnnlVkGX/b930e18d-6b4d-466e-bab2-0ae97c6d8535.mp3",
@@ -837,75 +837,75 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "bIHbv24MWmeRgasZH58o",
         "name": "Will",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "friendly",
-            "age": "young",
-            "gender": "male",
-            "use_case": "social media"
+          "accent": "American",
+          "description": "friendly",
+          "age": "young",
+          "gender": "male",
+          "use_case": "social media"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/bIHbv24MWmeRgasZH58o/8caf8f3d-ad29-4980-af41-53f20c72d7a4.mp3",
@@ -913,74 +913,74 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "cgSgspJ2msm6clMCkdW9",
         "name": "Jessica",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "expressive",
-            "age": "young",
-            "gender": "female",
-            "use_case": "conversational"
+          "accent": "American",
+          "description": "expressive",
+          "age": "young",
+          "gender": "female",
+          "use_case": "conversational"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/cgSgspJ2msm6clMCkdW9/56a97bf8-b69b-448f-846c-c3a11683d45a.mp3",
@@ -988,74 +988,74 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "cjVigY5qzO86Huf0OWal",
         "name": "Eric",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_multilingual_v2": "fine_tuned",
-                "eleven_turbo_v2_5": "fine_tuned",
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "friendly",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "conversational"
+          "accent": "American",
+          "description": "friendly",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "conversational"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/cjVigY5qzO86Huf0OWal/d098fda0-6456-4030-b3d8-63aa048c9070.mp3",
@@ -1063,73 +1063,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "iP95p4xoKVk53GoZ742B",
         "name": "Chris",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "casual",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "conversational"
+          "accent": "American",
+          "description": "casual",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "conversational"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/iP95p4xoKVk53GoZ742B/3f4bde72-cc48-40dd-829f-57fbf906f4d7.mp3",
@@ -1137,73 +1137,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "nPczCjzI2devNBz1zQrb",
         "name": "Brian",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "deep",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "narration"
+          "accent": "American",
+          "description": "deep",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/nPczCjzI2devNBz1zQrb/2dd3e72c-4fd3-42f1-93ea-abc5d4e5aa1d.mp3",
@@ -1211,73 +1211,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "onwK4e9ZLuTAKqWW03F9",
         "name": "Daniel",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "British",
-            "description": "authoritative",
-            "age": "middle-aged",
-            "gender": "male",
-            "use_case": "news"
+          "accent": "British",
+          "description": "authoritative",
+          "age": "middle-aged",
+          "gender": "male",
+          "use_case": "news"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/onwK4e9ZLuTAKqWW03F9/7eee0236-1a72-4b86-b303-5dcadc007ba9.mp3",
@@ -1285,74 +1285,74 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_multilingual_v1",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_v1",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "pFZP5JQG7iQjIQuC4Bku",
         "name": "Lily",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "British",
-            "description": "warm",
-            "age": "middle-aged",
-            "gender": "female",
-            "use_case": "narration"
+          "accent": "British",
+          "description": "warm",
+          "age": "middle-aged",
+          "gender": "female",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/pFZP5JQG7iQjIQuC4Bku/89b68b35-b3dd-4348-a84a-a3c13a3c2b30.mp3",
@@ -1360,73 +1360,73 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    },
-    {
+      },
+      {
         "voice_id": "pqHfZKP75CvOlQylNhV4",
         "name": "Bill",
         "samples": null,
         "category": "premade",
         "fine_tuning": {
-            "is_allowed_to_fine_tune": true,
-            "state": {
-                "eleven_flash_v2_5": "fine_tuned",
-                "eleven_turbo_v2": "fine_tuned",
-                "eleven_flash_v2": "fine_tuned",
-                "eleven_v2_flash": "fine_tuned",
-                "eleven_v2_5_flash": "fine_tuned"
-            },
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "manual_verification_requested": false,
-            "language": "en",
-            "progress": {
-                "eleven_flash_v2_5": 1.0,
-                "eleven_v2_flash": 1.0,
-                "eleven_flash_v2": 1.0,
-                "eleven_v2_5_flash": 1.0
-            },
-            "message": {
-                "eleven_flash_v2_5": "Done!",
-                "eleven_turbo_v2": "",
-                "eleven_flash_v2": "Done!",
-                "eleven_v2_flash": "Done!",
-                "eleven_v2_5_flash": "Done!"
-            },
-            "dataset_duration_seconds": null,
-            "verification_attempts": null,
-            "slice_ids": null,
-            "manual_verification": null,
-            "max_verification_attempts": 5,
-            "next_max_verification_attempts_reset_unix_ms": 1700000000000
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {
+            "eleven_flash_v2_5": 1,
+            "eleven_v2_flash": 1,
+            "eleven_flash_v2": 1,
+            "eleven_v2_5_flash": 1
+          },
+          "message": {
+            "eleven_flash_v2_5": "Done!",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "Done!",
+            "eleven_v2_flash": "Done!",
+            "eleven_v2_5_flash": "Done!"
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 5,
+          "next_max_verification_attempts_reset_unix_ms": 1700000000000
         },
         "labels": {
-            "accent": "American",
-            "description": "trustworthy",
-            "age": "old",
-            "gender": "male",
-            "use_case": "narration"
+          "accent": "American",
+          "description": "trustworthy",
+          "age": "old",
+          "gender": "male",
+          "use_case": "narration"
         },
         "description": null,
         "preview_url": "https://storage.googleapis.com/eleven-public-prod/premade/voices/pqHfZKP75CvOlQylNhV4/d782b3ff-84ba-4029-848c-acf01285524d.mp3",
@@ -1434,27 +1434,2651 @@
         "settings": null,
         "sharing": null,
         "high_quality_base_model_ids": [
-            "eleven_v2_flash",
-            "eleven_flash_v2",
-            "eleven_turbo_v2_5",
-            "eleven_multilingual_v2",
-            "eleven_v2_5_flash",
-            "eleven_flash_v2_5",
-            "eleven_turbo_v2"
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5",
+          "eleven_turbo_v2"
         ],
         "safety_control": null,
         "voice_verification": {
-            "requires_verification": false,
-            "is_verified": false,
-            "verification_failures": [],
-            "verification_attempts_count": 0,
-            "language": null,
-            "verification_attempts": null
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
         },
         "permission_on_resource": null,
         "is_owner": false,
         "is_legacy": false,
         "is_mixed": false,
         "created_at_unix": null
-    }
-]
+      },
+      {
+        "voice_id": "09AoN6tYyW3VSTQqCo7C",
+        "name": "Jessi",
+        "samples": [
+          {
+            "sample_id": "NR1iI3zfJzQtVnMZhtda",
+            "file_name": "Spring Home Decor Trends.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 12231820,
+            "hash": "15922ce64159000831b9780990422592"
+          },
+          {
+            "sample_id": "mZREjR44GIMtlQkVAUkR",
+            "file_name": "Remodeling Kitchen.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 2121495,
+            "hash": "420d5bb7dee95540a3bec973bfc05e54"
+          },
+          {
+            "sample_id": "jxErSfXuEUInWgzqwSbh",
+            "file_name": "Remodeling Bathroom.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 8414146,
+            "hash": "5e9f8ddb308c0b303b79926dbd74e9fd"
+          },
+          {
+            "sample_id": "ECuFlqgSFeHQf66c5y8j",
+            "file_name": "Remodeling Bedroom.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 8052783,
+            "hash": "97e205390a5b3a89c3c88bea90bc0e09"
+          },
+          {
+            "sample_id": "KeI1J9Pc1XaKwlnfDoyn",
+            "file_name": "Remodeling Kids Room.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 1975321,
+            "hash": "9ac60e69d35d60b3db4cfbc935abaff0"
+          },
+          {
+            "sample_id": "RDuzVvCAOg5eVzejzjlG",
+            "file_name": "Remodeling Garage.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 7116734,
+            "hash": "b0d4f8905991e852ecf4d7576388f04f"
+          },
+          {
+            "sample_id": "ddpdhtqwFAdDeCh7gAse",
+            "file_name": "Summer Home Decor Trends.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 11468765,
+            "hash": "e35708b7e816d5fcef199a8e929c900e"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_v2_flash": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": "",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "",
+            "eleven_multilingual_sts_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "pleasant",
+          "age": "young",
+          "gender": "female",
+          "language": "en",
+          "use_case": "narrative_story"
+        },
+        "description": "A pleasant mid-20s American female voice. Confident and casual. Perfect for news, corporate videos, faceless videos, audio narration, and more.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/09AoN6tYyW3VSTQqCo7C/kcwjIEhj1vqIC05nQ8a3.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739275346,
+          "whitelisted_emails": [],
+          "public_owner_id": "6a20ca3247597c8cba0cc95300d78729718687a4aa1082a33901703cead6825c",
+          "original_voice_id": "09AoN6tYyW3VSTQqCo7C",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Jessi",
+          "description": "A pleasant mid-20s American female voice. Confident and casual. Perfect for news, corporate videos, faceless videos, audio narration, and more.",
+          "labels": {
+            "language": "en",
+            "descriptive": "pleasant",
+            "age": "young",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739275346
+      },
+      {
+        "voice_id": "Bwff1jnzl1s94AEcntUq",
+        "name": "Tanya- Upbeat and Expressive",
+        "samples": [
+          {
+            "sample_id": "WFhiwXV35OATMR0sTxAz",
+            "file_name": "FINAL Voiceover for Clone.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 72370560,
+            "hash": "ed6c6eddb7f35f6b20839c132e88505b"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_flash_v2_5": "",
+            "eleven_v2_flash": "",
+            "eleven_flash_v2": "",
+            "eleven_turbo_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "upbeat",
+          "age": "middle_aged",
+          "gender": "female",
+          "language": "en",
+          "use_case": "conversational"
+        },
+        "description": "Middle aged female with American accent\nPerfect for projects requiring a dynamic and engaging tone.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/Bwff1jnzl1s94AEcntUq/qoI90uxNbUdjLpbz5RT4.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739274931,
+          "whitelisted_emails": [],
+          "public_owner_id": "bc8608b62416debb82eaeb9563de1bad93bb6707821c7209667c5c10eb551b25",
+          "original_voice_id": "Bwff1jnzl1s94AEcntUq",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 180,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Tanya- Upbeat and Expressive",
+          "description": "Middle aged female with American accent\nPerfect for projects requiring a dynamic and engaging tone.",
+          "labels": {
+            "language": "en",
+            "descriptive": "upbeat",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_flash_v2_5",
+          "eleven_v2_5_flash",
+          "eleven_turbo_v2",
+          "eleven_v2_flash",
+          "eleven_flash_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739274931
+      },
+      {
+        "voice_id": "F7hCTbeEDbm7osolS21j",
+        "name": "Amanda Olson",
+        "samples": [
+          {
+            "sample_id": "HwXVmHYxsDYVi9UFfEQQ",
+            "file_name": "AmandaOlsonVOSample.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 438305250,
+            "hash": "a7f0dc64eb081fc1a41cf2f1727d7582"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_multilingual_sts_v2": "",
+            "eleven_flash_v2": "",
+            "eleven_flash_v2_5": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "casual",
+          "age": "middle_aged",
+          "gender": "female",
+          "language": "en",
+          "use_case": "informative_educational"
+        },
+        "description": "A middle age caucasian woman from the midwest. Perfect for educational, informative or corporate training.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/pz6xtsH51FMXjmJXU0Jau9rgo253/voices/F7hCTbeEDbm7osolS21j/gZIBZuGsvZl2rxSqy3Y5.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739274844,
+          "whitelisted_emails": [],
+          "public_owner_id": "68135580231b56cc728f3117c78ac721b3d99d9c07ed80ff1187b409f8cc14ca",
+          "original_voice_id": "F7hCTbeEDbm7osolS21j",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": true,
+          "rate": 1,
+          "notice_period": 180,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Amanda Olson",
+          "description": "A middle age caucasian woman from the midwest. Perfect for educational, informative or corporate training.",
+          "labels": {
+            "language": "en",
+            "descriptive": "casual",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "informative_educational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_flash_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739274844
+      },
+      {
+        "voice_id": "JOEVSDqdCEW3oYq47ebK",
+        "name": "Mariluz Parras",
+        "samples": [
+          {
+            "sample_id": "u5TRNE35gxv0ngqQ8R0d",
+            "file_name": "INV_MariluzParras.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 115776612,
+            "hash": "0adc81833f24205f8d146dc311103a98"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "es",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_multilingual_sts_v2": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "peninsular",
+          "descriptive": "professional",
+          "age": "old",
+          "gender": "female",
+          "language": "es",
+          "use_case": "narrative_story"
+        },
+        "description": "Old Spanish female voice. Good for Narrations,",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/IgwDilkCraOI2af1CUCpv8HWGFt1/voices/JOEVSDqdCEW3oYq47ebK/6f7006f0-184f-4927-b4d6-63cf43dce393.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739270204,
+          "whitelisted_emails": [],
+          "public_owner_id": "136bd2e434bb08ce5b50747c65171702a2d4b515cdd0f3bbfcf846459fb4000c",
+          "original_voice_id": "JOEVSDqdCEW3oYq47ebK",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": false,
+          "live_moderation_enabled": false,
+          "rate": 2,
+          "notice_period": 90,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Mariluz Parras",
+          "description": "Old Spanish female voice. Good for Narrations,",
+          "labels": {
+            "language": "es",
+            "descriptive": "professional",
+            "age": "old",
+            "gender": "female",
+            "accent": "peninsular",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739270204
+      },
+      {
+        "voice_id": "UgBBYS2sOqTuMpoF3BR0",
+        "name": "Mark - Natural Conversations",
+        "samples": [
+          {
+            "sample_id": "AaxP4XAVBhaSWjhVJnVS",
+            "file_name": "Mark - New ConvoAI Render - Final 23min - better.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 360878876,
+            "hash": "b845fdb91ae779b3c63b0e7cba2d4d73"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_turbo_v2": "",
+            "eleven_multilingual_sts_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "casual",
+          "age": "young",
+          "gender": "male",
+          "language": "en",
+          "use_case": "conversational"
+        },
+        "description": "A casual, young-adult speaking in a natural manner. Perfect for Conversational AI.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/y7Wmp2r8nCeGkLiXiwMOVWktro13/voices/UgBBYS2sOqTuMpoF3BR0/0Oc7jiXwWN9kRTXfQsmw.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739518140,
+          "whitelisted_emails": [],
+          "public_owner_id": "024c9393c6380665357f60b1062c863cd635d79791f13d6f0a834a319d5ff56c",
+          "original_voice_id": "UgBBYS2sOqTuMpoF3BR0",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": true,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Mark - Natural Conversations",
+          "description": "A casual, young-adult speaking in a natural manner. Perfect for Conversational AI.",
+          "labels": {
+            "language": "en",
+            "descriptive": "casual",
+            "age": "young",
+            "gender": "male",
+            "accent": "american",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_multilingual_v2",
+          "eleven_turbo_v2_5",
+          "eleven_turbo_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739518140
+      },
+      {
+        "voice_id": "UpphzPau5vxibPYV2NeV",
+        "name": "Joe Inglewood",
+        "samples": [
+          {
+            "sample_id": "repeYapjY9gn1Z5Udsb6",
+            "file_name": "Inglewood8Inglewood8.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 47836472,
+            "hash": "30522fff69bb72df3802fb1b2801018e"
+          },
+          {
+            "sample_id": "hCCOCHAyf2PZiN2E9RSB",
+            "file_name": "Inglewood11Inglewood11.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 12164701,
+            "hash": "4a7170c3151069ddaf8b33bbaf09d9a2"
+          },
+          {
+            "sample_id": "RdcchWhIDvTAdkPFcsw6",
+            "file_name": "Inglewood6Inglewood6.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 20542693,
+            "hash": "569dd070269f31700a80455b845f3617"
+          },
+          {
+            "sample_id": "BZ4MHg912HQv03m4ZXZb",
+            "file_name": "Inglewood9Inglewood9.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 42692440,
+            "hash": "5942f9ceef4a81df4b8c99e9d659d6ea"
+          },
+          {
+            "sample_id": "wk0iZLAmUCEz1MgxNPxf",
+            "file_name": "Inglewood7Inglewood7.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 13190791,
+            "hash": "973fa096d21dd9130096dcfaab8c0ea6"
+          },
+          {
+            "sample_id": "Fb0sI6sFPQcZ3dbjIteT",
+            "file_name": "Inglewood10Inglewood10.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 28665729,
+            "hash": "a2b0543691325965275dff46fe0d76be"
+          },
+          {
+            "sample_id": "2A8wquxtH4w0SJfXEHvb",
+            "file_name": "Inglewood2Inglewood2.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 30373093,
+            "hash": "b8d294504cd0359955b27fe482ac075e"
+          },
+          {
+            "sample_id": "U3bORgtxkZYoUNge8MUa",
+            "file_name": "Inglewood4Inglewood4.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 23620962,
+            "hash": "c5e936e26619f7e3db0a85843f03740d"
+          },
+          {
+            "sample_id": "f7Q5aYcGKyigpYqQrgTn",
+            "file_name": "Inglewood3Inglewood3.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 67375019,
+            "hash": "e2692a73397792b12e81d13e7e4bfc5a"
+          },
+          {
+            "sample_id": "JZGS7fvSKPueHlLbAXqJ",
+            "file_name": "Inglewood1Inglewood1.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 30003199,
+            "hash": "ea7255a289af7ac5ec6a7603c84b24f4"
+          },
+          {
+            "sample_id": "vGXK6CU65kbXfwnPQ5Jr",
+            "file_name": "Inglewood5Inglewood5.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 29243558,
+            "hash": "fcd06a7b9e131f0ea1457f1c6f987884"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_v2_flash": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": "",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": "",
+            "eleven_multilingual_sts_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "pleasant",
+          "age": "middle_aged",
+          "gender": "male",
+          "language": "en",
+          "use_case": "narrative_story"
+        },
+        "description": "A velvety smooth middle age American Voice which is conversational in style and warm in tone.  An excellent voice for audiobooks of all kinds along with E-Learning content. ",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/T7bhqxLyENgRaSgfnqhPa6vPSID2/voices/UpphzPau5vxibPYV2NeV/WJQYDqPyRzPvh2pw4xjg.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739275963,
+          "whitelisted_emails": [],
+          "public_owner_id": "4e120f88d43f125a4c1f56885db63990e17568c80c5cca2f9f3a6459230fbeb1",
+          "original_voice_id": "UpphzPau5vxibPYV2NeV",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Joe Inglewood",
+          "description": "A velvety smooth middle age American Voice which is conversational in style and warm in tone.  An excellent voice for audiobooks of all kinds along with E-Learning content. ",
+          "labels": {
+            "language": "en",
+            "descriptive": "pleasant",
+            "age": "middle_aged",
+            "gender": "male",
+            "accent": "american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739275963
+      },
+      {
+        "voice_id": "Zdsf4NBMlHR5zJJ72y9q",
+        "name": "Kaymi Malave",
+        "samples": [
+          {
+            "sample_id": "00ExunmL5nKzIjWIUJtE",
+            "file_name": "Recording (2).mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 5590543,
+            "hash": "69399f1c8d181d6981e7297f0a0fe86b"
+          },
+          {
+            "sample_id": "H4KnfqD8kQYImdx4S0RU",
+            "file_name": "Recording (3).mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 6218479,
+            "hash": "c35529694229d1921947a97f6ae72fea"
+          },
+          {
+            "sample_id": "7DyyJd5t27Q63GPD73Rz",
+            "file_name": "Recording.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 5497301,
+            "hash": "d04914dbf712753f4e2293bd24ad127e"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_v2_flash": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": "",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "confident",
+          "age": "middle_aged",
+          "gender": "female",
+          "language": "en",
+          "use_case": "narrative_story"
+        },
+        "description": "Middle aged American Female Puerto Rican voice. Great for Narrations.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/Zdsf4NBMlHR5zJJ72y9q/HPvV7xOChPPoe8ehWQfo.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739274972,
+          "whitelisted_emails": [],
+          "public_owner_id": "6fd1f15759cffc8d27055e0b66a67edbf7937f1819036d13d0bc1ee6cf8e49cb",
+          "original_voice_id": "Zdsf4NBMlHR5zJJ72y9q",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Kaymi Malave",
+          "description": "Middle aged American Female Puerto Rican voice. Great for Narrations.",
+          "labels": {
+            "language": "en",
+            "descriptive": "confident",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739274972
+      },
+      {
+        "voice_id": "eBthAb30UYbt2nojGXeA",
+        "name": "Regina Martin",
+        "samples": [
+          {
+            "sample_id": "NOvev1o9peWIC9giS8iM",
+            "file_name": "Regina Martin.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 404705950,
+            "hash": "61f326833b79e8695d1d4a521c32e4ae"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "es",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_multilingual_sts_v2": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "latin american",
+          "descriptive": "calm",
+          "age": "old",
+          "gender": "female",
+          "language": "es",
+          "use_case": "narrative_story"
+        },
+        "description": "Female mature voice. Calm and Deep. Perfect for audiobooks.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/8RYUsFHsalUXjwVG0LjhNwH1j022/voices/eBthAb30UYbt2nojGXeA/qhDfKqKx9AmKBMRCBKkO.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739270196,
+          "whitelisted_emails": [],
+          "public_owner_id": "e9a6840c69b79812b77ea81fa11d55aaf80dcf1938fa0137bf7f514f67f75c99",
+          "original_voice_id": "eBthAb30UYbt2nojGXeA",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": true,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Regina Martin",
+          "description": "Female mature voice. Calm and Deep. Perfect for audiobooks.",
+          "labels": {
+            "language": "es",
+            "descriptive": "calm",
+            "age": "old",
+            "gender": "female",
+            "accent": "latin american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_v2_5_flash",
+          "eleven_multilingual_sts_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739270196
+      },
+      {
+        "voice_id": "lxYfHSkYm1EzQzGhdbfc",
+        "name": "Jessica Anne Bogart - A VO Professional; now cloned!",
+        "samples": [
+          {
+            "sample_id": "7TDVJhNiSCmTS65l8yK7",
+            "file_name": "JessicaAnneBogart - seg 2.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 57499400,
+            "hash": "70750eead5a76c1c1a1cf74a25da9384"
+          },
+          {
+            "sample_id": "t14xlHHzErRpXQakbi9t",
+            "file_name": "JessicaAnneBogart - seg 4.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 58212438,
+            "hash": "ac234de2889ea018f25bacb8fcbf4580"
+          },
+          {
+            "sample_id": "YgllCkLppG1GoO8hrs8T",
+            "file_name": "JessicaAnneBogart - seg1.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 56976115,
+            "hash": "be7ba9de1921e1a179b13c6c99a3fbae"
+          },
+          {
+            "sample_id": "IvffrVhfpUObJn1hwshY",
+            "file_name": "JessicaAnneBogart - seg3.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 58307733,
+            "hash": "dbb256c3b45d8ff1688467979ed95b06"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_turbo_v2": "",
+            "eleven_multilingual_sts_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "calm",
+          "age": "middle_aged",
+          "gender": "female",
+          "language": "en",
+          "use_case": "narrative_story"
+        },
+        "description": "A credited VoiceOver actor, now cloned. Confident, Conversational.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/yA8yDNUx4dZ4gwL9ztbTpUEIyR12/voices/lxYfHSkYm1EzQzGhdbfc/WtaEgXGHIfOmvcbjU6A9.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739274954,
+          "whitelisted_emails": [],
+          "public_owner_id": "066125d0c3eac062cd6655ed319d2347c29d07eab96ee22c6ebe7ef1841c3b1a",
+          "original_voice_id": "lxYfHSkYm1EzQzGhdbfc",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": true,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Jessica Anne Bogart - A VO Professional; now cloned!",
+          "description": "A credited VoiceOver actor, now cloned. Confident, Conversational.",
+          "labels": {
+            "language": "en",
+            "descriptive": "calm",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739274954
+      },
+      {
+        "voice_id": "tpFVjZdYBvOaWaUIRHRz",
+        "name": "Victoria Lennon",
+        "samples": [
+          {
+            "sample_id": "sAhr9JP6NgQY5ty6p53b",
+            "file_name": "LeahArscottTTS.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 1277901706,
+            "hash": "687212541cebae568d187dbaa1c81d0d"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_v2_flash": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_flash_v2_5": "",
+            "eleven_v2_5_flash": "",
+            "eleven_turbo_v2": "",
+            "eleven_flash_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "calm",
+          "age": "young",
+          "gender": "female",
+          "language": "en",
+          "use_case": "conversational"
+        },
+        "description": "Feminine, Raspy, down to earth, cool, textured, very chill, natural, Her, AI, girl next door, IT girl, That girl, north american, relaxed, ",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/NEJfVFx9jgNPMOl9gH6SCAvmq1K2/voices/tpFVjZdYBvOaWaUIRHRz/b3861a54-8f6a-4768-b4ab-cb760fdfdef1.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739275285,
+          "whitelisted_emails": [],
+          "public_owner_id": "e40950c630103cae112a9b36b31673d251d1e598b66ccdce3389569d60cf8b01",
+          "original_voice_id": "tpFVjZdYBvOaWaUIRHRz",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": false,
+          "live_moderation_enabled": false,
+          "rate": 2,
+          "notice_period": 180,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Victoria Lennon",
+          "description": "Feminine, Raspy, down to earth, cool, textured, very chill, natural, Her, AI, girl next door, IT girl, That girl, north american, relaxed, ",
+          "labels": {
+            "language": "en",
+            "descriptive": "calm",
+            "age": "young",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739275285
+      },
+      {
+        "voice_id": "uju3wxzG5OhpWcoi3SMy",
+        "name": "Michael C. Vincent",
+        "samples": [
+          {
+            "sample_id": "e2rrZnhzEoeX9EJmydzz",
+            "file_name": "Present Speak 2#01_3.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 185751136,
+            "hash": "0bea10e58ae504641db5344d4cc998c6"
+          },
+          {
+            "sample_id": "bxyKgvyO3tDzWFy3fTXz",
+            "file_name": "Michael-Vincent-Voice-Training-32Bit-WAV-FullRead-25minutes.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 573727796,
+            "hash": "a134606f5e1a22d8d98f68abf2d3d4f6"
+          },
+          {
+            "sample_id": "dkts01Cg2JlkY2lYg1vl",
+            "file_name": "Present Speak 2#01_1.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 118276400,
+            "hash": "b836cea47362c97e2153243ad29ac077"
+          },
+          {
+            "sample_id": "NhvE3pwamdBDHOdRr0uK",
+            "file_name": "Present Speak 2#01_2.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 92524410,
+            "hash": "cedfaa2c0046c7d9114ed1f5f6cc0c70"
+          },
+          {
+            "sample_id": "ha5BSYAB7zyFyFwap4ap",
+            "file_name": "Present Speak 2#01.mp3",
+            "mime_type": "audio/mpeg",
+            "size_bytes": 177253058,
+            "hash": "ed977cf267cf1b6b0640459a2eadfe94"
+          }
+        ],
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {
+            "eleven_multilingual_v2": "",
+            "eleven_turbo_v2_5": "",
+            "eleven_turbo_v2": "",
+            "eleven_multilingual_sts_v2": ""
+          },
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "accent": "american",
+          "descriptive": "confident",
+          "age": "middle_aged",
+          "gender": "male",
+          "language": "en",
+          "use_case": "narrative_story"
+        },
+        "description": "A calm, confident and enthusiastic middle-aged male voice. Warm bass tones and crisp high tones. Delivery is articulate intelligent and vibrant. The voice is used for voiceovers and educational narrations. ",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/uju3wxzG5OhpWcoi3SMy/ixYUu11jiy8LIVZidnvA.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739275965,
+          "whitelisted_emails": [],
+          "public_owner_id": "95e7935f31f209326e8bbd4ec2ebbd05ce34d72c04dac7da2d5b9d422ea05caf",
+          "original_voice_id": "uju3wxzG5OhpWcoi3SMy",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 90,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": true,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Michael C. Vincent",
+          "description": "A calm, confident and enthusiastic middle-aged male voice. Warm bass tones and crisp high tones. Delivery is articulate intelligent and vibrant. The voice is used for voiceovers and educational narrations. ",
+          "labels": {
+            "language": "en",
+            "descriptive": "confident",
+            "age": "middle_aged",
+            "gender": "male",
+            "accent": "american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2",
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739275965
+      },
+      {
+        "voice_id": "UOxKeHS7lixzgw35mtAR",
+        "name": "Grandma Titina - 70 year old woman",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "es",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "es",
+          "descriptive": "gentle",
+          "age": "old",
+          "gender": "female",
+          "accent": "latin american",
+          "use_case": "narrative_story"
+        },
+        "description": "Grandmother is a natural storyteller and works well in Spanish , English, French and Italian. try it in every language.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/p0QwyQhQHwXWlLjKRkuCkuOwvFC3/voices/UOxKeHS7lixzgw35mtAR/jQsditSSEZCDuTgpuTJ7.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739528409,
+          "whitelisted_emails": [],
+          "public_owner_id": "45e0512fae6329c3caafbd72fd4b9d30b9965d3529dcf6a8551c2ad433e4252e",
+          "original_voice_id": "UOxKeHS7lixzgw35mtAR",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": false,
+          "live_moderation_enabled": false,
+          "rate": 3,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Grandma Titina - 70 year old woman",
+          "description": "Grandmother is a natural storyteller and works well in Spanish , English, French and Italian. try it in every language.",
+          "labels": {
+            "language": "es",
+            "descriptive": "gentle",
+            "age": "old",
+            "gender": "female",
+            "accent": "latin american",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739528409
+      },
+      {
+        "voice_id": "m1VE7dnwBN0zMer3LcKv",
+        "name": "Mariluz Parras - Expressive",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "es",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "es",
+          "descriptive": "professional",
+          "age": "old",
+          "gender": "female",
+          "accent": "peninsular",
+          "use_case": "advertisement"
+        },
+        "description": "Spanish female voice. Works well for Advertising, marketing and expressive formats.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/IgwDilkCraOI2af1CUCpv8HWGFt1/voices/m1VE7dnwBN0zMer3LcKv/2b4ffe65-d23b-435c-affe-3b3d026b493a.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739528471,
+          "whitelisted_emails": [],
+          "public_owner_id": "136bd2e434bb08ce5b50747c65171702a2d4b515cdd0f3bbfcf846459fb4000c",
+          "original_voice_id": "m1VE7dnwBN0zMer3LcKv",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": false,
+          "live_moderation_enabled": false,
+          "rate": 2,
+          "notice_period": 90,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Mariluz Parras - Expressive",
+          "description": "Spanish female voice. Works well for Advertising, marketing and expressive formats.",
+          "labels": {
+            "language": "es",
+            "descriptive": "professional",
+            "age": "old",
+            "gender": "female",
+            "accent": "peninsular",
+            "use_case": "advertisement"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739528471
+      },
+      {
+        "voice_id": "lNABL6eI3BpPT8BvSqjK",
+        "name": "Jacqui Griffin",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "en",
+          "descriptive": "chill",
+          "age": "old",
+          "gender": "female",
+          "accent": "australian",
+          "use_case": "conversational"
+        },
+        "description": "Australian female voice. Works well for conversations.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/TOGdTXMbSsdvQf3ERegntWNS8fb2/voices/lNABL6eI3BpPT8BvSqjK/IzCltgswHo7KvyEzLcuT.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739528526,
+          "whitelisted_emails": [],
+          "public_owner_id": "09297050488006f9753bb196dd095ff5cf32ccfb63b8f08b9663b2f1d47dc6e8",
+          "original_voice_id": "lNABL6eI3BpPT8BvSqjK",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 0,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Jacqui Griffin",
+          "description": "Australian female voice. Works well for conversations.",
+          "labels": {
+            "language": "en",
+            "descriptive": "chill",
+            "age": "old",
+            "gender": "female",
+            "accent": "australian",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739528526
+      },
+      {
+        "voice_id": "dYjOkSQBPiH2igolJfeH",
+        "name": "Mademoiselle - French ",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "fr",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "fr",
+          "descriptive": "modulated",
+          "age": "middle_aged",
+          "gender": "female",
+          "accent": "parisian",
+          "use_case": "informative_educational"
+        },
+        "description": "French voice female, ideal for your IVR, PODCAST and NARRATION. smiling, sparkling and young.\n35/40 years old. Sounds great in multiple languages.\n",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/koOonD4HAsSMVyHuP4QTaatQ9cA2/voices/dYjOkSQBPiH2igolJfeH/XEmJQo6OrUDOAvfcVtgN.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530236,
+          "whitelisted_emails": [],
+          "public_owner_id": "09e3a14f14edc1fe3fba4f5ad4c21cdd719abba1ef7227c2d9b0e82f41f2fec7",
+          "original_voice_id": "dYjOkSQBPiH2igolJfeH",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Mademoiselle - French ",
+          "description": "French voice female, ideal for your IVR, PODCAST and NARRATION. smiling, sparkling and young.\n35/40 years old. Sounds great in multiple languages.\n",
+          "labels": {
+            "language": "fr",
+            "descriptive": "modulated",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "parisian",
+            "use_case": "informative_educational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530236
+      },
+      {
+        "voice_id": "7eVMgwCnXydb3CikjV7a",
+        "name": "Lea",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "de",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "de",
+          "descriptive": "calm",
+          "accent": "standard",
+          "gender": "female",
+          "age": "middle_aged",
+          "use_case": "narrative_story"
+        },
+        "description": "A clear and attractive mature female German voice. Perfect for German language, but great for English with a German accent too. Her entrancing and sexy voice is ideal for accurate German narration or voiceovers of audiobooks, advertising, gaming and social media. \n",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/7eVMgwCnXydb3CikjV7a/zMitELWPfkgqNXLr2X9t.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530246,
+          "whitelisted_emails": [],
+          "public_owner_id": "9104f466a293c99963e66f347b8faf904dc65dec464c358ebfd0a893a325ef96",
+          "original_voice_id": "7eVMgwCnXydb3CikjV7a",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": true,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Lea",
+          "description": "A clear and attractive mature female German voice. Perfect for German language, but great for English with a German accent too. Her entrancing and sexy voice is ideal for accurate German narration or voiceovers of audiobooks, advertising, gaming and social media. \n",
+          "labels": {
+            "language": "de",
+            "descriptive": "calm",
+            "accent": "standard",
+            "gender": "female",
+            "age": "middle_aged",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530246
+      },
+      {
+        "voice_id": "iBo5PWT1qLiEyqhM7TrG",
+        "name": "Liberty X",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "en",
+          "descriptive": "confident",
+          "age": "middle_aged",
+          "gender": "female",
+          "accent": "british",
+          "use_case": "social_media"
+        },
+        "description": "A professional voice with a Transatlantic/mid-Atlantic, global or neutral English accent that sits between American and British. Authoritative, motivating, sincere, warm, relatable and uplifting.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/TBCGBdfm5sahGkhMn2WcXK1i4Ya2/voices/iBo5PWT1qLiEyqhM7TrG/bJPHKvzPkMAcGWTdcxay.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530288,
+          "whitelisted_emails": [],
+          "public_owner_id": "6643afd1d55a6987b18e340e00bb89ed60329c878a01823e0c10a50fb522bd76",
+          "original_voice_id": "iBo5PWT1qLiEyqhM7TrG",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Liberty X",
+          "description": "A professional voice with a Transatlantic/mid-Atlantic, global or neutral English accent that sits between American and British. Authoritative, motivating, sincere, warm, relatable and uplifting.",
+          "labels": {
+            "language": "en",
+            "descriptive": "confident",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "british",
+            "use_case": "social_media"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530288
+      },
+      {
+        "voice_id": "yUy9CCX9brt8aPVvIWy3",
+        "name": "Ramona - Calm & Soothing Voice",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "de",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "de",
+          "descriptive": "calm",
+          "age": "middle_aged",
+          "gender": "female",
+          "accent": "standard",
+          "use_case": "conversational"
+        },
+        "description": "Ramona is an experienced artist who has spent decades in the acting and voice industry. Her voice has a perfect blend that can create calmness while keeping the audience hooked, making it ideal for audiobooks, meditation guides, podcasts, commercials, and animated films.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/workspace/ed9b05e6324c457685490352e9a1ec90/voices/yUy9CCX9brt8aPVvIWy3/BRrSRl9Gfqr8OocPraMg.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530354,
+          "whitelisted_emails": [],
+          "public_owner_id": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6",
+          "original_voice_id": "yUy9CCX9brt8aPVvIWy3",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Ramona - Calm & Soothing Voice",
+          "description": "Ramona is an experienced artist who has spent decades in the acting and voice industry. Her voice has a perfect blend that can create calmness while keeping the audience hooked, making it ideal for audiobooks, meditation guides, podcasts, commercials, and animated films.",
+          "labels": {
+            "language": "de",
+            "descriptive": "calm",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "standard",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_flash_v2_5",
+          "eleven_multilingual_v2",
+          "eleven_multilingual_sts_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530354
+      },
+      {
+        "voice_id": "4rwC6xlwNjrg40xWm8Vb",
+        "name": "Kary ",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "en",
+          "descriptive": "neutral",
+          "age": "middle_aged",
+          "gender": "female",
+          "accent": "american",
+          "use_case": "informative_educational"
+        },
+        "description": "Clear and natural American accent with a warm, engaging tone. Ideal for narration, presentations, commercials, and more.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/J1Hwt02VGEYnhcf8lwTuTJER3xz1/voices/4rwC6xlwNjrg40xWm8Vb/70f98ae5-5cd1-4b49-9051-2c0cd35a87cc.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530415,
+          "whitelisted_emails": [],
+          "public_owner_id": "dbe70ee83b1448edbfdcfcdc2baf6d3e109742db936e5f7390d6847adabe23d3",
+          "original_voice_id": "4rwC6xlwNjrg40xWm8Vb",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 0,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Kary ",
+          "description": "Clear and natural American accent with a warm, engaging tone. Ideal for narration, presentations, commercials, and more.",
+          "labels": {
+            "language": "en",
+            "descriptive": "neutral",
+            "age": "middle_aged",
+            "gender": "female",
+            "accent": "american",
+            "use_case": "informative_educational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530415
+      },
+      {
+        "voice_id": "aTbnroHRGIomiKpqAQR8",
+        "name": "Felicity - young and well-spoken",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "en",
+          "descriptive": "classy",
+          "age": "young",
+          "gender": "female",
+          "accent": "british",
+          "use_case": "narrative_story"
+        },
+        "description": "A young British English woman's voice: sophisticated yet approachable. Crisp, well-spoken tones blend warmth and authority. Ideal for engaging narration, podcasts, and social media content (YouTube, TikTok, Reels, Stories). Professional studio-quality audio perfect for Gen-Z female voices in audiobooks, video dubbing, advertising, and e-learning. This versatile voice adapts to any context, connecting with audiences through its natural, confident, posh delivery. ",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/custom/voices/aTbnroHRGIomiKpqAQR8/zWRZJuu21NfhhWauHwQW.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739530928,
+          "whitelisted_emails": [],
+          "public_owner_id": "2d9f284193d8f5db3fbd4099c6457a255c9f52c41783d8bb71b4d9458a6750aa",
+          "original_voice_id": "aTbnroHRGIomiKpqAQR8",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": false,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "high_quality",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Felicity - young and well-spoken",
+          "description": "A young British English woman's voice: sophisticated yet approachable. Crisp, well-spoken tones blend warmth and authority. Ideal for engaging narration, podcasts, and social media content (YouTube, TikTok, Reels, Stories). Professional studio-quality audio perfect for Gen-Z female voices in audiobooks, video dubbing, advertising, and e-learning. This versatile voice adapts to any context, connecting with audiences through its natural, confident, posh delivery. ",
+          "labels": {
+            "language": "en",
+            "descriptive": "classy",
+            "age": "young",
+            "gender": "female",
+            "accent": "british",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_v2_flash",
+          "eleven_flash_v2",
+          "eleven_multilingual_sts_v2",
+          "eleven_turbo_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739530928
+      },
+      {
+        "voice_id": "wrxvN1LZJIfL3HHvffqe",
+        "name": "Bella - Bubbly Best Friend",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_v2_flash": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned",
+            "eleven_turbo_v2": "fine_tuned",
+            "eleven_flash_v2": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "en",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "en",
+          "descriptive": "excited",
+          "age": "young",
+          "gender": "female",
+          "accent": "chinese",
+          "use_case": "conversational"
+        },
+        "description": "A lively, energetic voice full of excitement, the kind that instantly lifts your spirits. It’s the sound of a friend who’s always thrilled to see you, ready to share in every little joy and make you feel like the world is full of possibilities. With its bubbly tone and friendly charm, this voice is perfect for spreading positive energy, cheerful narrations, upbeat videos, and any project that needs a touch of excitement and enthusiasm.",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/68QcDXfJfdOf0V0NVuflGGlhxUi2/voices/wrxvN1LZJIfL3HHvffqe/Clc8gimnf50XBfdax3zf.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739531987,
+          "whitelisted_emails": [],
+          "public_owner_id": "14ccf8ea3c6ec42f997143deda0ae92183716f16ba6dc1f8e2a4a873fdde7bab",
+          "original_voice_id": "wrxvN1LZJIfL3HHvffqe",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": false,
+          "live_moderation_enabled": false,
+          "rate": 3,
+          "notice_period": 90,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Bella - Bubbly Best Friend",
+          "description": "A lively, energetic voice full of excitement, the kind that instantly lifts your spirits. It’s the sound of a friend who’s always thrilled to see you, ready to share in every little joy and make you feel like the world is full of possibilities. With its bubbly tone and friendly charm, this voice is perfect for spreading positive energy, cheerful narrations, upbeat videos, and any project that needs a touch of excitement and enthusiasm.",
+          "labels": {
+            "language": "en",
+            "descriptive": "excited",
+            "age": "young",
+            "gender": "female",
+            "accent": "chinese",
+            "use_case": "conversational"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_flash_v2"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739531987
+      },
+      {
+        "voice_id": "d4Z5Fvjohw3zxGpV8XUV",
+        "name": "Maria",
+        "samples": null,
+        "category": "professional",
+        "fine_tuning": {
+          "is_allowed_to_fine_tune": true,
+          "state": {
+            "eleven_multilingual_v2": "fine_tuned",
+            "eleven_turbo_v2_5": "fine_tuned",
+            "eleven_multilingual_sts_v2": "fine_tuned",
+            "eleven_flash_v2_5": "fine_tuned",
+            "eleven_v2_5_flash": "fine_tuned"
+          },
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "manual_verification_requested": false,
+          "language": "pl",
+          "progress": {},
+          "message": {},
+          "dataset_duration_seconds": null,
+          "verification_attempts": null,
+          "slice_ids": null,
+          "manual_verification": null,
+          "max_verification_attempts": 0,
+          "next_max_verification_attempts_reset_unix_ms": 0
+        },
+        "labels": {
+          "language": "pl",
+          "descriptive": "calm",
+          "age": "young",
+          "gender": "female",
+          "accent": "standard",
+          "use_case": "narrative_story"
+        },
+        "description": "Young polish female with a feminine, calm and subdued voice. Highly recommend for videos, podcasts and audiobooks. ",
+        "preview_url": "https://storage.googleapis.com/eleven-public-prod/database/user/IYw5P9xmJGf9JFc2cTDnNct2YXT2/voices/d4Z5Fvjohw3zxGpV8XUV/nqlGr2puWdfLe85m8RJG.mp3",
+        "available_for_tiers": [],
+        "settings": null,
+        "sharing": {
+          "status": "copied",
+          "history_item_sample_id": null,
+          "date_unix": 1739533030,
+          "whitelisted_emails": [],
+          "public_owner_id": "7d58f9a63696e3b882b1a36e2afe40af86e2d9fa9c88965260f0965ebb293d09",
+          "original_voice_id": "d4Z5Fvjohw3zxGpV8XUV",
+          "financial_rewards_enabled": false,
+          "free_users_allowed": true,
+          "live_moderation_enabled": true,
+          "rate": 1,
+          "notice_period": 730,
+          "disable_at_unix": null,
+          "voice_mixing_allowed": false,
+          "featured": false,
+          "category": "professional",
+          "reader_app_enabled": null,
+          "image_url": "",
+          "ban_reason": null,
+          "liked_by_count": 0,
+          "cloned_by_count": 0,
+          "name": "Maria",
+          "description": "Young polish female with a feminine, calm and subdued voice. Highly recommend for videos, podcasts and audiobooks. ",
+          "labels": {
+            "language": "pl",
+            "descriptive": "calm",
+            "age": "young",
+            "gender": "female",
+            "accent": "standard",
+            "use_case": "narrative_story"
+          },
+          "review_status": "not_requested",
+          "review_message": null,
+          "enabled_in_library": false,
+          "instagram_username": null,
+          "twitter_username": null,
+          "youtube_username": null,
+          "tiktok_username": null,
+          "moderation_check": null,
+          "reader_restricted_on": null
+        },
+        "high_quality_base_model_ids": [
+          "eleven_turbo_v2_5",
+          "eleven_multilingual_sts_v2",
+          "eleven_multilingual_v2",
+          "eleven_v2_5_flash",
+          "eleven_flash_v2_5"
+        ],
+        "safety_control": null,
+        "voice_verification": {
+          "requires_verification": false,
+          "is_verified": false,
+          "verification_failures": [],
+          "verification_attempts_count": 0,
+          "language": null,
+          "verification_attempts": null
+        },
+        "permission_on_resource": "admin",
+        "is_owner": false,
+        "is_legacy": false,
+        "is_mixed": false,
+        "created_at_unix": 1739533030
+      }
+    ]

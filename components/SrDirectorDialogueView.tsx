@@ -6,15 +6,39 @@ import axios from 'axios'
 import { Dialogue as BaseDialogue } from '@/types/dialogue'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 
-// Extend the base dialogue type with additional fields needed for the director view
-interface SrDirectorDialogue extends BaseDialogue {
-  recordedAudioUrl: any
+// Types
+interface DialogueText {
+  original: string;
+  translated: string;
+  adapted: string;
+}
+
+interface LocalBaseDialogue {
+  _id: string;
+  dialogNumber: string;
+  dialogue: DialogueText;
+  characterName: string;
+  status: string;
+  timeStart: number;
+  timeEnd: number;
+  subtitleIndex: number;
+  videoClipUrl?: string;
+  recordedAudioUrl?: string | null;
+  voiceOverNotes?: string;
+  voiceId?: string;
+  ai_converted_voiceover_url?: string;
+}
+
+interface SrDirectorDialogue extends Omit<LocalBaseDialogue, '_id'> {
+  _id?: string;
   index: number;
   character: string;
-  videoUrl: string;
-  revisionRequested?: boolean;
-  needsReRecord?: boolean;
+  videoUrl?: string;
+  revisionRequested: boolean;
+  needsReRecord: boolean;
+  recordedAudioUrl: string | null;
   voiceId?: string;
+  ai_converted_voiceover_url?: string;
 }
 
 // Add interface for grouped dialogues
@@ -60,6 +84,23 @@ interface DialogueViewProps {
   }
 }
 
+// Add debounce hook
+const useDebounce = <T,>(value: T, delay: number): T => {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 type QueryData = {
   data: BaseDialogue[];
   status: string;
@@ -72,9 +113,14 @@ const adaptDialogue = (dialogue: BaseDialogue): SrDirectorDialogue => ({
   index: dialogue.subtitleIndex,
   character: dialogue.characterName,
   videoUrl: dialogue.videoClipUrl,
+  status: dialogue.status || 'pending',
+  timeStart: Number(dialogue.timeStart) || 0,
+  timeEnd: Number(dialogue.timeEnd) || 0,
   revisionRequested: dialogue.status === 'revision-requested',
   needsReRecord: dialogue.status === 'needs-rerecord',
-  recordedAudioUrl: dialogue.recordedAudioUrl || null
+  recordedAudioUrl: dialogue.recordedAudioUrl || null,
+  voiceId: (dialogue as any).voiceId,
+  ai_converted_voiceover_url: (dialogue as any).ai_converted_voiceover_url
 });
 
 export default function SrDirectorDialogueView({ dialogues: initialDialogues, projectId, project, episode }: DialogueViewProps) {
@@ -82,21 +128,56 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   useCacheCleaner();
 
   // Add state for voice models
-  const [voiceModels, setVoiceModels] = useState<VoiceModel[]>([]);
+  const [allVoiceModels, setAllVoiceModels] = useState<VoiceModel[]>([]);
+  const [filteredVoiceModels, setFilteredVoiceModels] = useState<VoiceModel[]>([]);
+  const [selectedGender, setSelectedGender] = useState('all');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
 
-  // Add effect to fetch voice models
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Add debugging for component initialization
+  useEffect(() => {
+    console.log('SrDirectorDialogueView - Component Mount:', {
+      initialDialoguesCount: initialDialogues.length,
+      projectId,
+      projectInfo: {
+        databaseName: project?.databaseName,
+        title: project?.title
+      },
+      episodeInfo: {
+        collectionName: episode?.collectionName,
+        name: episode?.name
+      },
+      dialogueState: {
+        currentDialogueIndex: 0,
+        hasCurrentDialogue: false,
+        selectedCharacter: null,
+        totalDialogues: 0
+      }
+    });
+  }, []);
+
+  // Update effect to fetch voice models with debugging
   useEffect(() => {
     const fetchVoiceModels = async () => {
+      console.log('Voice Models - Fetch Start');
       setIsLoadingVoices(true);
       try {
         const response = await fetch('/api/voice-models/available');
         const data = await response.json();
+        console.log('Voice Models - Fetch Response:', {
+          success: data.success,
+          modelCount: data.models?.length,
+          firstModel: data.models?.[0]
+        });
         if (data.success) {
-          setVoiceModels(data.models);
+          setAllVoiceModels(data.models);
+          setFilteredVoiceModels(data.models);
         }
       } catch (error) {
-        console.error('Error fetching voice models:', error);
+        console.error('Voice Models - Fetch Error:', error);
       } finally {
         setIsLoadingVoices(false);
       }
@@ -105,8 +186,23 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     fetchVoiceModels();
   }, []);
 
+  // Modify the filtering effect to include search
+  useEffect(() => {
+    const filtered = allVoiceModels.filter(model => {
+      const matchesGender = selectedGender === 'all' || 
+        model.labels.gender?.toLowerCase() === selectedGender.toLowerCase();
+      
+      const matchesSearch = debouncedSearchQuery === '' ||
+        model.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
+      
+      return matchesGender && matchesSearch;
+    });
+    setFilteredVoiceModels(filtered);
+  }, [selectedGender, allVoiceModels, debouncedSearchQuery]);
+
   // Memoize the adapted and sorted dialogues, and add character grouping
   const { sortedDialogues, dialoguesList, characterGroupedDialogues } = useMemo(() => {
+    const renderTimestamp = new Date().toISOString();
     const adaptedDialogues = initialDialogues.map(adaptDialogue);
     const sorted = [...adaptedDialogues].sort((a, b) => 
       (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
@@ -122,10 +218,11 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       return acc;
     }, {});
 
-    console.log('SrDirectorDialogueView - Initial state:', {
+    // Log initial state only once with a unique timestamp
+    console.log('SrDirectorDialogueView - Initialization:', {
+      timestamp: renderTimestamp,
+      renderType: 'initial',
       totalDialogues: sorted.length,
-      firstDialogue: sorted[0],
-      lastDialogue: sorted[sorted.length - 1],
       uniqueCharacters: Object.keys(groupedByCharacter).length,
       characterBreakdown: Object.entries(groupedByCharacter).map(([char, dialogues]) => ({
         character: char,
@@ -138,11 +235,45 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       dialoguesList: sorted,
       characterGroupedDialogues: groupedByCharacter
     };
-  }, [initialDialogues]);
+  }, [initialDialogues]); // Only depend on initialDialogues
+
+  // Remove the duplicate initialization effect and consolidate into a single mount effect
+  useEffect(() => {
+    const mountTimestamp = new Date().toISOString();
+    
+    // Log mount information once
+    console.log('SrDirectorDialogueView - Mount:', {
+      timestamp: mountTimestamp,
+      componentState: {
+        initialDialoguesCount: initialDialogues.length,
+        projectId,
+        projectInfo: {
+          databaseName: project?.databaseName,
+          title: project?.title
+        },
+        episodeInfo: {
+          collectionName: episode?.collectionName,
+          name: episode?.name
+        }
+      }
+    });
+
+    // Set up cleanup
+    return () => {
+      console.log('SrDirectorDialogueView - Cleanup:', {
+        timestamp: new Date().toISOString(),
+        componentState: {
+          dialoguesCount: dialoguesList.length,
+          selectedCharacter: null,
+          currentDialogueIndex: 0
+        }
+      });
+    };
+  }, []); // Empty dependency array for mount/unmount only
 
   // State declarations
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
-  const [currentDialogue, setCurrentDialogue] = useState<SrDirectorDialogue | null>(() => sortedDialogues[0] || null);
+  const [currentDialogue, setCurrentDialogue] = useState<SrDirectorDialogue | null>(null);
   const [dialogues, setDialogues] = useState<SrDirectorDialogue[]>(dialoguesList);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
@@ -168,6 +299,13 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   const [isPlayingConverted, setIsPlayingConverted] = useState(false);
   const convertedAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Add new state for converted audio playback with video
+  const [isPlayingVideoWithConverted, setIsPlayingVideoWithConverted] = useState(false);
+  const [isProcessingBulkVoiceUpdate, setIsProcessingBulkVoiceUpdate] = useState(false);
+
+  // Add state for selected voice model
+  const [selectedVoiceModel, setSelectedVoiceModel] = useState<VoiceModel | null>(null);
+
   // Get dialogues for selected character or all dialogues if no character selected
   const activeDialogues = useMemo(() => {
     if (!selectedCharacter) return dialoguesList;
@@ -191,37 +329,184 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     });
   }, [activeDialogues, dialogueFilter]);
 
-  // Simplify navigation handlers
-  const handleNext = useCallback(() => {
-    if (currentDialogueIndex < filteredDialogues.length - 1) {
-      setCurrentDialogueIndex(prev => prev + 1);
-      setCurrentDialogue(filteredDialogues[currentDialogueIndex + 1]);
-    }
-  }, [currentDialogueIndex, filteredDialogues]);
-
-  const handlePrevious = useCallback(() => {
-    if (currentDialogueIndex > 0) {
-        setCurrentDialogueIndex(prev => prev - 1);
-      setCurrentDialogue(filteredDialogues[currentDialogueIndex - 1]);
-    }
-  }, [currentDialogueIndex, filteredDialogues]);
-
-  // Update current dialogue when index changes - with proper dependency array
+  // Optimize state tracking to reduce unnecessary updates
   useEffect(() => {
-    const dialogue = dialoguesList[currentDialogueIndex];
-    if (dialogue && dialogue !== currentDialogue) {
-      console.log('Updating dialogue:', {
-        dialogueNumber: dialogue.dialogNumber,
-        character: dialogue.character,
-        timeStart: dialogue.timeStart,
-        timeEnd: dialogue.timeEnd
+    const stateUpdateTimestamp = new Date().toISOString();
+    const stateSnapshot = {
+      timestamp: stateUpdateTimestamp,
+      type: 'state-update',
+      updates: {
+        character: {
+          selected: selectedCharacter,
+          dialoguesCount: selectedCharacter ? characterGroupedDialogues[selectedCharacter]?.length : 0
+        },
+        dialogue: {
+          currentIndex: currentDialogueIndex,
+          total: filteredDialogues.length,
+          hasCurrentDialogue: !!currentDialogue,
+          currentId: currentDialogue?.dialogNumber
+        },
+        audio: {
+          hasRecordedAudio: !!currentDialogue?.recordedAudioUrl,
+          hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+          selectedVoiceId: currentDialogue?.voiceId
+        }
+      }
+    };
+
+    // Only log if there are meaningful changes
+    if (
+      stateSnapshot.updates.character.selected !== undefined ||
+      stateSnapshot.updates.dialogue.currentId !== undefined ||
+      stateSnapshot.updates.audio.hasRecordedAudio !== undefined
+    ) {
+      console.log('State Update:', stateSnapshot);
+    }
+  }, [
+    selectedCharacter,
+    currentDialogueIndex,
+    currentDialogue,
+    filteredDialogues.length,
+    characterGroupedDialogues
+  ]);
+
+  // Optimize dialogue update effect
+  useEffect(() => {
+    if (!selectedCharacter) {
+      console.log('Dialogue Update - No character selected, skipping update');
+      return;
+    }
+
+    const dialogue = activeDialogues[currentDialogueIndex];
+    if (!dialogue) {
+      console.log('Dialogue Update - No dialogue found at index:', currentDialogueIndex);
+      return;
+    }
+
+    // Only update if the dialogue number has changed
+    if (!currentDialogue || dialogue.dialogNumber !== currentDialogue.dialogNumber) {
+      console.log('Dialogue Update:', {
+        timestamp: new Date().toISOString(),
+        type: 'dialogue-change',
+        details: {
+          dialogueNumber: dialogue.dialogNumber,
+          character: dialogue.character,
+          index: currentDialogueIndex,
+          audio: {
+            hasRecordedAudio: !!dialogue.recordedAudioUrl,
+            hasConvertedAudio: !!dialogue.ai_converted_voiceover_url,
+            voiceId: dialogue.voiceId
+          },
+          timing: {
+            start: dialogue.timeStart,
+            end: dialogue.timeEnd
+          }
+        }
       });
       
       setCurrentDialogue(dialogue);
       setRevisionRequested(dialogue.revisionRequested || false);
       setNeedsReRecord(dialogue.needsReRecord || false);
     }
-  }, [currentDialogueIndex, dialoguesList]);
+  }, [currentDialogueIndex, activeDialogues, selectedCharacter, currentDialogue]);
+
+  // Add logging for character selection
+  const handleCharacterSelection = useCallback((character: string, dialogues: SrDirectorDialogue[]) => {
+    console.log('Character Selection - Start:', {
+      selectedCharacter: character,
+      dialoguesCount: dialogues.length,
+      firstDialogue: dialogues[0],
+      currentIndex: currentDialogueIndex,
+      dialogueState: {
+        hasCurrentDialogue: !!currentDialogue,
+        currentDialogueId: currentDialogue?.dialogNumber,
+        hasRecordedAudio: !!currentDialogue?.recordedAudioUrl,
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url
+      }
+    });
+
+    // Reset states when selecting a character
+    setCurrentDialogueIndex(0);
+    setSelectedCharacter(character);
+    
+    // Set the first dialogue for the selected character
+    const firstDialogue = dialogues[0];
+    if (firstDialogue) {
+      console.log('Character Selection - Setting First Dialogue:', {
+        dialogueNumber: firstDialogue.dialogNumber,
+        character: firstDialogue.character,
+        hasRecordedAudio: !!firstDialogue.recordedAudioUrl,
+        hasConvertedAudio: !!firstDialogue.ai_converted_voiceover_url,
+        voiceId: firstDialogue.voiceId,
+        timeStart: firstDialogue.timeStart,
+        timeEnd: firstDialogue.timeEnd
+      });
+      setCurrentDialogue(firstDialogue);
+      setRevisionRequested(firstDialogue.revisionRequested || false);
+      setNeedsReRecord(firstDialogue.needsReRecord || false);
+    } else {
+      console.log('Character Selection - No dialogues available for character');
+      setCurrentDialogue(null);
+    }
+  }, []);
+
+  // Add clear character selection handler
+  const handleClearCharacterSelection = useCallback(() => {
+    console.log('Clearing character selection');
+    setSelectedCharacter(null);
+    setCurrentDialogueIndex(0);
+    setCurrentDialogue(null);
+    setRevisionRequested(false);
+    setNeedsReRecord(false);
+  }, []);
+
+  // Add debugging for dialogue navigation
+  const handleNext = useCallback(() => {
+    console.log('Navigation - Next:', {
+      currentIndex: currentDialogueIndex,
+      totalDialogues: filteredDialogues.length,
+      canMoveNext: currentDialogueIndex < filteredDialogues.length - 1
+    });
+
+    if (currentDialogueIndex < filteredDialogues.length - 1) {
+      const nextIndex = currentDialogueIndex + 1;
+      const nextDialogue = filteredDialogues[nextIndex];
+      
+      console.log('Navigation - Next Dialogue:', {
+        nextIndex,
+        dialogueNumber: nextDialogue.dialogNumber,
+        character: nextDialogue.character,
+        hasRecordedAudio: !!nextDialogue.recordedAudioUrl,
+        hasConvertedAudio: !!nextDialogue.ai_converted_voiceover_url
+      });
+
+      setCurrentDialogueIndex(nextIndex);
+      setCurrentDialogue(nextDialogue);
+    }
+  }, [currentDialogueIndex, filteredDialogues]);
+
+  const handlePrevious = useCallback(() => {
+    console.log('Navigation - Previous:', {
+      currentIndex: currentDialogueIndex,
+      canMovePrevious: currentDialogueIndex > 0
+    });
+
+    if (currentDialogueIndex > 0) {
+      const prevIndex = currentDialogueIndex - 1;
+      const prevDialogue = filteredDialogues[prevIndex];
+
+      console.log('Navigation - Previous Dialogue:', {
+        prevIndex,
+        dialogueNumber: prevDialogue.dialogNumber,
+        character: prevDialogue.character,
+        hasRecordedAudio: !!prevDialogue.recordedAudioUrl,
+        hasConvertedAudio: !!prevDialogue.ai_converted_voiceover_url
+      });
+
+      setCurrentDialogueIndex(prevIndex);
+      setCurrentDialogue(prevDialogue);
+    }
+  }, [currentDialogueIndex, filteredDialogues]);
 
   // Modify handleApproveAndSave to remove confirmation logic
   const handleApproveAndSave = useCallback(async () => {
@@ -430,11 +715,235 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
   };
 
+  // Modify handleVoiceSelection to first select the model
+  const handleVoiceSelection = async (model: VoiceModel) => {
+    console.log('Voice Selection - Start:', {
+      selectedModel: model,
+      currentModel: selectedVoiceModel,
+      currentDialogue: {
+        id: currentDialogue?.dialogNumber,
+        hasRecordedAudio: !!currentDialogue?.recordedAudioUrl,
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        voiceId: currentDialogue?.voiceId
+      }
+    });
+
+    // Just update the selected model, don't process yet
+    setSelectedVoiceModel(model);
+
+    console.log('Voice Selection - Complete:', {
+      newSelectedModel: model.id
+    });
+  };
+
+  // Add new function to process voice conversion
+  const handleProcessVoice = async () => {
+    console.log('Process Voice - Start:', {
+      selectedModel: selectedVoiceModel,
+      currentDialogue: {
+        id: currentDialogue?.dialogNumber,
+        hasRecordedAudio: !!currentDialogue?.recordedAudioUrl,
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        voiceId: currentDialogue?.voiceId
+      }
+    });
+
+    if (!selectedVoiceModel || !currentDialogue?.recordedAudioUrl) {
+      const error = 'Please select a voice model and ensure there is recorded audio';
+      console.error('Process Voice - Validation Error:', {
+        hasSelectedModel: !!selectedVoiceModel,
+        hasRecordedAudio: !!currentDialogue?.recordedAudioUrl
+      });
+      setError(error);
+      return;
+    }
+
+    try {
+      setIsProcessingVoice(true);
+      
+      const response = await fetch('/api/voice-models/speech-to-speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          voiceId: selectedVoiceModel.id,
+          recordedAudioUrl: currentDialogue.recordedAudioUrl,
+          dialogueNumber: currentDialogue.dialogNumber
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process voice conversion');
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error('Failed to process voice conversion');
+      }
+
+      // Log the response data from voice processing
+      console.log('Voice Processing - API Response:', {
+        success: data.success,
+        audioUrl: data.audioUrl,
+        dialogueNumber: currentDialogue.dialogNumber
+      });
+
+      // Create the complete updated dialogue object
+      const dialogueComponents = currentDialogue.dialogNumber.split('.');
+      const sceneNumber = dialogueComponents[2];
+
+      const updatedDialogue = {
+        _id: currentDialogue.dialogNumber,
+        dialogue: currentDialogue.dialogue,
+        character: currentDialogue.character,
+        status: currentDialogue.status || 'pending',
+        timeStart: currentDialogue.timeStart,
+        timeEnd: currentDialogue.timeEnd,
+        index: currentDialogue.index,
+        recordedAudioUrl: currentDialogue.recordedAudioUrl,
+        voiceOverNotes: currentDialogue.voiceOverNotes,
+        revisionRequested: currentDialogue.revisionRequested,
+        needsReRecord: currentDialogue.needsReRecord,
+        databaseName: project?.databaseName,
+        collectionName: episode?.collectionName,
+        subtitleIndex: currentDialogue.subtitleIndex,
+        characterName: currentDialogue.characterName,
+        dialogNumber: currentDialogue.dialogNumber,
+        projectId,
+        sceneNumber,
+        voiceId: selectedVoiceModel.id,
+        ai_converted_voiceover_url: data.audioUrl
+      };
+
+      // Log the update payload
+      console.log('Database Update - Request Payload:', {
+        dialogueNumber: currentDialogue.dialogNumber,
+        updateData: {
+          voiceId: updatedDialogue.voiceId,
+          ai_converted_voiceover_url: updatedDialogue.ai_converted_voiceover_url,
+          databaseName: updatedDialogue.databaseName,
+          collectionName: updatedDialogue.collectionName
+        }
+      });
+
+      // Update the dialogue in the database
+      const { data: responseData } = await axios.patch(
+        `/api/dialogues/update/${currentDialogue.dialogNumber}`,
+        updatedDialogue,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          params: {
+            databaseName: project?.databaseName,
+            collectionName: episode?.collectionName,
+            projectId
+          }
+        }
+      );
+
+      // Log the database response
+      console.log('Database Update - Response:', {
+        success: true,
+        dialogueNumber: responseData.dialogNumber,
+        voiceId: responseData.voiceId,
+        ai_converted_voiceover_url: responseData.ai_converted_voiceover_url,
+        updatedAt: responseData.updatedAt
+      });
+
+      // Create a new dialogue object with updated fields
+      const finalDialogue = {
+        ...currentDialogue,
+        voiceId: selectedVoiceModel.id,
+        ai_converted_voiceover_url: data.audioUrl
+      };
+
+      console.log('State Update - Before:', {
+        dialogueNumber: currentDialogue.dialogNumber,
+        previousVoiceId: currentDialogue.voiceId,
+        previousConvertedAudio: currentDialogue.ai_converted_voiceover_url
+      });
+
+      // Update dialogues list
+      setDialogues(prevDialogues => {
+        const updatedDialogues = prevDialogues.map(d => 
+          d.dialogNumber === currentDialogue.dialogNumber ? finalDialogue : d
+        );
+        console.log('State Update - Dialogues List:', {
+          totalDialogues: updatedDialogues.length,
+          updatedDialogue: updatedDialogues.find(d => d.dialogNumber === currentDialogue.dialogNumber)
+        });
+        return updatedDialogues;
+      });
+
+      // Update current dialogue
+      setCurrentDialogue(finalDialogue);
+
+      // Update query cache
+      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
+        if (!oldData?.data) return oldData;
+        const updatedData = {
+          ...oldData,
+          data: oldData.data.map((d: BaseDialogue) => 
+            d.dialogNumber === currentDialogue.dialogNumber ? finalDialogue : d
+          )
+        };
+        console.log('Query Cache Update:', {
+          dialogueNumber: currentDialogue.dialogNumber,
+          updatedDialogue: updatedData.data.find((d) => 
+            (d as BaseDialogue).dialogNumber === currentDialogue.dialogNumber
+          ) as typeof finalDialogue | undefined
+        });
+        return updatedData;
+      });
+
+      console.log('State Update - After:', {
+        dialogueNumber: finalDialogue.dialogNumber,
+        newVoiceId: finalDialogue.voiceId,
+        newConvertedAudio: finalDialogue.ai_converted_voiceover_url,
+        timestamp: new Date().toISOString()
+      });
+
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+
+    } catch (error) {
+      console.error('Process Voice - Error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process voice conversion');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  };
+
   // Handle synced playback with converted audio
   const handleConvertedAudioPlayback = async () => {
-    if (!currentDialogue?.voiceId || !videoRef.current) return;
+    console.log('Converted Audio Playback - Start:', {
+      currentDialogue: {
+        id: currentDialogue?.dialogNumber,
+        hasVoiceId: !!currentDialogue?.voiceId,
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        audioUrl: currentDialogue?.ai_converted_voiceover_url
+      },
+      playbackState: {
+        isPlaying,
+        isPlayingConverted
+      }
+    });
+
+    if (!currentDialogue?.ai_converted_voiceover_url || !videoRef.current) {
+      console.error('Converted Audio Playback - Validation Error:', {
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        hasVideoRef: !!videoRef.current
+      });
+      return;
+    }
 
     if (isPlayingConverted) {
+      console.log('Converted Audio Playback - Stopping');
       // Stop both video and converted audio
       if (videoRef.current) {
         videoRef.current.pause();
@@ -449,12 +958,17 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
 
     try {
+      console.log('Converted Audio Playback - Starting:', {
+        audioUrl: currentDialogue.ai_converted_voiceover_url
+      });
+
       // Create audio element for converted audio
-      const audio = new Audio(`https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`);
+      const audio = new Audio(currentDialogue.ai_converted_voiceover_url);
       convertedAudioRef.current = audio;
 
       // Set up cleanup on audio end
       audio.addEventListener('ended', () => {
+        console.log('Converted Audio Playback - Ended');
         setIsPlayingConverted(false);
         setIsPlaying(false);
         if (videoRef.current) {
@@ -473,10 +987,14 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         audio.play()
       ]);
 
+      console.log('Converted Audio Playback - Started Successfully');
       setIsPlayingConverted(true);
       setIsPlaying(true);
     } catch (error) {
-      console.error('Failed to start converted audio playback:', error);
+      console.error('Converted Audio Playback - Error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Failed to start converted audio playback'
+      });
       setIsPlayingConverted(false);
       setIsPlaying(false);
       if (convertedAudioRef.current) {
@@ -500,466 +1018,553 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     };
   }, [currentDialogue?._id]);
 
-  // Add function to handle voice selection
-  const handleVoiceSelection = async (voiceId: string) => {
-    if (!currentDialogue?.recordedAudioUrl) {
-      setError('No recorded audio available for this dialogue');
+  // Update handleVideoWithConvertedAudio function
+  const handleVideoWithConvertedAudio = async () => {
+    console.log('AI Converted Audio Playback - Initial State:', {
+      dialogue: {
+        id: currentDialogue?.dialogNumber,
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        convertedAudioUrl: currentDialogue?.ai_converted_voiceover_url,
+        character: currentDialogue?.character
+      },
+      video: {
+        exists: !!videoRef.current,
+        currentTime: videoRef.current?.currentTime,
+        duration: videoRef.current?.duration,
+        paused: videoRef.current?.paused,
+        muted: videoRef.current?.muted
+      },
+      playbackState: {
+        isPlaying,
+        isPlayingVideoWithConverted,
+        hasAudioRef: !!convertedAudioRef.current
+      }
+    });
+
+    if (!currentDialogue?.ai_converted_voiceover_url || !videoRef.current) {
+      console.error('AI Converted Audio Playback - Validation Failed:', {
+        hasConvertedAudio: !!currentDialogue?.ai_converted_voiceover_url,
+        hasVideoRef: !!videoRef.current,
+        dialogueId: currentDialogue?.dialogNumber
+      });
+      return;
+    }
+
+    if (isPlayingVideoWithConverted) {
+      console.log('AI Converted Audio Playback - Stopping Playback:', {
+        videoState: {
+          currentTime: videoRef.current.currentTime,
+          duration: videoRef.current.duration,
+          muted: videoRef.current.muted
+        },
+        audioState: {
+          exists: !!convertedAudioRef.current,
+          currentTime: convertedAudioRef.current?.currentTime
+        }
+      });
+
+      // Stop playback
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.muted = false; // Unmute video when stopping
+        console.log('Video playback stopped and unmuted');
+      }
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+        console.log('Audio playback stopped and reference cleared');
+      }
+      setIsPlayingVideoWithConverted(false);
+      setIsPlaying(false);
       return;
     }
 
     try {
-      setIsProcessingVoice(true);
-      
-      const response = await fetch('/api/voice-models/speech-to-speech', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          voiceId,
-          recordedAudioUrl: currentDialogue.recordedAudioUrl,
-          dialogueNumber: currentDialogue.dialogNumber
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process voice conversion');
+      // Ensure video is muted before starting
+      if (videoRef.current) {
+        videoRef.current.muted = true;
+        console.log('Video muted before playback');
       }
 
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error('Failed to process voice conversion');
-      }
-
-      // Update the dialogue with new voice ID and converted audio
-      const dialogueId = currentDialogue.dialogNumber;
-      const updateData = {
-        ...currentDialogue,
-        voiceId,
-        recordedAudioUrl: data.audioUrl
-      };
-
-      const { data: responseData } = await axios.patch(
-        `/api/dialogues/update/${dialogueId}`,
-        updateData,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          params: {
-            databaseName: project?.databaseName,
-            collectionName: episode?.collectionName,
-            projectId
-          }
+      console.log('AI Converted Audio Playback - Starting:', {
+        audioUrl: currentDialogue.ai_converted_voiceover_url,
+        videoState: {
+          ready: videoRef.current.readyState,
+          duration: videoRef.current.duration,
+          muted: videoRef.current.muted
         }
-      );
-
-      // Update local state
-      setDialogues(prevDialogues => 
-        prevDialogues.map(d => 
-          d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
-        )
-      );
-
-      // Update query cache
-      queryClient.setQueryData(['dialogues', projectId], (oldData: QueryData | undefined) => {
-        if (!oldData?.data) return oldData;
-        return {
-          ...oldData,
-          data: oldData.data.map((d: BaseDialogue) => 
-            d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
-          )
-        };
       });
 
-      setShowSaveSuccess(true);
-      setTimeout(() => setShowSaveSuccess(false), 2000);
+      // Create audio element for converted audio
+      const audio = new Audio(currentDialogue.ai_converted_voiceover_url);
+      
+      // Add loadedmetadata event listener
+      await new Promise((resolve, reject) => {
+        audio.addEventListener('loadedmetadata', () => {
+          console.log('AI Converted Audio - Metadata Loaded:', {
+            audioDuration: audio.duration,
+            videoDuration: videoRef.current?.duration,
+            videoMuted: videoRef.current?.muted
+          });
+          resolve(true);
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.error('AI Converted Audio - Load Error:', {
+            error: e,
+            audioUrl: currentDialogue.ai_converted_voiceover_url
+          });
+          reject(new Error('Failed to load audio'));
+        });
+      });
 
+      convertedAudioRef.current = audio;
+
+      // Set up cleanup on audio end
+      audio.addEventListener('ended', () => {
+        console.log('AI Converted Audio Playback - Ended:', {
+          audioTime: audio.currentTime,
+          videoTime: videoRef.current?.currentTime,
+          videoMuted: videoRef.current?.muted
+        });
+        setIsPlayingVideoWithConverted(false);
+        setIsPlaying(false);
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.muted = false; // Unmute video when finished
+        }
+      });
+
+      // Add progress logging with sync adjustment
+      audio.addEventListener('timeupdate', () => {
+        if (videoRef.current && Math.abs(audio.currentTime - videoRef.current.currentTime) > 0.1) {
+          // Adjust video time if it gets out of sync by more than 100ms
+          videoRef.current.currentTime = audio.currentTime;
+        }
+        console.log('AI Converted Audio - Progress:', {
+          audioTime: audio.currentTime,
+          videoTime: videoRef.current?.currentTime,
+          syncDiff: Math.abs(audio.currentTime - (videoRef.current?.currentTime || 0)),
+          videoMuted: videoRef.current?.muted
+        });
+      });
+
+      // Reset both video and audio to start
+      videoRef.current.currentTime = 0;
+      audio.currentTime = 0;
+      
+      console.log('Starting synchronized playback');
+      
+      // Start playback ensuring video is muted
+      videoRef.current.muted = true;
+      await Promise.all([
+        videoRef.current.play().then(() => console.log('Video playback started (muted)')),
+        audio.play().then(() => console.log('Audio playback started'))
+      ]);
+
+      console.log('AI Converted Audio Playback - Started Successfully:', {
+        audioState: {
+          duration: audio.duration,
+          currentTime: audio.currentTime
+        },
+        videoState: {
+          duration: videoRef.current.duration,
+          currentTime: videoRef.current.currentTime,
+          muted: videoRef.current.muted
+        }
+      });
+
+      setIsPlayingVideoWithConverted(true);
+      setIsPlaying(true);
     } catch (error) {
-      console.error('Error processing voice:', error);
-      setError(error instanceof Error ? error.message : 'Failed to process voice conversion');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setIsProcessingVoice(false);
+      console.error('AI Converted Audio Playback - Error:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        audioUrl: currentDialogue?.ai_converted_voiceover_url,
+        videoState: {
+          ready: videoRef.current?.readyState,
+          duration: videoRef.current?.duration,
+          muted: videoRef.current?.muted
+        }
+      });
+
+      setIsPlayingVideoWithConverted(false);
+      setIsPlaying(false);
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+        console.log('Audio reference cleared after error');
+      }
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.muted = false; // Ensure video is unmuted after error
+        console.log('Video stopped and unmuted after error');
+      }
     }
   };
 
-  if (!currentDialogue) {
-    return <div className="text-center p-4">No dialogues available.</div>
+  // Add function to handle bulk voice update
+  const handleBulkVoiceUpdate = async () => {
+    if (!currentDialogue?.voiceId || !selectedCharacter) return;
+
+    try {
+      setIsProcessingBulkVoiceUpdate(true);
+      
+      // Get all dialogues for the selected character
+      const characterDialogues = dialogues.filter(d => d.characterName === selectedCharacter);
+      
+      // Update each dialogue with the selected voice ID
+      await Promise.all(characterDialogues.map(async (dialogue) => {
+        const dialogueComponents = dialogue.dialogNumber.split('.');
+        const sceneNumber = dialogueComponents[2];
+
+        const updateData = {
+          _id: dialogue.dialogNumber,
+          dialogue: dialogue.dialogue,
+          character: dialogue.character,
+          status: dialogue.status || 'pending',
+          timeStart: dialogue.timeStart,
+          timeEnd: dialogue.timeEnd,
+          index: dialogue.index,
+          recordedAudioUrl: dialogue.recordedAudioUrl,
+          voiceOverNotes: dialogue.voiceOverNotes,
+          revisionRequested: dialogue.revisionRequested,
+          needsReRecord: dialogue.needsReRecord,
+          databaseName: project?.databaseName,
+          collectionName: episode?.collectionName,
+          subtitleIndex: dialogue.subtitleIndex,
+          characterName: dialogue.characterName,
+          dialogNumber: dialogue.dialogNumber,
+          projectId,
+          sceneNumber,
+          voiceId: currentDialogue.voiceId // Add the selected voice ID
+        };
+
+        await axios.patch(
+          `/api/dialogues/update/${dialogue.dialogNumber}`,
+          updateData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            params: {
+              databaseName: project?.databaseName,
+              collectionName: episode?.collectionName,
+              projectId
+            }
+          }
+        );
+      }));
+
+      // Show success message
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
+
+      // Refresh the dialogues list
+      queryClient.invalidateQueries(['dialogues', projectId]);
+
+    } catch (error) {
+      console.error('Error updating voice for all dialogues:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update voice for all dialogues');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setIsProcessingBulkVoiceUpdate(false);
+    }
+  };
+
+  if (!dialoguesList.length) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No Dialogues Available
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            There are no dialogues available for review.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="w-full mx-auto px-4 space-y-4 sm:space-y-6">
-      {/* Project Overview Banner */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 p-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              All Dialogues Overview
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              Total Dialogues: {dialoguesList.length}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm dark:bg-blue-900 dark:text-blue-200">
-              Pending: {dialoguesList.filter(d => !d.revisionRequested && !d.needsReRecord).length}
-            </span>
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm dark:bg-yellow-900 dark:text-yellow-200">
-              Needs Revision: {dialoguesList.filter(d => d.revisionRequested).length}
-            </span>
-            <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm dark:bg-red-900 dark:text-red-200">
-              Needs Re-record: {dialoguesList.filter(d => d.needsReRecord).length}
-            </span>
+    <div className="w-full h-screen flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
+      {/* Top Header Bar */}
+      <div className="w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Dialogue Review Interface
+          </h2>
+          <div className="flex items-center gap-4">
+            <div className="flex gap-2">
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs dark:bg-blue-900 dark:text-blue-200">
+                Pending: {dialoguesList.filter(d => !d.revisionRequested && !d.needsReRecord).length}
+              </span>
+              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs dark:bg-yellow-900 dark:text-yellow-200">
+                Revision: {dialoguesList.filter(d => d.revisionRequested).length}
+              </span>
+              <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs dark:bg-red-900 dark:text-red-200">
+                Re-record: {dialoguesList.filter(d => d.needsReRecord).length}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Enhanced Character Selection */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Character List Panel */}
-        <div className="md:col-span-1 bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 p-4 flex flex-col">
-          <div className="flex justify-between items-center mb-3 sticky top-0 bg-white dark:bg-gray-800 z-10">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Characters</h3>
-            {selectedCharacter && (
-              <button
-                onClick={() => {
-                  setSelectedCharacter(null);
-                  setCurrentDialogueIndex(0);
-                }}
-                className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                Clear Selection
-              </button>
-            )}
-          </div>
-          <div className="flex flex-col gap-4">
-            {/* Character List */}
-            <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(50vh-8rem)] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="w-72 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+          {/* Character Selection */}
+          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white">Characters</h3>
+              {selectedCharacter && (
+                <button
+                  onClick={handleClearCharacterSelection}
+                  className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="space-y-1 max-h-[30vh] overflow-y-auto scrollbar-thin">
               {Object.entries(characterGroupedDialogues).map(([character, dialogues]) => (
                 <button
                   key={character}
                   onClick={() => {
-                    setSelectedCharacter(character);
-                    setCurrentDialogueIndex(0);
-                    const firstDialogue = dialogues[0];
-                    if (firstDialogue) {
-                      setCurrentDialogue(firstDialogue);
-                    }
+                    handleCharacterSelection(character, dialogues);
                   }}
-                  className={`w-full px-4 py-2 rounded-lg text-left ${
+                  className={`w-full px-3 py-2 rounded text-left text-sm ${
                     selectedCharacter === character
                       ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
                 >
                   <div className="font-medium">{character}</div>
-                  <div className="text-sm opacity-80">{dialogues.length} dialogues</div>
+                  <div className="text-xs opacity-80">{dialogues.length} lines</div>
                 </button>
               ))}
             </div>
+          </div>
 
-            {/* Voice Models Section */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Available Voice Models</h4>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="text-sm rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-2 py-1"
-                    onChange={(e) => {
-                      const filtered = voiceModels.filter(model => 
-                        e.target.value === 'all' || model.category === e.target.value
-                      );
-                      setVoiceModels(filtered);
-                    }}
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="cloned">Cloned</option>
-                    <option value="generated">Generated</option>
-                    <option value="professional">Professional</option>
-                  </select>
-                </div>
+          {/* Voice Models */}
+          <div className="flex-1 p-3 overflow-y-auto scrollbar-thin">
+            <div className="space-y-2 mb-3">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Voice Models</h3>
+                <select
+                  value={selectedGender}
+                  className="text-xs border border-gray-300 rounded bg-white dark:bg-gray-700 px-2 py-1"
+                  onChange={(e) => setSelectedGender(e.target.value)}
+                >
+                  <option value="all">All</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
-
-              {isLoadingVoices ? (
-                <div className="text-center py-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                  <p className="text-sm text-gray-500 mt-2">Loading voice models...</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4 overflow-y-auto max-h-[calc(50vh-8rem)] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                  {voiceModels.map((model) => (
-                    <div
-                      key={model.id}
-                      className="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                            {model.name}
-                            {model.verification.verified && (
-                              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full dark:bg-green-900 dark:text-green-200">
-                                Verified
-                              </span>
-                            )}
-                          </h5>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                            ID: {model.id}
-                          </p>
-                        </div>
-                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full dark:bg-blue-900 dark:text-blue-200 whitespace-nowrap">
-                          {model.category}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        {/* Voice Characteristics */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {model.labels.gender && (
-                            <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded dark:bg-purple-900 dark:text-purple-200">
-                              {model.labels.gender}
-                            </span>
-                          )}
-                          {model.labels.accent && (
-                            <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded dark:bg-yellow-900 dark:text-yellow-200">
-                              {model.labels.accent}
-                            </span>
-                          )}
-                          {model.labels.age && (
-                            <span className="text-xs px-2 py-1 bg-orange-100 text-orange-800 rounded dark:bg-orange-900 dark:text-orange-200">
-                              {model.labels.age}
-                            </span>
-                          )}
-                          {model.labels.useCase && (
-                            <span className="text-xs px-2 py-1 bg-indigo-100 text-indigo-800 rounded dark:bg-indigo-900 dark:text-indigo-200">
-                              {model.labels.useCase}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Description */}
-                        {model.description && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
-                            {model.description}
-                          </p>
-                        )}
-
-                        {/* Fine-tuning Info */}
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className={`w-2 h-2 rounded-full ${
-                            model.fineTuning.isAllowed ? 'bg-green-500' : 'bg-red-500'
-                          }`} />
-                          <span className="text-gray-600 dark:text-gray-300">
-                            {model.fineTuning.isAllowed ? 'Fine-tuning available' : 'No fine-tuning'}
-                          </span>
-                          {model.fineTuning.language && (
-                            <span className="text-gray-500 dark:text-gray-400">
-                              ({model.fineTuning.language})
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Preview Audio */}
-                        {model.previewUrl && (
-                          <div className="mt-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 012.828-2.828" />
-                              </svg>
-                              <span className="text-sm text-gray-600 dark:text-gray-300">Preview</span>
-                            </div>
-                            <audio 
-                              src={model.previewUrl} 
-                              controls 
-                              className="w-full h-8 audio-player"
-                            />
-                          </div>
-                        )}
-
-                        {/* Supported Models */}
-                        {model.supportedModels.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {model.supportedModels.map((modelId, index) => (
-                              <span 
-                                key={index}
-                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded dark:bg-gray-800 dark:text-gray-300"
-                                title="Supported Model ID"
-                              >
-                                {modelId}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-end gap-2 mt-3">
-                          <button
-                            onClick={() => handleVoiceSelection(model.id)}
-                            disabled={!currentDialogue || !currentDialogue.recordedAudioUrl || isProcessingVoice}
-                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                          >
-                            {isProcessingVoice ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                Processing...
-                              </>
-                            ) : (
-                              'Select Voice'
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search voice models..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
+
+            {isLoadingVoices ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredVoiceModels.map((model) => (
+                  <div
+                    key={model.id}
+                    className="p-2 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-sm"
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div className="flex-1">
+                        <div className="font-medium flex items-center gap-1">
+                          {model.name}
+                          {model.verification.verified && (
+                            <span className="text-[10px] px-1 bg-green-100 text-green-800 rounded">✓</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">ID: {model.id}</div>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">
+                        {model.category}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 my-1">
+                      {model.labels.gender && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">
+                          {model.labels.gender}
+                        </span>
+                      )}
+                      {model.labels.accent && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded">
+                          {model.labels.accent}
+                        </span>
+                      )}
+                    </div>
+
+                    {model.previewUrl && (
+                      <audio 
+                        src={model.previewUrl} 
+                        controls 
+                        className="w-full h-6 mt-1"
+                      />
+                    )}
+
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleVoiceSelection(model)}
+                        className={`flex-1 px-2 py-1 text-xs rounded ${
+                          selectedVoiceModel?.id === model.id
+                            ? 'bg-green-500 text-white'
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                      >
+                        {selectedVoiceModel?.id === model.id ? 'Selected' : 'Select Voice'}
+                      </button>
+                      {selectedVoiceModel?.id === model.id && !currentDialogue?.ai_converted_voiceover_url && (
+                        <button
+                          onClick={handleProcessVoice}
+                          disabled={isProcessingVoice || !currentDialogue?.recordedAudioUrl}
+                          className="flex-1 px-2 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isProcessingVoice ? 'Processing...' : 'Process Voice'}
+                        </button>
+                      )}
+                      {selectedVoiceModel?.id === model.id && currentDialogue?.ai_converted_voiceover_url && (
+                        <button
+                          onClick={handleBulkVoiceUpdate}
+                          disabled={isProcessingBulkVoiceUpdate}
+                          className="flex-1 px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+                        >
+                          {isProcessingBulkVoiceUpdate ? 'Updating...' : 'Apply to All'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="md:col-span-3 space-y-4">
-          {selectedCharacter ? (
-            <>
-              {/* Character Info Banner with Filter */}
-              <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {!selectedCharacter ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  Select a Character
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Choose a character from the list to start reviewing
+                </p>
+              </div>
+            </div>
+          ) : !currentDialogue ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  No Dialogues Available
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  No dialogues available for {selectedCharacter}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {/* Character Header */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                       {selectedCharacter}
                     </h2>
-                    <p className="text-blue-700 dark:text-blue-300">
-                      Viewing dialogue {currentDialogueIndex + 1} of {filteredDialogues.length}
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Dialogue {currentDialogueIndex + 1} of {filteredDialogues.length}
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    {/* Filter Dropdown */}
+                  <div className="flex items-center gap-2">
                     <select
                       value={dialogueFilter}
                       onChange={(e) => {
                         setDialogueFilter(e.target.value);
                         setCurrentDialogueIndex(0);
                       }}
-                      className="px-3 py-1.5 rounded border border-blue-300 bg-white text-blue-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-blue-800 dark:border-blue-700 dark:text-blue-100"
+                      className="text-sm border border-gray-300 rounded bg-white dark:bg-gray-700 px-2 py-1"
                     >
                       <option value="all">All Dialogues</option>
                       <option value="pending">Pending Review</option>
                       <option value="revision">Needs Revision</option>
                       <option value="rerecord">Needs Re-record</option>
                     </select>
-                    {/* Navigation Controls */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
                       <button
                         onClick={handlePrevious}
                         disabled={currentDialogueIndex === 0}
-                        className="p-2 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
                       >
                         ←
                       </button>
                       <button
                         onClick={handleNext}
                         disabled={currentDialogueIndex === (filteredDialogues.length - 1)}
-                        className="p-2 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
                       >
                         →
                       </button>
                     </div>
                   </div>
                 </div>
-
-                {/* Filter Stats */}
-                <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                  <span className="text-blue-700 dark:text-blue-300">
-                    Total: {activeDialogues.length}
-                  </span>
-                  <span className="text-blue-700 dark:text-blue-300">
-                    Pending: {activeDialogues.filter(d => !d.revisionRequested && !d.needsReRecord).length}
-                  </span>
-                  <span className="text-yellow-600 dark:text-yellow-400">
-                    Needs Revision: {activeDialogues.filter(d => d.revisionRequested).length}
-                  </span>
-                  <span className="text-red-600 dark:text-red-400">
-                    Needs Re-record: {activeDialogues.filter(d => d.needsReRecord).length}
-                  </span>
-                </div>
-
-                {/* Dialogue Numbers Section */}
-                <div className="mt-4 border-t border-blue-200 dark:border-blue-700 pt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                      All Dialogue Numbers
-                    </h3>
-                    <span className="text-xs text-blue-600 dark:text-blue-300">
-                      {activeDialogues.length} dialogues
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {activeDialogues.map((dialogue, index) => (
-                      <button
-                        key={dialogue.dialogNumber}
-                        onClick={() => {
-                          setCurrentDialogueIndex(index);
-                          setCurrentDialogue(dialogue);
-                        }}
-                        className={`px-2 py-1 text-xs rounded-md truncate hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors ${
-                          currentDialogue?.dialogNumber === dialogue.dialogNumber
-                            ? 'bg-blue-200 dark:bg-blue-700 font-medium'
-                            : dialogue.recordedAudioUrl 
-                              ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100'
-                              : 'bg-white dark:bg-gray-700'
-                        }`}
-                        title={`Scene: ${dialogue.dialogNumber.split('.')[2]}, Index: ${dialogue.subtitleIndex}${dialogue.recordedAudioUrl ? ' (Recorded)' : ''}`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span>{dialogue.dialogNumber}</span>
-                          {dialogue.recordedAudioUrl && (
-                            <svg className="w-3 h-3 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
 
-              {/* Video Player Card */}
-              <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-                <div className="relative">
+              {/* Video Player */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="aspect-video bg-black">
                   <video
                     ref={videoRef}
                     src={currentDialogue?.videoUrl}
-                    className="w-full"
+                    className="w-full h-full object-contain"
                   />
-                  {isVideoLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
-                        <span className="text-sm text-white">Loading video...</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
-                
-                {/* Video Controls */}
-                <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                    <div className="flex items-center gap-2">
+                <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {/* Video Controls */}
+                    <div className="flex items-center gap-1 border-r pr-2 border-gray-200 dark:border-gray-700">
                       <button
                         onClick={() => {
                           if (videoRef.current) {
                             videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
                           }
                         }}
-                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                        className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
                       >
                         -5s
                       </button>
                       <button
                         onClick={() => {
                           if (videoRef.current) {
+                            videoRef.current.muted = false; // Ensure video audio is not muted
                             if (isPlaying) {
                               videoRef.current.pause();
                             } else {
@@ -968,56 +1573,45 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                             setIsPlaying(!isPlaying);
                           }
                         }}
-                        className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                        className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
                       >
-                        {isPlaying ? 'Pause' : 'Play'}
+                        {isPlaying ? '⏸' : '▶'} Video
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (videoRef.current) {
+                            videoRef.current.currentTime = Math.min(videoRef.current.duration, videoRef.current.currentTime + 5);
+                          }
+                        }}
+                        className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
+                      >
+                        +5s
                       </button>
                     </div>
+
+                    {/* Voice-over Controls */}
                     {currentDialogue?.recordedAudioUrl && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={handleSyncedPlayback}
-                          className="px-4 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+                          className="px-2 py-1 bg-purple-500 text-white text-xs rounded"
                         >
-                          {isSyncedPlaying ? 'Stop Recorded' : 'Play Recorded'}
+                          {isSyncedPlaying ? 'Stop Original' : 'Play Original'}
                         </button>
-                        {currentDialogue.voiceId && (
-                          <>
-                            <button
-                              onClick={handleConvertedAudioPlayback}
-                              className="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
-                            >
-                              {isPlayingConverted ? 'Stop Converted' : 'Play Converted'}
-                            </button>
-                            <button
-                              onClick={() => {
-                                const audioUrl = `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`;
-                                window.open(audioUrl, '_blank');
-                              }}
-                              className="px-4 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm flex items-center gap-1"
-                              title="Open converted audio in new tab"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                              Converted Audio
-                            </button>
-                          </>
+                        {currentDialogue.ai_converted_voiceover_url && (
+                          <button
+                            onClick={handleVideoWithConvertedAudio}
+                            className="px-2 py-1 bg-indigo-500 text-white text-xs rounded"
+                          >
+                            {isPlayingVideoWithConverted ? 'Stop AI Audio' : 'AI Converted Audio'}
+                          </button>
                         )}
-                        <div 
-                          className={`w-3 h-3 rounded-full ${
-                            Math.abs(audioDuration - videoDuration) < 0.1 
-                              ? 'bg-green-500' 
-                              : 'bg-red-500'
-                          }`}
-                          title={Math.abs(audioDuration - videoDuration) < 0.1 
-                            ? 'Audio and video durations match' 
-                            : `Duration mismatch - Video: ${videoDuration.toFixed(3)}s, Audio: ${audioDuration.toFixed(3)}s`}
-                        />
                       </div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600 dark:text-gray-300">Speed:</span>
+
+                    {/* Playback Speed */}
+                    <div className="flex items-center gap-1 text-xs border-l pl-2 border-gray-200 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Speed:</span>
                       {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
                         <button
                           key={rate}
@@ -1033,10 +1627,10 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                               setPlaybackRate(rate);
                             }
                           }}
-                          className={`px-2 py-1 rounded text-sm ${
+                          className={`px-1.5 py-0.5 rounded ${
                             playbackRate === rate
                               ? 'bg-blue-500 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
                         >
                           {rate}x
@@ -1047,194 +1641,113 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                 </div>
               </div>
 
-              {/* Dialogue Information Card */}
-              <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700">
-                <div className="p-5 space-y-4">
-                  {/* Time Display */}
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 dark:text-white">Start:</span>
-                      <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                        {currentDialogue?.timeStart || '00:00.000'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 dark:text-white">End:</span>
-                      <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                        {currentDialogue?.timeEnd || '00:00.000'}
-                      </p>
-                    </div>
-                    {/* Voice ID Display */}
-                    <div className="flex items-center gap-2 ml-auto">
-                      <span className="font-medium text-gray-900 dark:text-white">Voice ID:</span>
-                      <p className="px-2 py-1 rounded-md border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white min-w-[100px] text-center">
-                        {currentDialogue?.voiceId || 'Not assigned'}
-                      </p>
+              {/* Dialogue Info */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">
+                      Original
+                    </label>
+                    <div className="text-sm p-2 rounded bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                      {currentDialogue?.dialogue.original}
                     </div>
                   </div>
-
-                  {/* All Text Versions */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                        Original Text
-                      </label>
-                      <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        {currentDialogue?.dialogue.original}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                        Translated Text
-                      </label>
-                      <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        {currentDialogue?.dialogue.translated}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                        Adapted Text
-                      </label>
-                      <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        {currentDialogue?.dialogue.adapted}
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">
+                      Translated
+                    </label>
+                    <div className="text-sm p-2 rounded bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                      {currentDialogue?.dialogue.translated}
                     </div>
                   </div>
-
-                  {/* Voice-over Players */}
-                  <div className="space-y-4">
-                    {/* Original Recording Player */}
-                    {currentDialogue.recordedAudioUrl && (
-                      <div className="flex flex-col items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                          </svg>
-                          <span className="font-medium text-gray-900 dark:text-white">Original Recording</span>
-                        </div>
-                        <audio 
-                          controls 
-                          src={currentDialogue.recordedAudioUrl} 
-                          className="w-full max-w-md audio-player"
-                        />
-                      </div>
-                    )}
-
-                    {/* Converted Audio Player */}
-                    {currentDialogue.voiceId && (
-                      <div className="flex flex-col items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                          </svg>
-                          <span className="font-medium text-gray-900 dark:text-white">AI Converted Audio</span>
-                        </div>
-                        <audio 
-                          controls 
-                          src={`https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`}
-                          className="w-full max-w-md audio-player"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Voice-over Notes Display */}
-                  {currentDialogue.voiceOverNotes && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-white">
-                        Voice-over Notes
-                      </label>
-                      <div className="w-full p-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        {currentDialogue.voiceOverNotes}
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">
+                      Adapted
+                    </label>
+                    <div className="text-sm p-2 rounded bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                      {currentDialogue?.dialogue.adapted}
                     </div>
-                  )}
-
-                  {/* Revision Request and Re-record Toggles */}
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="revisionRequested"
-                        checked={revisionRequested}
-                        onChange={(e) => setRevisionRequested(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                      />
-                      <label htmlFor="revisionRequested" className="text-sm font-medium text-gray-900 dark:text-white">
-                        Request Revision
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="needsReRecord"
-                        checked={needsReRecord}
-                        onChange={(e) => setNeedsReRecord(e.target.checked)}
-                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                      />
-                      <label htmlFor="needsReRecord" className="text-sm font-medium text-gray-900 dark:text-white">
-                        Needs Re-record
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Navigation and Info */}
-                  <div className="flex items-center justify-center pt-4 mt-4 border-t border-gray-200 dark:border-gray-600">
-                    <div className="text-center">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        Dialogue {currentDialogueIndex + 1} of {dialoguesList.length}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {currentDialogue?.timeStart} - {currentDialogue?.timeEnd}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Add Save Button */}
-                  <div className="flex justify-end pt-4">
-                    <button
-                      onClick={handleApproveAndSave}
-                      disabled={isSaving}
-                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSaving ? 'Saving...' : revisionRequested ? 'Request Revision' : 'Approve'}
-                    </button>
                   </div>
                 </div>
+
+                {/* Audio Players */}
+                {currentDialogue.recordedAudioUrl && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Original:</span>
+                      <audio 
+                        controls 
+                        src={currentDialogue.recordedAudioUrl} 
+                        className="flex-1 h-8"
+                      />
+                    </div>
+                    {currentDialogue.voiceId && (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/30 rounded">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">AI Voice:</span>
+                        <audio 
+                          controls 
+                          src={currentDialogue.ai_converted_voiceover_url || `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`}
+                          className="flex-1 h-8"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Review Controls */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={revisionRequested}
+                        onChange={(e) => setRevisionRequested(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Needs Revision</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={needsReRecord}
+                        onChange={(e) => setNeedsReRecord(e.target.checked)}
+                        className="w-4 h-4 text-purple-600 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Needs Re-record</span>
+                    </label>
+                  </div>
+                  <button
+                    onClick={handleApproveAndSave}
+                    disabled={isSaving}
+                    className="px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving...' : revisionRequested ? 'Request Revision' : 'Approve'}
+                  </button>
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center dark:bg-gray-800 dark:border-gray-600">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Select a Character
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Choose a character from the list to view and manage their dialogues
-              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Feedback Messages */}
-      {isSaving && (
-        <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          Saving review...
-        </div>
-      )}
-      
-      {showSaveSuccess && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          Review saved successfully!
-        </div>
-      )}
-      
-      {error && (
-        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          {error}
-        </div>
-      )}
+      <div className="fixed top-4 right-4 space-y-2 z-50">
+        {isSaving && (
+          <div className="bg-blue-500 text-white px-3 py-1.5 rounded text-sm shadow-lg">
+            Saving review...
+          </div>
+        )}
+        {showSaveSuccess && (
+          <div className="bg-green-500 text-white px-3 py-1.5 rounded text-sm shadow-lg">
+            Saved successfully!
+          </div>
+        )}
+        {error && (
+          <div className="bg-red-500 text-white px-3 py-1.5 rounded text-sm shadow-lg">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   )
 } 

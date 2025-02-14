@@ -1,6 +1,6 @@
 // VoiceOverDialougeView.tsx
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
 import { type Dialogue } from '../types/dialogue'
@@ -13,6 +13,7 @@ import RecordingTimer from './RecordingTimer'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 import { logEvent } from '@/utils/analytics'
 import { debounce } from 'lodash'
+import { Profiler } from 'react'
 
 // Add new type for recording status
 type RecordingStatus = 'available' | 'unavailable' | 'checking';
@@ -527,11 +528,17 @@ const debouncedLogEvent = debounce((event: string, data: any) => {
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId, episode, project }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
+  // console.log('initialDialogues', initialDialogues);
 
-  // Sort dialogues by subtitleIndex before initializing state
-  const sortedDialogues = [...initialDialogues].sort((a, b) => 
-    (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
-  );
+  // Memoize sortedDialogues to prevent unnecessary recalculation
+  // const sortedDialogues = useMemo(() => 
+  //   [...initialDialogues].sort((a, b) => 
+  //     (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
+  //   ), [initialDialogues]
+  // );
+
+  const sortedDialogues = initialDialogues;
+
   
   const [dialoguesList, setDialoguesList] = useState(sortedDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
@@ -555,7 +562,27 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   const [maxDuration, setMaxDuration] = useState(0);
   const [currentRecordingDuration, setCurrentRecordingDuration] = useState(0);
 
-  const currentDialogue = dialoguesList[currentDialogueIndex];
+  // Memoize currentDialogue to prevent unnecessary recalculations
+  const currentDialogue = useMemo(() => 
+    dialoguesList[currentDialogueIndex],
+    [dialoguesList, currentDialogueIndex]
+  );
+
+  // Update dialoguesList only when sortedDialogues changes
+  useEffect(() => {
+    setDialoguesList(sortedDialogues);
+  }, [sortedDialogues]);
+
+  // Log only on mount and when dialogues actually change
+  useEffect(() => {
+    const dialoguesCount = initialDialogues.length;
+    logEvent('Component initialized', {
+      totalDialogues: dialoguesCount,
+      projectId,
+      episodeId: episode?._id,
+      projectTitle: project?.title
+    });
+  }, [projectId, episode?._id, project?.title, initialDialogues.length]);
 
   const {
     audioBlob,
@@ -830,16 +857,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       };
     }
   }, [currentDialogue?.videoClipUrl]);
-
-  // Add initialization logging
-  useEffect(() => {
-    logEvent('Component initialized', {
-      totalDialogues: initialDialogues.length,
-      projectId,
-      episodeId: episode?._id,
-      projectTitle: project?.title
-    });
-  }, []);
 
   // First, combine the duplicate useEffect for maxDuration and currentIndex
   useEffect(() => {
@@ -1124,6 +1141,20 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
           // Update voiceOverUrl
           const voiceOverUrl = uploadResponse.data.processedUrl;
 
+          // Update local state with new voiceOverUrl
+          setDialoguesList(prevList => {
+            const newList = [...prevList];
+            const dialogueIndex = newList.findIndex(d => d._id === currentDialogue._id);
+            if (dialogueIndex !== -1) {
+              newList[dialogueIndex] = {
+                ...newList[dialogueIndex],
+                voiceOverUrl,
+                status: 'completed'
+              };
+            }
+            return newList;
+          });
+
           // Clear local audio blob and reset states
           setLocalAudioBlob(null);
           setPlayingState(false);
@@ -1258,7 +1289,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [currentDialogue, startRecording, setPlayingState, setError]);
 
-  return (
+  const ComponentContent = (
     <div className="w-full h-screen flex flex-col bg-gray-900">
       <CharacterInfo 
         character={currentDialogue.characterName} 
@@ -1358,4 +1389,12 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       />
     </div>
   );
+
+  return process.env.NODE_ENV === 'development' ? (
+    <Profiler id="VoiceOverDialogueView" onRender={(id, phase, actualDuration) => {
+      console.debug(`[Profiler] ${id} - ${phase} took ${actualDuration}ms`);
+    }}>
+      {ComponentContent}
+    </Profiler>
+  ) : ComponentContent;
 } 

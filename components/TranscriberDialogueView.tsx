@@ -66,7 +66,7 @@ const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => {
   //   characterName: dialogue.characterName,
   //   dialogueText: dialogue.dialogue
   // });
-  
+
   return {
     ...dialogue,
     index: dialogue.subtitleIndex || 0,
@@ -86,24 +86,24 @@ const adaptDialogue = (dialogue: BaseDialogue): TranscriberDialogue => {
   };
 };
 
-export default function TranscriberDialogueView({ 
-  dialogues: initialDialogues, 
+export default function TranscriberDialogueView({
+  dialogues: initialDialogues,
   projectId,
   episodes = [],
-  currentEpisodeId 
+  currentEpisodeId
 }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
 
-  
+
 
   // Convert dialogues using the adapter
   const adaptedInitialDialogues = initialDialogues.map(adaptDialogue);
 
-  const sortedDialogues = [...adaptedInitialDialogues].sort((a, b) => 
+  const sortedDialogues = [...adaptedInitialDialogues].sort((a, b) =>
     (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
   );
-  
+
   // State declarations
   const [dialoguesList, setDialoguesList] = useState<TranscriberDialogue[]>(sortedDialogues);
   const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
@@ -142,7 +142,7 @@ export default function TranscriberDialogueView({
         timeStart: dialogue.timeStart,
         timeEnd: dialogue.timeEnd
       });
-      
+
       setCurrentDialogue(dialogue);
       setCharacter(dialogue.character || '');
       setPendingOriginalText(dialogue.dialogue.original || '');
@@ -178,7 +178,7 @@ export default function TranscriberDialogueView({
   // Video control handlers
   const togglePlayPause = useCallback(() => {
     if (!videoRef.current) return;
-    
+
     if (isPlaying) {
       videoRef.current.pause();
     } else {
@@ -190,7 +190,7 @@ export default function TranscriberDialogueView({
   // Check for unsaved changes
   const hasChanges = useCallback(() => {
     if (!currentDialogue) return false;
-    
+
     return (
       character !== currentDialogue.character ||
       pendingOriginalText !== currentDialogue.dialogue.original ||
@@ -202,16 +202,16 @@ export default function TranscriberDialogueView({
   // Save changes with approval
   const handleApproveAndSave = useCallback(async () => {
     if (!currentDialogue) return;
-    
+
     try {
       setNetworkStatus('saving');
       setIsSaving(true);
-      
+
       const sceneNumber = extractSceneNumber(currentDialogue.dialogNumber);
       if (!sceneNumber) {
         throw new Error('Invalid scene number format');
       }
-      
+
       const updateData = {
         dialogue: {
           original: pendingOriginalText || currentDialogue.dialogue.original,
@@ -238,7 +238,7 @@ export default function TranscriberDialogueView({
         `/api/dialogues/update/${encodeURIComponent(currentDialogue.dialogNumber)}`,
         updateData
       );
-      
+
       console.log('Save response:', responseData);
 
       // Create an adapted dialogue from the response
@@ -252,8 +252,8 @@ export default function TranscriberDialogueView({
       });
 
       // Update the dialogues list with the new dialogue
-      setDialoguesList(prevDialogues => 
-        prevDialogues.map(d => 
+      setDialoguesList(prevDialogues =>
+        prevDialogues.map(d =>
           d.dialogNumber === currentDialogue.dialogNumber ? updatedDialogue : d
         )
       );
@@ -263,7 +263,7 @@ export default function TranscriberDialogueView({
         if (!oldData?.data) return oldData;
         return {
           ...oldData,
-          data: oldData.data.map((d: BaseDialogue) => 
+          data: oldData.data.map((d: BaseDialogue) =>
             d.dialogNumber === currentDialogue.dialogNumber ? responseData : d
           )
         };
@@ -297,11 +297,11 @@ export default function TranscriberDialogueView({
           timeEnd,
         }
       });
-      
+
       setNetworkStatus('error');
       setError(
-        error instanceof Error 
-          ? `Save failed: ${error.message}` 
+        error instanceof Error
+          ? `Save failed: ${error.message}`
           : 'Failed to save transcription'
       );
     } finally {
@@ -368,15 +368,17 @@ export default function TranscriberDialogueView({
     const handleCanPlay = () => setIsVideoLoading(false);
     const handleWaiting = () => setIsVideoLoading(true);
     const handlePlaying = () => setIsVideoLoading(false);
+    const handleError = (e: Event) => {
+      const videoElement = e.target as HTMLVideoElement;
+      console.error('Video error:', videoElement.error);
+      setError(`Video playback error: ${videoElement.error?.message || 'Unknown error'}`);
+      setIsVideoLoading(false);
+    };
     const handleTimeUpdate = () => {
-      if (!currentDialogue) return;
+      if (!video || !currentDialogue) return;
+
       const currentTime = video.currentTime;
-      // Add your time update logic here using currentTime
-      // For example: update progress bar, check if current time is within dialogue time range, etc.
-      if (currentTime >= parseFloat(currentDialogue.timeEnd)) {
-        video.pause();
-        setIsPlaying(false);
-      }
+
     };
 
     video.addEventListener('play', handlePlay);
@@ -385,7 +387,16 @@ export default function TranscriberDialogueView({
     video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('error', handleError);
     video.addEventListener('timeupdate', handleTimeUpdate);
+
+    // Set initial video time when dialogue changes
+    if (currentDialogue?.timeStart) {
+      const startTime = parseFloat(currentDialogue.timeStart);
+      if (!isNaN(startTime)) {
+        video.currentTime = startTime;
+      }
+    }
 
     return () => {
       video.removeEventListener('play', handlePlay);
@@ -394,6 +405,7 @@ export default function TranscriberDialogueView({
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('error', handleError);
       video.removeEventListener('timeupdate', handleTimeUpdate);
     };
   }, [currentDialogue]);
@@ -435,7 +447,7 @@ export default function TranscriberDialogueView({
     if (networkStatus === 'idle') return null;
 
     const config = statusConfig[networkStatus as keyof typeof statusConfig];
-    
+
     return (
       <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium text-base animate-fade-in-up">
         <div className={`${config.bg} px-4 py-2 rounded-lg flex items-center gap-2`}>
@@ -447,15 +459,31 @@ export default function TranscriberDialogueView({
   };
 
   // Add video control functions
-  const rewindFiveSeconds = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
-    }
-  };
+  // const rewindFiveSeconds = () => {
+  //   if (videoRef.current) {
+  //     videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
+  //   }
+  // };
+
+  // const forwardFiveSeconds = () => {
+  //   if (videoRef.current) {
+  //     videoRef.current.currentTime = Math.min(
+  //       videoRef.current.duration,
+  //       videoRef.current.currentTime + 5
+  //     );
+  //   }
+  // };
 
   const changePlaybackRate = (rate: number) => {
     if (videoRef.current) {
       videoRef.current.playbackRate = rate;
+    }
+  };
+
+  const handleVideoError = () => {
+    if (videoRef.current?.error) {
+      console.error('Video error:', videoRef.current.error);
+      setError(`Failed to load video: ${videoRef.current.error.message}`);
     }
   };
 
@@ -475,7 +503,7 @@ export default function TranscriberDialogueView({
     }
 
     setError(''); // Clear any previous errors
-    
+
     try {
       console.log('Fetching dialogues for episode:', {
         projectId,
@@ -485,7 +513,7 @@ export default function TranscriberDialogueView({
 
       // Fetch dialogues for the selected episode
       const response = await axios.get(`/api/dialogues?projectId=${projectId}&episodeName=${encodeURIComponent(episode.name)}`);
-      
+
       if (!response.data?.data) {
         throw new Error('No dialogue data received from server');
       }
@@ -562,13 +590,13 @@ export default function TranscriberDialogueView({
     }
 
     const direction = info.offset.x > 0 ? 'right' : 'left';
-    
+
     if (direction === 'left') {
       // Right to left swipe
       if (hasChanges()) {
         // Show confirmation modal for saving if there are changes
-        animControls.start({ 
-          x: -200, 
+        animControls.start({
+          x: -200,
           opacity: 0.5,
           scale: 0.95,
           transition: { duration: 0.2 }
@@ -578,8 +606,8 @@ export default function TranscriberDialogueView({
         });
       } else {
         // If no changes, move to next dialogue
-        animControls.start({ 
-          x: -200, 
+        animControls.start({
+          x: -200,
           opacity: 0,
           scale: 0.95,
           transition: { duration: 0.2 }
@@ -592,8 +620,8 @@ export default function TranscriberDialogueView({
       }
     } else if (direction === 'right' && currentDialogueIndex > 0) {
       // Left to right swipe - Go to previous dialogue
-      animControls.start({ 
-        x: 200, 
+      animControls.start({
+        x: 200,
         opacity: 0,
         scale: 0.95,
         transition: { duration: 0.2 }
@@ -617,10 +645,10 @@ export default function TranscriberDialogueView({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6 relative">
+    <div className="w-full  mx-auto px-4 space-y-4 sm:space-y-6 relative">
       <NetworkStatusIndicator />
       <EpisodeInfo />
-      
+
       {/* Video Player Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
         <div className="relative">
@@ -628,6 +656,10 @@ export default function TranscriberDialogueView({
             ref={videoRef}
             src={currentDialogue?.videoUrl}
             className="w-full"
+            onError={handleVideoError}
+            controls
+            controlsList="nodownload"
+            preload="auto"
           />
           {isVideoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
@@ -638,16 +670,10 @@ export default function TranscriberDialogueView({
             </div>
           )}
         </div>
-        
+
         {/* Video Controls */}
         <div className="p-3 flex items-center justify-center gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <button
-              onClick={rewindFiveSeconds}
-              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              -5s
-            </button>
             <button
               onClick={togglePlayPause}
               className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -657,15 +683,14 @@ export default function TranscriberDialogueView({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-700 dark:text-gray-300">Speed:</span>
-            {[0.5, 0.75, 1].map((rate) => (
+            {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
               <button
                 key={rate}
                 onClick={() => changePlaybackRate(rate)}
-                className={`px-2 py-1 rounded ${
-                  videoRef.current?.playbackRate === rate
+                className={`px-2 py-1 rounded ${videoRef.current?.playbackRate === rate
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                }`}
+                  }`}
               >
                 {rate}x
               </button>
@@ -691,9 +716,9 @@ export default function TranscriberDialogueView({
         }}
         onDragEnd={handleDragEnd}
         whileTap={{ cursor: 'grabbing' }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 300, 
+        transition={{
+          type: "spring",
+          stiffness: 300,
           damping: 30,
           opacity: { duration: 0.2 },
           scale: { duration: 0.2 }
@@ -781,13 +806,13 @@ export default function TranscriberDialogueView({
             Saving transcription...
           </div>
         )}
-        
+
         {showSaveSuccess && (
           <div className="bg-green-500 text-white px-4 py-2 rounded shadow-lg text-sm text-center sm:text-left">
             Transcription saved successfully!
           </div>
         )}
-        
+
         {error && (
           <div className="bg-red-500 text-white px-4 py-2 rounded shadow-lg text-sm text-center sm:text-left">
             {error}

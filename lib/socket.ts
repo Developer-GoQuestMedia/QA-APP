@@ -164,11 +164,15 @@ export function disconnectUser(userId: string) {
 
 export function getSocketClient() {
   if (!socket) {
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app';
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const socketUrl = isDevelopment 
+      ? 'http://localhost:3000' 
+      : (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app');
+    
     console.log('Initializing socket client with URL:', socketUrl);
     
     socket = createSocketClient(socketUrl, {
-      path: '/api/socket/io',  // Updated path to match Next.js API route convention
+      path: '/api/socket/io',
       addTrailingSlash: false,
       autoConnect: true,
       reconnection: true,
@@ -176,7 +180,7 @@ export function getSocketClient() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       withCredentials: true,
     });
 

@@ -44,14 +44,19 @@ export async function GET(req: NextRequest) {
           path: '/api/socket/io',
           addTrailingSlash: false,
           cors: {
-            origin: process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app",
+            origin: [
+              'http://localhost:3000',
+              process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app"
+            ],
             methods: ["GET", "POST"],
             credentials: true,
             allowedHeaders: ['Content-Type', 'Authorization']
           },
           pingTimeout: 60000,
           pingInterval: 25000,
-          transports: ['websocket', 'polling']
+          transports: ['polling', 'websocket'],
+          allowEIO3: true,
+          allowUpgrades: true
         });
 
         io = server.io;

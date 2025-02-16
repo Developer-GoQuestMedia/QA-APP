@@ -1304,6 +1304,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
           _id: dialogue.dialogNumber,
           dialogue: dialogue.dialogue,
           character: dialogue.character,
+          characterName: dialogue.characterName,
           status: dialogue.status || 'pending',
           timeStart: dialogue.timeStart,
           timeEnd: dialogue.timeEnd,
@@ -1315,7 +1316,6 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
           databaseName: project?.databaseName,
           collectionName: episode?.collectionName,
           subtitleIndex: dialogue.subtitleIndex,
-          characterName: dialogue.characterName,
           dialogNumber: dialogue.dialogNumber,
           projectId,
           sceneNumber,
@@ -2031,7 +2031,13 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">AI Voice:</span>
                         <audio 
                           controls 
-                          src={currentDialogue.ai_converted_voiceover_url || `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/converted_audio/${currentDialogue.dialogNumber}.wav`}
+                          src={currentDialogue.ai_converted_voiceover_url || (() => {
+                            const dialogueComponents = currentDialogue.dialogNumber.split('.');
+                            const projectNumber = dialogueComponents[0];
+                            const episodeNumber = dialogueComponents[1].padStart(2, '0');
+                            const sanitizedCharacterName = currentDialogue.characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                            return `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/project_${projectNumber}/episode_${episodeNumber}/converted_audio/${sanitizedCharacterName}/${currentDialogue.dialogNumber}.wav`;
+                          })()}
                           className="flex-1 h-8"
                         />
                       </div>

@@ -54,9 +54,9 @@ export async function POST(request: Request) {
     }
 
     // Get request body
-    const { voiceId, recordedAudioUrl, dialogueNumber } = await request.json();
+    const { voiceId, recordedAudioUrl, dialogueNumber, characterName } = await request.json();
 
-    if (!voiceId || !recordedAudioUrl || !dialogueNumber) {
+    if (!voiceId || !recordedAudioUrl || !dialogueNumber || !characterName) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
@@ -113,13 +113,20 @@ export async function POST(request: Request) {
       // Get audio data as Buffer
       const audioData = Buffer.from(await response.arrayBuffer());
       
-      // Generate R2 path
+      // Generate R2 path with project/episode/converted_audio/character structure
       const sanitizedDialogueNumber = dialogueNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const r2Key = `converted_audio/${sanitizedDialogueNumber}.wav`;
+      const sanitizedCharacterName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      const dialogueComponents = dialogueNumber.split('.');
+      const projectNumber = dialogueComponents[0];
+      const episodeNumber = dialogueComponents[1].padStart(2, '0');
+      const r2Key = `project_${projectNumber}/episode_${episodeNumber}/converted_audio/${sanitizedCharacterName}/${sanitizedDialogueNumber}.wav`;
       
       console.log('Uploading to R2:', {
         bucket: BUCKET_NAME,
         key: r2Key,
+        characterName: characterName,
+        projectNumber,
+        episodeNumber,
         contentType: 'audio/wav',
         dataSize: audioData.length
       });

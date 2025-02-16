@@ -101,10 +101,12 @@ export async function POST(request: NextRequest) {
       throw new Error(`Episode ${paddedEpisodeNumber} not found in project document. Available episodes: ${projectDoc.episodes.map((ep: any) => ep.collectionName).join(', ')}`);
     }
 
-    // 7. Generate file path for R2 using the same structure as video
-    const basePath = getBasePathFromVideoKey(episode.videoKey);
+    // 7. Generate file path for R2 using project/episode structure
+    const projectNumber = dialogueComponents.projectNumber;
+    const episodeNumber = padNumber(dialogueComponents.episodeNumber);
+    const sanitizedCharacterName = dialogueComponents.dialogueNumber.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const fileName = `${dialogueId}.wav`;
-    const key = `${basePath}/recordings/${fileName}`;
+    const key = `project_${projectNumber}/episode_${episodeNumber}/converted_audio/${sanitizedCharacterName}/${fileName}`;
 
     // 8. Convert audio to buffer
     const arrayBuffer = await audio.arrayBuffer();

@@ -96,10 +96,13 @@ export async function POST(request: NextRequest) {
       throw new Error(`Episode ${paddedEpisodeNumber} not found in project`);
     }
 
-    // 9. Generate file paths
-    const basePath = getBasePathFromVideoKey(episode.videoKey);
-    const originalKey = `${basePath}/recordings/${dialogueId}.wav`;
-    const processedKey = `${basePath}/processed_recordings/${dialogueId}.wav`;
+    // 9. Generate file paths using project/episode structure
+    const projectNumber = dialogueComponents.projectNumber;
+    const episodeNumber = padNumber(dialogueComponents.episodeNumber);
+    const sanitizedCharacterName = dialogue.characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const basePath = `project_${projectNumber}/episode_${episodeNumber}`;
+    const originalKey = `${basePath}/converted_audio/${sanitizedCharacterName}/original/${dialogueId}.wav`;
+    const processedKey = `${basePath}/converted_audio/${sanitizedCharacterName}/processed/${dialogueId}.wav`;
 
     // 10. Upload both files to R2
     await Promise.all([

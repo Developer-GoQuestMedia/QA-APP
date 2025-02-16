@@ -1604,208 +1604,211 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <div className="w-72 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-          {/* Character Selection */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white">Characters</h3>
-              {selectedCharacter && (
-                <button
-                  onClick={handleClearCharacterSelection}
-                  className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            <div className="mb-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={characterSearchQuery}
-                  onChange={(e) => setCharacterSearchQuery(e.target.value)}
-                  placeholder="Search characters..."
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                />
-                {characterSearchQuery && (
-                  <button
-                    onClick={() => setCharacterSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    ×
-                  </button>
-                )}
+        {/* Left Sidebar - 1/4 width */}
+        <div className="w-1/4 flex flex-col relative bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+          {/* Characters Section - Top Half */}
+          <div className="h-1/2 border-b border-gray-200 dark:border-gray-700">
+            <div className="h-full flex flex-col">
+              <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-none">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">Characters</h3>
+                  {selectedCharacter && (
+                    <button
+                      onClick={handleClearCharacterSelection}
+                      className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={characterSearchQuery}
+                    onChange={(e) => setCharacterSearchQuery(e.target.value)}
+                    placeholder="Search characters..."
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  />
+                  {characterSearchQuery && (
+                    <button
+                      onClick={() => setCharacterSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="space-y-1 max-h-[30vh] overflow-y-auto scrollbar-thin">
-              {filteredCharacters.map(([character, dialogues]) => {
-                // Calculate voice assignment stats for this character
-                const dialoguesWithVoice = dialogues.filter(d => d.voiceId);
-                const voiceAssignmentPercentage = Math.round((dialoguesWithVoice.length / dialogues.length) * 100);
-                const hasVoiceAssigned = dialoguesWithVoice.length > 0;
-                // Get the voice model name if all dialogues have the same voice ID
-                const allSameVoice = dialoguesWithVoice.every(d => d.voiceId === dialoguesWithVoice[0]?.voiceId);
-                const voiceModel = allSameVoice && hasVoiceAssigned ? 
-                  allVoiceModels.find(m => m.id === dialoguesWithVoice[0]?.voiceId)?.name : null;
+              <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
+                <div className="space-y-1">
+                  {filteredCharacters.map(([character, dialogues]) => {
+                    const dialoguesWithVoice = dialogues.filter(d => d.voiceId);
+                    const voiceAssignmentPercentage = Math.round((dialoguesWithVoice.length / dialogues.length) * 100);
+                    const hasVoiceAssigned = dialoguesWithVoice.length > 0;
+                    const allSameVoice = dialoguesWithVoice.every(d => d.voiceId === dialoguesWithVoice[0]?.voiceId);
+                    const voiceModel = allSameVoice && hasVoiceAssigned ? 
+                      allVoiceModels.find(m => m.id === dialoguesWithVoice[0]?.voiceId)?.name : null;
 
-                return (
-                <button
-                  key={character}
-                  onClick={() => {
-                    handleCharacterSelection(character, dialogues);
-                  }}
-                  className={`w-full px-3 py-2 rounded text-left text-sm ${
-                    selectedCharacter === character
-                      ? 'bg-blue-500 text-white'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                    <div className="flex justify-between items-start">
-                      <div>
-                  <div className="font-medium">{character}</div>
-                  <div className="text-xs opacity-80">{dialogues.length} lines</div>
-                      </div>
-                      {hasVoiceAssigned && (
-                        <div className={`text-xs px-1.5 py-0.5 rounded ${
+                    return (
+                      <button
+                        key={character}
+                        onClick={() => handleCharacterSelection(character, dialogues)}
+                        className={`w-full px-3 py-2 rounded text-left text-sm ${
                           selectedCharacter === character
-                            ? 'bg-blue-400 text-white'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                        }`}>
-                          {voiceModel ? 
-                            `${voiceModel}` : 
-                            `${voiceAssignmentPercentage}% assigned`
-                          }
+                            ? 'bg-blue-500 text-white'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium">{character}</div>
+                            <div className="text-xs opacity-80">{dialogues.length} lines</div>
+                          </div>
+                          {hasVoiceAssigned && (
+                            <div className={`text-xs px-1.5 py-0.5 rounded ${
+                              selectedCharacter === character
+                                ? 'bg-blue-400 text-white'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            }`}>
+                              {voiceModel ? 
+                                `${voiceModel}` : 
+                                `${voiceAssignmentPercentage}% assigned`
+                              }
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                </button>
-                );
-              })}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Voice Models */}
-          <div className="flex-1 p-3 overflow-y-auto scrollbar-thin">
-            <div className="space-y-2 mb-3">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Voice Models</h3>
-                <select
-                  value={selectedGender}
-                  className="text-xs border border-gray-300 rounded bg-white dark:bg-gray-700 px-2 py-1"
-                  onChange={(e) => setSelectedGender(e.target.value)}
-                >
-                  <option value="all">All</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search voice models..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          {/* Voice Models Section - Bottom Half */}
+          <div className="h-1/2">
+            <div className="h-full flex flex-col">
+              <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-none">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">Voice Models</h3>
+                  <select
+                    value={selectedGender}
+                    className="text-xs border border-gray-300 rounded bg-white dark:bg-gray-700 px-2 py-1"
+                    onChange={(e) => setSelectedGender(e.target.value)}
                   >
-                    ×
-                  </button>
+                    <option value="all">All</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search voice models..."
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
+                {isLoadingVoices ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredVoiceModels.map((model) => (
+                      <div
+                        key={model.id}
+                        className="p-2 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-sm"
+                      >
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex-1">
+                            <div className="font-medium flex items-center gap-1">
+                              {model.name}
+                              {model.verification.verified && (
+                                <span className="text-[10px] px-1 bg-green-100 text-green-800 rounded">✓</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">ID: {model.id}</div>
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">
+                            {model.category}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 my-1">
+                          {model.labels.gender && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">
+                              {model.labels.gender}
+                            </span>
+                          )}
+                          {model.labels.accent && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded">
+                              {model.labels.accent}
+                            </span>
+                          )}
+                        </div>
+
+                        {model.previewUrl && (
+                          <audio 
+                            src={model.previewUrl} 
+                            controls 
+                            className="w-full h-6 mt-1"
+                          />
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleVoiceSelection(model)}
+                            className={`flex-1 px-2 py-1 text-xs rounded ${
+                              selectedVoiceModel?.id === model.id
+                                ? 'bg-green-500 text-white'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            {selectedVoiceModel?.id === model.id ? 'Selected' : 'Select Voice'}
+                          </button>
+                          {selectedVoiceModel?.id === model.id && currentDialogue?.recordedAudioUrl && !currentDialogue?.ai_converted_voiceover_url && (
+                            <button
+                              onClick={handleProcessVoice}
+                              disabled={isProcessingVoice}
+                              className="flex-1 px-2 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isProcessingVoice ? 'Processing...' : 'Process Voice'}
+                            </button>
+                          )}
+                          {selectedVoiceModel?.id === model.id && (
+                            <button
+                              onClick={handleBulkVoiceUpdate}
+                              disabled={isProcessingBulkVoiceUpdate}
+                              className="flex-1 px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+                            >
+                              {isProcessingBulkVoiceUpdate ? 'Updating...' : 'Apply to All'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
-
-            {isLoadingVoices ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredVoiceModels.map((model) => (
-                  <div
-                    key={model.id}
-                    className="p-2 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-sm"
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <div className="flex-1">
-                        <div className="font-medium flex items-center gap-1">
-                          {model.name}
-                          {model.verification.verified && (
-                            <span className="text-[10px] px-1 bg-green-100 text-green-800 rounded">✓</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">ID: {model.id}</div>
-                      </div>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">
-                        {model.category}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1 my-1">
-                      {model.labels.gender && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">
-                          {model.labels.gender}
-                        </span>
-                      )}
-                      {model.labels.accent && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded">
-                          {model.labels.accent}
-                        </span>
-                      )}
-                    </div>
-
-                    {model.previewUrl && (
-                      <audio 
-                        src={model.previewUrl} 
-                        controls 
-                        className="w-full h-6 mt-1"
-                      />
-                    )}
-
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={() => handleVoiceSelection(model)}
-                        className={`flex-1 px-2 py-1 text-xs rounded ${
-                          selectedVoiceModel?.id === model.id
-                            ? 'bg-green-500 text-white'
-                            : 'bg-blue-500 text-white hover:bg-blue-600'
-                        }`}
-                      >
-                        {selectedVoiceModel?.id === model.id ? 'Selected' : 'Select Voice'}
-                      </button>
-                      {selectedVoiceModel?.id === model.id && currentDialogue?.recordedAudioUrl && !currentDialogue?.ai_converted_voiceover_url && (
-                        <button
-                          onClick={handleProcessVoice}
-                          disabled={isProcessingVoice}
-                          className="flex-1 px-2 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isProcessingVoice ? 'Processing...' : 'Process Voice'}
-                        </button>
-                      )}
-                      {selectedVoiceModel?.id === model.id && (
-                        <button
-                          onClick={handleBulkVoiceUpdate}
-                          disabled={isProcessingBulkVoiceUpdate}
-                          className="flex-1 px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
-                        >
-                          {isProcessingBulkVoiceUpdate ? 'Updating...' : 'Apply to All'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {/* Main Content - 3/4 width */}
+        <div className="w-3/4 overflow-y-auto scrollbar-thin">
           {!selectedCharacter ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">

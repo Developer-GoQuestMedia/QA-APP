@@ -137,6 +137,10 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
+  // Add state for character search
+  const [characterSearchQuery, setCharacterSearchQuery] = useState('');
+  const debouncedCharacterSearchQuery = useDebounce(characterSearchQuery, 300);
+
   // Add debugging for component initialization
   useEffect(() => {
     console.log('SrDirectorDialogueView - Component Mount:', {
@@ -328,6 +332,13 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       }
     });
   }, [activeDialogues, dialogueFilter]);
+
+  // Add filtered characters logic
+  const filteredCharacters = useMemo(() => {
+    return Object.entries(characterGroupedDialogues).filter(([character]) => 
+      character.toLowerCase().includes(debouncedCharacterSearchQuery.toLowerCase())
+    );
+  }, [characterGroupedDialogues, debouncedCharacterSearchQuery]);
 
   // Optimize state tracking to reduce unnecessary updates
   useEffect(() => {
@@ -551,8 +562,22 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
         characterName: currentDialogue.characterName,
         dialogNumber: currentDialogue.dialogNumber,
         projectId,
-        sceneNumber
+        sceneNumber,
+        voiceId: currentDialogue.voiceId,
+        ai_converted_voiceover_url: currentDialogue.ai_converted_voiceover_url
       };
+      
+      console.log('Saving dialogue with voice data:', {
+        dialogueId,
+        voiceId: currentDialogue.voiceId,
+        hasConvertedAudio: !!currentDialogue.ai_converted_voiceover_url,
+        character: currentDialogue.character,
+        updateContext: {
+          databaseName: project.databaseName,
+          collectionName: episode.collectionName,
+          projectId
+        }
+      });
       
       const { data: responseData } = await axios.patch(
         `/api/dialogues/update/${dialogueId}`,
@@ -715,7 +740,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
   };
 
-  // Modify handleVoiceSelection to first select the model
+  // Modify handleVoiceSelection to update the current dialogue
   const handleVoiceSelection = async (model: VoiceModel) => {
     console.log('Voice Selection - Start:', {
       selectedModel: model,
@@ -728,11 +753,34 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       }
     });
 
-    // Just update the selected model, don't process yet
+    // Update the selected model
     setSelectedVoiceModel(model);
 
+    // Update current dialogue with the new voice ID
+    if (currentDialogue) {
+      const updatedDialogue = {
+        ...currentDialogue,
+        voiceId: model.id
+      };
+      setCurrentDialogue(updatedDialogue);
+
+      // Update dialogues list
+      setDialogues(prevDialogues => 
+        prevDialogues.map(d => 
+          d.dialogNumber === currentDialogue.dialogNumber ? updatedDialogue : d
+        )
+      );
+
+      console.log('Voice Selection - Updated Current Dialogue:', {
+        dialogueNumber: currentDialogue.dialogNumber,
+        previousVoiceId: currentDialogue.voiceId,
+        newVoiceId: model.id
+      });
+    }
+
     console.log('Voice Selection - Complete:', {
-      newSelectedModel: model.id
+      newSelectedModel: model.id,
+      currentDialogueVoiceId: currentDialogue?.voiceId
     });
   };
 
@@ -1203,9 +1251,16 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
   };
 
-  // Add function to handle bulk voice update
+  // Modify handleBulkVoiceUpdate to assign voice ID without requiring audio
   const handleBulkVoiceUpdate = async () => {
-    if (!currentDialogue?.voiceId || !selectedCharacter) return;
+    if (!selectedVoiceModel || !selectedCharacter) {
+      console.error('Bulk Voice Update - Invalid State:', {
+        hasSelectedModel: !!selectedVoiceModel,
+        selectedCharacter,
+        selectedVoiceId: selectedVoiceModel?.id
+      });
+      return;
+    }
 
     try {
       setIsProcessingBulkVoiceUpdate(true);
@@ -1213,10 +1268,33 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       // Get all dialogues for the selected character
       const characterDialogues = dialogues.filter(d => d.characterName === selectedCharacter);
       
+      console.log('Bulk Voice Update - Starting:', {
+        character: selectedCharacter,
+        selectedVoiceId: selectedVoiceModel.id,
+        totalDialogues: characterDialogues.length,
+        projectContext: {
+          databaseName: project?.databaseName,
+          collectionName: episode?.collectionName,
+          projectId
+        }
+      });
+
+      // Create a new array to track updated dialogues
+      let updatedDialoguesList = [...dialogues];
+
       // Update each dialogue with the selected voice ID
-      await Promise.all(characterDialogues.map(async (dialogue) => {
+      const updateResults = await Promise.all(characterDialogues.map(async (dialogue) => {
         const dialogueComponents = dialogue.dialogNumber.split('.');
         const sceneNumber = dialogueComponents[2];
+
+        console.log('Bulk Voice Update - Processing Dialogue:', {
+          dialogueNumber: dialogue.dialogNumber,
+          character: dialogue.characterName,
+          currentVoiceId: dialogue.voiceId,
+          newVoiceId: selectedVoiceModel.id,
+          hasRecordedAudio: !!dialogue.recordedAudioUrl,
+          hasConvertedAudio: !!dialogue.ai_converted_voiceover_url
+        });
 
         const updateData = {
           _id: dialogue.dialogNumber,
@@ -1226,7 +1304,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
           timeStart: dialogue.timeStart,
           timeEnd: dialogue.timeEnd,
           index: dialogue.index,
-          recordedAudioUrl: dialogue.recordedAudioUrl,
+          recordedAudioUrl: dialogue.recordedAudioUrl || null,
           voiceOverNotes: dialogue.voiceOverNotes,
           revisionRequested: dialogue.revisionRequested,
           needsReRecord: dialogue.needsReRecord,
@@ -1237,34 +1315,104 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
           dialogNumber: dialogue.dialogNumber,
           projectId,
           sceneNumber,
-          voiceId: currentDialogue.voiceId // Add the selected voice ID
+          voiceId: selectedVoiceModel.id,
+          ai_converted_voiceover_url: dialogue.ai_converted_voiceover_url || null
         };
 
-        await axios.patch(
-          `/api/dialogues/update/${dialogue.dialogNumber}`,
-          updateData,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            params: {
-              databaseName: project?.databaseName,
-              collectionName: episode?.collectionName,
-              projectId
+        try {
+          const response = await axios.patch(
+            `/api/dialogues/update/${dialogue.dialogNumber}`,
+            updateData,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              params: {
+                databaseName: project?.databaseName,
+                collectionName: episode?.collectionName,
+                projectId
+              }
             }
+          );
+
+          // Verify the response contains the voice ID
+          if (response.data?.voiceId !== selectedVoiceModel.id) {
+            console.error('Bulk Voice Update - Voice ID Mismatch:', {
+              dialogueNumber: dialogue.dialogNumber,
+              expectedVoiceId: selectedVoiceModel.id,
+              receivedVoiceId: response.data?.voiceId
+            });
+            return { success: false, dialogueNumber: dialogue.dialogNumber, error: 'Voice ID mismatch' };
           }
-        );
+
+          // Update the dialogue in our tracking array
+          updatedDialoguesList = updatedDialoguesList.map(d => 
+            d.dialogNumber === dialogue.dialogNumber 
+              ? { ...d, voiceId: selectedVoiceModel.id }
+              : d
+          );
+
+          console.log('Bulk Voice Update - Dialogue Updated:', {
+            dialogueNumber: dialogue.dialogNumber,
+            success: true,
+            voiceId: response.data.voiceId,
+            hasRecordedAudio: !!response.data.recordedAudioUrl,
+            hasConvertedAudio: !!response.data.ai_converted_voiceover_url
+          });
+
+          return { success: true, dialogueNumber: dialogue.dialogNumber };
+        } catch (error) {
+          console.error('Bulk Voice Update - Dialogue Update Failed:', {
+            dialogueNumber: dialogue.dialogNumber,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            requestData: updateData
+          });
+          return { success: false, dialogueNumber: dialogue.dialogNumber, error };
+        }
       }));
+
+      // Update all dialogues at once
+      setDialogues(updatedDialoguesList);
+
+      const successCount = updateResults.filter(result => result.success).length;
+      const failureCount = updateResults.filter(result => !result.success).length;
+
+      console.log('Bulk Voice Update - Completed:', {
+        totalProcessed: updateResults.length,
+        successCount,
+        failureCount,
+        character: selectedCharacter,
+        voiceId: selectedVoiceModel.id,
+        results: updateResults
+      });
 
       // Show success message
       setShowSaveSuccess(true);
       setTimeout(() => setShowSaveSuccess(false), 2000);
 
-      // Refresh the dialogues list
-      queryClient.invalidateQueries(['dialogues', projectId]);
+      // Force a full refresh of the dialogues list
+      await queryClient.invalidateQueries(['dialogues', projectId]);
+
+      // Verify the updates in the local state
+      const verificationDialogues = updatedDialoguesList.filter(d => 
+        d.characterName === selectedCharacter && d.voiceId === selectedVoiceModel.id
+      );
+
+      console.log('Bulk Voice Update - Verification:', {
+        character: selectedCharacter,
+        expectedVoiceId: selectedVoiceModel.id,
+        totalDialogues: characterDialogues.length,
+        updatedDialoguesCount: verificationDialogues.length,
+        allUpdated: verificationDialogues.length === characterDialogues.length,
+        verificationSample: verificationDialogues.slice(0, 3)
+      });
 
     } catch (error) {
-      console.error('Error updating voice for all dialogues:', error);
+      console.error('Bulk Voice Update - Error:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        character: selectedCharacter,
+        voiceId: selectedVoiceModel.id
+      });
       setError(error instanceof Error ? error.message : 'Failed to update voice for all dialogues');
       setTimeout(() => setError(''), 3000);
     } finally {
@@ -1328,23 +1476,69 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                 </button>
               )}
             </div>
+            <div className="mb-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={characterSearchQuery}
+                  onChange={(e) => setCharacterSearchQuery(e.target.value)}
+                  placeholder="Search characters..."
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                />
+                {characterSearchQuery && (
+                  <button
+                    onClick={() => setCharacterSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="space-y-1 max-h-[30vh] overflow-y-auto scrollbar-thin">
-              {Object.entries(characterGroupedDialogues).map(([character, dialogues]) => (
-                <button
-                  key={character}
-                  onClick={() => {
-                    handleCharacterSelection(character, dialogues);
-                  }}
-                  className={`w-full px-3 py-2 rounded text-left text-sm ${
-                    selectedCharacter === character
-                      ? 'bg-blue-500 text-white'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="font-medium">{character}</div>
-                  <div className="text-xs opacity-80">{dialogues.length} lines</div>
-                </button>
-              ))}
+              {filteredCharacters.map(([character, dialogues]) => {
+                // Calculate voice assignment stats for this character
+                const dialoguesWithVoice = dialogues.filter(d => d.voiceId);
+                const voiceAssignmentPercentage = Math.round((dialoguesWithVoice.length / dialogues.length) * 100);
+                const hasVoiceAssigned = dialoguesWithVoice.length > 0;
+                // Get the voice model name if all dialogues have the same voice ID
+                const allSameVoice = dialoguesWithVoice.every(d => d.voiceId === dialoguesWithVoice[0]?.voiceId);
+                const voiceModel = allSameVoice && hasVoiceAssigned ? 
+                  allVoiceModels.find(m => m.id === dialoguesWithVoice[0]?.voiceId)?.name : null;
+
+                return (
+                  <button
+                    key={character}
+                    onClick={() => {
+                      handleCharacterSelection(character, dialogues);
+                    }}
+                    className={`w-full px-3 py-2 rounded text-left text-sm ${
+                      selectedCharacter === character
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium">{character}</div>
+                        <div className="text-xs opacity-80">{dialogues.length} lines</div>
+                      </div>
+                      {hasVoiceAssigned && (
+                        <div className={`text-xs px-1.5 py-0.5 rounded ${
+                          selectedCharacter === character
+                            ? 'bg-blue-400 text-white'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        }`}>
+                          {voiceModel ? 
+                            `${voiceModel}` : 
+                            `${voiceAssignmentPercentage}% assigned`
+                          }
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1441,16 +1635,16 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                       >
                         {selectedVoiceModel?.id === model.id ? 'Selected' : 'Select Voice'}
                       </button>
-                      {selectedVoiceModel?.id === model.id && !currentDialogue?.ai_converted_voiceover_url && (
+                      {selectedVoiceModel?.id === model.id && currentDialogue?.recordedAudioUrl && !currentDialogue?.ai_converted_voiceover_url && (
                         <button
                           onClick={handleProcessVoice}
-                          disabled={isProcessingVoice || !currentDialogue?.recordedAudioUrl}
+                          disabled={isProcessingVoice}
                           className="flex-1 px-2 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isProcessingVoice ? 'Processing...' : 'Process Voice'}
                         </button>
                       )}
-                      {selectedVoiceModel?.id === model.id && currentDialogue?.ai_converted_voiceover_url && (
+                      {selectedVoiceModel?.id === model.id && (
                         <button
                           onClick={handleBulkVoiceUpdate}
                           disabled={isProcessingBulkVoiceUpdate}

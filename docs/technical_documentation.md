@@ -2,253 +2,307 @@
 
 ## Project Overview
 
-QA-APP is a sophisticated Next.js-based application designed for managing and processing audio/video content with advanced Q&A capabilities. The application features real-time collaboration, voice processing, and comprehensive project management tools.
+QA-APP is a sophisticated Next.js-based application designed for managing and processing audio/video content with advanced Q&A capabilities. The application features real-time collaboration, voice processing, and comprehensive project management tools with specialized roles including Director, Sr. Director, Transcriber, Translator, and Voice-over artists.
 
 ## Technical Stack
 
 ### Core Technologies
-- **Framework**: Next.js 14.2
-- **Runtime**: Node.js
-- **Language**: TypeScript
+- **Framework**: Next.js 14.2 with App Router
+- **Runtime**: Node.js 18+
+- **Language**: TypeScript 5.0+
 - **Database**: MongoDB with Prisma ORM
 - **Real-time Communication**: Socket.IO
 - **Authentication**: NextAuth.js
 - **State Management**: React Query (Tanstack Query)
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS with Shadcn/UI
 - **Testing**: Jest with React Testing Library
+- **Queue Management**: BullMQ with Redis
 
 ### Key Dependencies
-- `@prisma/client`: Database ORM
-- `socket.io`: Real-time communication
-- `next-auth`: Authentication and authorization
-- `@tanstack/react-query`: Data fetching and caching
-- `mongodb`: Database driver
-- `bullmq`: Job queue management
-- `@aws-sdk/client-s3`: S3 integration for media storage
-- `@vercel/blob`: Blob storage for media files
+- `@prisma/client`: ^5.0.0 - Database ORM
+- `socket.io`: ^4.7.0 - Real-time communication
+- `next-auth`: ^4.24.0 - Authentication and authorization
+- `@tanstack/react-query`: ^5.0.0 - Data fetching and caching
+- `mongodb`: ^6.0.0 - Database driver
+- `bullmq`: ^4.0.0 - Job queue management
+- `@aws-sdk/client-s3`: ^3.0.0 - S3 integration for media storage
+- `@vercel/blob`: ^0.15.0 - Blob storage for media files
+- `shadcn/ui`: ^1.0.0 - UI components
 
 ## System Architecture
 
 ### 1. Application Structure
 ```
 app/
-├── api/           # API routes
-├── components/    # Shared components
-├── lib/          # Core utilities
-├── types/        # TypeScript definitions
-└── [routes]/     # Application routes
+├── api/                # API routes
+│   ├── auth/          # Authentication endpoints
+│   ├── voice-models/  # Voice processing endpoints
+│   ├── voice-over/    # Voice-over management
+│   ├── dialogues/     # Dialogue management
+│   ├── srDirector/    # Sr. Director specific endpoints
+│   ├── director/      # Director specific endpoints
+│   ├── socket/        # WebSocket endpoints
+│   └── admin/         # Admin management
+├── components/        # Shared components
+│   ├── ui/           # UI components
+│   └── providers/    # Context providers
+├── lib/              # Core utilities
+├── types/            # TypeScript definitions
+└── [routes]/         # Application routes
 ```
 
 ### 2. Core Features
 
+#### Role-Based System
+- **Sr. Director**: Project oversight and final approval
+- **Director**: Project management and review
+- **Transcriber**: Audio transcription
+- **Translator**: Audio translation
+- **Voice-over Artist**: Audio recording and processing
+- **Admin**: System management and monitoring
+
 #### Authentication System
-- NextAuth.js integration
-- Role-based access control (Admin, Transcriber, Reviewer)
-- Secure session management
-- Protected API routes
+- NextAuth.js with custom providers
+- Role-based access control
+- Secure session management with JWT
+- Protected API routes with middleware
+- Rate limiting implementation
 
 #### Real-time Communication
-- Socket.IO implementation
-- Project room management
-- Live updates and notifications
-- Connection state management
-- Automatic reconnection handling
+- Socket.IO implementation with room management
+- Project-specific channels
+- Live updates for dialogue changes
+- Real-time voice processing status
+- Automatic reconnection with state recovery
 
 #### Voice Processing
-- Voice model management
-- Audio file processing
+- Multiple voice model support
+- Real-time audio processing
 - Noise reduction capabilities
-- Progress tracking
-- S3 integration for media storage
+- Progress tracking with WebSocket updates
+- S3/Blob storage integration
+- Queue-based processing with BullMQ
 
 #### Project Management
-- CRUD operations for projects
-- Episode tracking and management
+- Hierarchical project structure
+- Episode and dialogue tracking
+- Multi-stage approval process
 - Team collaboration features
-- Status tracking and updates
+- Real-time status updates
 - Bulk operations support
 
 #### Admin Dashboard
 - Comprehensive project oversight
-- User management
-- System monitoring
-- Analytics and reporting
-- Audit logging
+- User management with role assignment
+- System monitoring and metrics
+- Voice model management
+- Audit logging and activity tracking
 
 ## API Structure
 
 ### REST Endpoints
 
-#### Projects
-- `GET /api/projects`: List all projects
-- `POST /api/projects`: Create new project
-- `GET /api/projects/[id]`: Get project details
-- `PUT /api/projects/[id]`: Update project
-- `DELETE /api/projects/[id]`: Delete project
-
-#### Episodes
-- `GET /api/projects/[id]/episodes`: List episodes
-- `POST /api/projects/[id]/episodes`: Create episode
-- `GET /api/projects/[id]/episodes/[episodeId]`: Get episode
-- `PUT /api/projects/[id]/episodes/[episodeId]`: Update episode
+#### Authentication
+- `POST /api/auth/[...nextauth]`: Authentication endpoints
+- `GET /api/auth/session`: Session management
+- `POST /api/auth/callback`: OAuth callbacks
 
 #### Voice Processing
-- `GET /api/voice-models`: List available voice models
-- `POST /api/voice-over`: Process voice over
-- `POST /api/noise-reduction`: Apply noise reduction
+- `POST /api/voice-models/speech-to-speech`: Voice transformation
+- `POST /api/voice-over/process`: Voice-over processing
+- `POST /api/noise-reduction`: Audio cleanup
+
+#### Project Management
+- `GET /api/srDirector/projects`: Sr. Director projects
+- `GET /api/director/projects`: Director projects
+- `GET /api/translator/projects`: Translator projects
+- `POST /api/dialogues`: Dialogue management
+- `PUT /api/dialogues/[id]`: Update dialogues
+- `POST /api/dialogues/[id]/translate`: Submit translation
 
 #### Admin
-- `GET /api/admin/projects`: Admin project list
 - `GET /api/admin/users`: User management
-- `POST /api/admin/projects/bulk`: Bulk operations
+- `POST /api/admin/voice-models`: Voice model management
+- `GET /api/admin/metrics`: System metrics
 
 ### Socket Events
 
 #### Project Events
-- `projectUpdate`: Real-time project updates
-- `episodeUpdate`: Episode status changes
-- `teamUpdate`: Team member changes
+- `dialogueUpdate`: Real-time dialogue changes
+- `translationUpdate`: Translation status changes
+- `voiceProcessing`: Voice processing status
+- `approvalUpdate`: Approval status changes
 
 #### System Events
-- `connect`: Socket connection
-- `disconnect`: Socket disconnection
-- `error`: Error handling
-- `authenticate`: User authentication
+- `connect`: Socket connection with auth
+- `disconnect`: Clean disconnection
+- `error`: Error handling with recovery
+- `roomJoin`: Project room management
 
 ## Database Schema
 
 ### Collections
 
 #### Users
-\`\`\`typescript
+```typescript
 interface User {
   _id: ObjectId;
-  username: string;
   email: string;
-  role: 'admin' | 'transcriber' | 'reviewer';
+  name: string;
+  role: 'admin' | 'srDirector' | 'director' | 'transcriber' | 'translator' | 'voiceArtist';
+  permissions: string[];
   isActive: boolean;
+  lastLogin: Date;
   createdAt: Date;
   updatedAt: Date;
 }
-\`\`\`
+```
 
 #### Projects
-\`\`\`typescript
+```typescript
 interface Project {
   _id: ObjectId;
   title: string;
   description: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'on-hold';
+  status: 'draft' | 'in-review' | 'approved' | 'in-progress' | 'completed';
   sourceLanguage: string;
   targetLanguage: string;
-  assignedTo: string[];
+  assignedRoles: {
+    srDirector?: string;
+    director?: string;
+    transcriber?: string;
+    translator?: string;
+    voiceArtist?: string;
+  };
+  metadata: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
-\`\`\`
+```
 
-#### Episodes
-\`\`\`typescript
-interface Episode {
+#### Dialogues
+```typescript
+interface Dialogue {
   _id: ObjectId;
   projectId: ObjectId;
-  title: string;
-  status: string;
-  audioUrl: string;
-  transcription: string;
+  episodeId: ObjectId;
+  content: string;
+  translation?: string;
+  audioUrl?: string;
+  status: 'pending' | 'transcribed' | 'translated' | 'recorded' | 'approved';
+  approvals: {
+    director?: boolean;
+    srDirector?: boolean;
+  };
+  metadata: {
+    duration?: number;
+    wordCount?: number;
+    lastModifiedBy: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
-\`\`\`
+```
 
 ## Security Implementation
 
 ### Authentication
-- JWT-based authentication
-- Secure password hashing
-- Session management
+- JWT with rotating keys
+- Secure session management
+- Role-based middleware
+- Rate limiting per endpoint
 - CSRF protection
 
 ### Authorization
-- Role-based access control
-- Resource-level permissions
+- Granular permission system
+- Resource-level access control
 - API route protection
-- Socket authentication
+- WebSocket authentication
+- Role hierarchy enforcement
 
 ### Data Protection
-- Input validation
+- Input validation with Zod
 - XSS prevention
 - CORS configuration
-- Rate limiting
+- Rate limiting with Redis
+- Secure file handling
 
 ## Development Guidelines
 
 ### Code Standards
-1. Use TypeScript strict mode
-2. Implement proper error handling
-3. Follow React hooks best practices
-4. Maintain proper documentation
-5. Write comprehensive tests
+1. TypeScript strict mode required
+2. Comprehensive error handling
+3. React hooks best practices
+4. Component-based architecture
+5. Test-driven development
 
 ### Best Practices
-1. Use proper type definitions
-2. Implement loading states
-3. Handle error scenarios
-4. Follow Next.js conventions
-5. Maintain code modularity
+1. Proper type definitions
+2. Loading state management
+3. Error boundary implementation
+4. Next.js 14 conventions
+5. Modular component design
+6. Translation workflow management
+7. Multi-language support handling
 
 ### Performance Optimization
-1. Implement proper caching
-2. Use connection pooling
-3. Optimize database queries
-4. Implement proper indexing
-5. Handle large file uploads efficiently
+1. React Query caching
+2. Redis connection pooling
+3. Optimized MongoDB queries
+4. Proper indexing strategy
+5. Efficient file processing
 
 ## Deployment
 
 ### Requirements
 - Node.js 18+
-- MongoDB 5+
-- Redis (for BullMQ)
+- MongoDB 6+
+- Redis 7+
 - AWS S3 bucket
-- Environment variables configuration
+- Environment configuration
 
 ### Environment Variables
-\`\`\`env
+```env
 NEXTAUTH_URL=
 NEXTAUTH_SECRET=
 MONGODB_URI=
+REDIS_URL=
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
-REDIS_URL=
-\`\`\`
+AWS_REGION=
+AWS_BUCKET_NAME=
+BLOB_READ_WRITE_TOKEN=
+```
 
 ### Deployment Steps
-1. Build the application
-2. Configure environment variables
-3. Set up database indexes
-4. Configure S3 bucket
-5. Set up Redis instance
+1. Build application
+2. Configure environment
+3. Setup database indexes
+4. Initialize Redis
+5. Configure S3/Blob storage
+6. Deploy worker processes
 
 ## Monitoring and Maintenance
 
 ### System Health
 - Socket connection monitoring
-- Database performance tracking
-- API response times
+- Queue performance tracking
+- API response metrics
 - Error rate monitoring
+- Resource utilization
 
 ### Backup and Recovery
-- Database backups
-- Media file backups
-- System state recovery
-- Data integrity checks
+- Automated database backups
+- Media file redundancy
+- System state snapshots
+- Data integrity verification
 
 ### Error Tracking
-- Error logging
-- Performance metrics
-- User activity monitoring
-- System alerts
+- Structured error logging
+- Performance monitoring
+- User activity tracking
+- Queue monitoring
+- Real-time alerts
 
 ## Future Enhancements
 
@@ -258,6 +312,9 @@ REDIS_URL=
 3. Batch processing improvements
 4. Additional voice models
 5. Extended API functionality
+6. Enhanced translation memory system
+7. Machine translation integration
+8. Translation quality metrics
 
 ### Scalability Plans
 1. Horizontal scaling support

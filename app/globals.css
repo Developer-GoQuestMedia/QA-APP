@@ -48,6 +48,17 @@
   --ring: 224.3 76.3% 48%;
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-thin::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-thin {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 /* Ensure proper text visibility in dark mode */
 .dark body {
   @apply bg-background text-foreground;

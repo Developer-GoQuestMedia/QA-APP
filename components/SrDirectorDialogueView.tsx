@@ -1941,7 +1941,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                           onClick={handleSyncedPlayback}
                           className="px-2 py-1 bg-purple-500 text-white text-xs rounded"
                         >
-                          {isSyncedPlaying ? 'Stop Original' : 'Play Original'}
+                          {isSyncedPlaying ? 'Stop Recorded Audio' : 'Play Recorded Audio'}
                         </button>
                         {currentDialogue.ai_converted_voiceover_url && (
                           <button

@@ -186,90 +186,60 @@ export function disconnectUser(userId: string) {
 }
 
 export function getSocketClient() {
-  if (socket) return socket;
-  if (isInitializing) return null;
+  if (socket) {
+    return socket;
+  }
 
-  isInitializing = true;
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const socketUrl = isDevelopment 
-    ? 'http://localhost:3000' 
-    : (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app');
-  
-  console.log('Initializing socket client with URL:', socketUrl);
-  
-  socket = createSocketClient(socketUrl, {
-    path: '/socket.io/',
-    addTrailingSlash: false,
-    autoConnect: true,
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
-    transports: ['websocket', 'polling'],
-    withCredentials: true,
-    forceNew: false,
-    upgrade: true,
-    rememberUpgrade: true,
-    secure: !isDevelopment,
-    rejectUnauthorized: !isDevelopment,
-    extraHeaders: {
-      'Access-Control-Allow-Credentials': 'true'
-    }
-  });
+  if (isInitializing) {
+    console.warn('Socket client initialization already in progress');
+    return null;
+  }
 
-  // Add connection event handlers
-  socket.on('connect', () => {
-    console.log('Socket client connected successfully:', {
-      socketId: socket?.id,
-      url: socketUrl,
-      path: '/socket.io/',
-      transport: socket?.io?.engine?.transport?.name,
-      timestamp: new Date().toISOString()
-    });
-  });
+  try {
+    isInitializing = true;
+    const baseUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+                   (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
-  socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', {
-      error: error.message,
-      url: socketUrl,
-      path: '/socket.io/',
-      timestamp: new Date().toISOString(),
-      transportType: socket?.io?.engine?.transport?.name,
-      state: socket?.connected ? 'connected' : 'disconnected'
+    console.log('Initializing socket client with URL:', baseUrl);
+
+    const clientConfig = {
+      path: SOCKET_CONFIG.path,
+      addTrailingSlash: SOCKET_CONFIG.addTrailingSlash,
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      transports: SOCKET_CONFIG.transports,
+      withCredentials: true
+    };
+
+    socket = createSocketClient(baseUrl, clientConfig);
+
+    socket.on('connect', () => {
+      console.log('Socket client connected successfully:', {
+        socketId: socket?.id,
+        url: baseUrl,
+        path: SOCKET_CONFIG.path,
+        transport: socket?.io?.engine?.transport?.name,
+        timestamp: new Date().toISOString(),
+      });
     });
 
-    // Only try transport fallback if not already on polling
-    if (socket?.io?.engine?.transport?.name === 'websocket') {
-      console.log('Falling back to polling transport...');
-      socket.io.opts.transports = ['polling', 'websocket'];
-    }
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.log('Socket client disconnected:', {
-      reason,
-      timestamp: new Date().toISOString(),
-      willReconnect: reason === 'io server disconnect' ? false : true
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', {
+        error: error.message,
+        url: baseUrl,
+        timestamp: new Date().toISOString(),
+      });
     });
-  });
 
-  socket.on('reconnect', (attemptNumber) => {
-    console.log('Socket client reconnected:', {
-      attemptNumber,
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  socket.on('reconnect_attempt', (attemptNumber) => {
-    console.log('Socket client reconnection attempt:', {
-      attemptNumber,
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  isInitializing = false;
-  return socket;
+    return socket;
+  } catch (error) {
+    console.error('Failed to initialize socket client:', error);
+    return null;
+  } finally {
+    isInitializing = false;
+  }
 }
 
 export function disconnectSocket() {

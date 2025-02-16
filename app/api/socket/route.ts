@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
+      console.error('Socket authentication failed: No session found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -35,126 +36,28 @@ export async function GET(req: NextRequest) {
       const server = (req as any).socket?.server as NetServer;
 
       if (!server) {
+        console.error('Socket initialization failed: HTTP Server not available');
         throw new Error('HTTP Server not available');
       }
 
       if (!server.io) {
         console.log('Initializing Socket.IO server...');
-        server.io = new SocketIOServer(server, {
-          path: '/api/socket/io',
-          addTrailingSlash: false,
-          cors: {
-            origin: [
-              'http://localhost:3000',
-              process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app"
-            ],
-            methods: ["GET", "POST"],
-            credentials: true,
-            allowedHeaders: ['Content-Type', 'Authorization']
-          },
-          pingTimeout: 60000,
-          pingInterval: 25000,
-          transports: ['polling', 'websocket'],
-          allowEIO3: true,
-          allowUpgrades: true
-        });
-
-        io = server.io;
-
-        server.io.on('connection', (socket) => {
-          console.log('Socket connected:', {
-            socketId: socket.id,
-            activeConnections: activeConnections.size,
-            transport: socket.conn.transport.name,
-            timestamp: new Date().toISOString()
-          });
-
-          // Initialize connection tracking
-          activeConnections.set(socket.id, { rooms: new Set() });
-
-          // Handle user authentication
-          socket.on('authenticate', ({ userId }) => {
-            if (userId) {
-              const connection = activeConnections.get(socket.id);
-              if (connection) {
-                connection.userId = userId;
-                console.log('Socket authenticated:', {
-                  socketId: socket.id,
-                  userId,
-                  timestamp: new Date().toISOString()
-                });
-              }
-            }
-          });
-
-          // Handle joining project rooms
-          socket.on('joinProjectRoom', ({ projectId }) => {
-            if (!projectId) return;
-
-            const roomId = `project-${projectId}`;
-            socket.join(roomId);
-            
-            const connection = activeConnections.get(socket.id);
-            if (connection) {
-              connection.rooms.add(roomId);
-              console.log('Socket joined room:', {
-                socketId: socket.id,
-                roomId,
-                timestamp: new Date().toISOString()
-              });
-            }
-          });
-
-          // Handle leaving project rooms
-          socket.on('leaveProjectRoom', ({ projectId }) => {
-            if (!projectId) return;
-
-            const roomId = `project-${projectId}`;
-            socket.leave(roomId);
-            
-            const connection = activeConnections.get(socket.id);
-            if (connection) {
-              connection.rooms.delete(roomId);
-              console.log('Socket left room:', {
-                socketId: socket.id,
-                roomId,
-                timestamp: new Date().toISOString()
-              });
-            }
-          });
-
-          // Handle disconnection
-          socket.on('disconnect', (reason) => {
-            const connection = activeConnections.get(socket.id);
-            if (connection) {
-              // Leave all rooms
-              connection.rooms.forEach(roomId => {
-                socket.leave(roomId);
-              });
-              
-              // Remove from active connections
-              activeConnections.delete(socket.id);
-              
-              console.log('Socket disconnected:', {
-                socketId: socket.id,
-                reason,
-                remainingConnections: activeConnections.size,
-                timestamp: new Date().toISOString()
-              });
-            }
-          });
-        });
+        io = initSocketServer(server);
       } else {
         io = server.io;
       }
     }
 
     // Return success response with CORS headers
-    return new NextResponse(JSON.stringify({ success: true }), {
+    return new NextResponse(JSON.stringify({ 
+      success: true,
+      message: 'Socket.IO server initialized successfully',
+      timestamp: new Date().toISOString()
+    }), {
       headers: {
-        'Access-Control-Allow-Origin': process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app",
-        'Access-Control-Allow-Methods': 'GET, POST',
-        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Access-Control-Allow-Credentials',
         'Content-Type': 'application/json',
       },
     });
@@ -162,7 +65,8 @@ export async function GET(req: NextRequest) {
     console.error('Error in Socket.IO initialization:', error);
     return NextResponse.json({ 
       error: 'Failed to initialize Socket.IO',
-      details: error.message 
+      details: error.message,
+      timestamp: new Date().toISOString()
     }, { status: 500 });
   }
 } 

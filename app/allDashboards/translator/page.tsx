@@ -3,13 +3,33 @@
 import { useSession } from 'next-auth/react'
 import TranslatorView from '@/components/TranslatorView'
 import { useProjects } from '@/hooks/useProjects'
+import LoadingState from '@/components/LoadingState'
+import ErrorState from '@/components/ErrorState'
 
 export default function TranslatorDashboard() {
   const { data: session, status } = useSession()
-  const { data: projects, isLoading: isLoadingProjects } = useProjects()
+  const { 
+    data: projects, 
+    isLoading: isLoadingProjects, 
+    error: projectsError,
+    refetch: refetchProjects 
+  } = useProjects()
 
   if (status === 'loading' || isLoadingProjects) {
-    return <div>Loading...</div>
+    return (
+      <LoadingState 
+        message={status === 'loading' ? 'Loading session...' : 'Loading projects...'} 
+      />
+    )
+  }
+
+  if (projectsError) {
+    return (
+      <ErrorState
+        message={projectsError instanceof Error ? projectsError.message : 'Failed to load projects'}
+        onRetry={() => refetchProjects()}
+      />
+    )
   }
 
   return (

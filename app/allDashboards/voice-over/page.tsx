@@ -4,10 +4,17 @@ import { useSession } from 'next-auth/react'
 import VoiceOverView from '@/components/VoiceOverView'
 import { useProjects } from '@/hooks/useProjects'
 import { type Project } from '@/types/project'
+import LoadingState from '@/components/LoadingState'
+import ErrorState from '@/components/ErrorState'
 
 export default function VoiceOverDashboard() {
   const { data: session, status } = useSession()
-  const { data: projects, isLoading: isLoadingProjects } = useProjects()
+  const { 
+    data: projects, 
+    isLoading: isLoadingProjects, 
+    error: projectsError,
+    refetch: refetchProjects 
+  } = useProjects()
 
   console.log('VoiceOver Dashboard Render:', {
     sessionStatus: status,
@@ -22,7 +29,20 @@ export default function VoiceOverDashboard() {
       sessionLoading: status === 'loading',
       projectsLoading: isLoadingProjects
     })
-    return <div>Loading...</div>
+    return (
+      <LoadingState 
+        message={status === 'loading' ? 'Loading session...' : 'Loading projects...'} 
+      />
+    )
+  }
+
+  if (projectsError) {
+    return (
+      <ErrorState
+        message={projectsError instanceof Error ? projectsError.message : 'Failed to load projects'}
+        onRetry={() => refetchProjects()}
+      />
+    )
   }
 
   console.log('Dashboard ready to render:', {

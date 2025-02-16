@@ -1,10 +1,42 @@
 import { Server } from 'socket.io';
 import type { Server as HTTPServer } from 'http';
 import { io as createSocketClient } from 'socket.io-client';
+import type { ServerOptions } from 'socket.io';
 
 let io: Server | null = null;
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
 let socket: ReturnType<typeof createSocketClient> | null = null;
+let isInitializing = false;
+
+// Unified socket configuration
+const SOCKET_CONFIG: Partial<ServerOptions> = {
+  path: '/socket.io/',
+  addTrailingSlash: false,
+  cors: {
+    origin: '*',
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Credentials']
+  },
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: true,
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  allowUpgrades: true,
+  cookie: {
+    name: 'io',
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax' as const
+  },
+  connectTimeout: 45000,
+  perMessageDeflate: false,
+  httpCompression: false
+};
 
 export function initSocketServer(server: HTTPServer) {
   if (io) {
@@ -12,16 +44,7 @@ export function initSocketServer(server: HTTPServer) {
     return io;
   }
 
-  io = new Server(server, {
-    cors: {
-      origin: process.env.NEXTAUTH_URL || "https://qa-app-brown.vercel.app",
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    // Add ping timeout and interval settings
-    pingTimeout: 60000,
-    pingInterval: 25000,
-  });
+  io = new Server(server, SOCKET_CONFIG);
 
   io.on('connection', (socket) => {
     console.log('Socket connected:', {
@@ -163,60 +186,95 @@ export function disconnectUser(userId: string) {
 }
 
 export function getSocketClient() {
-  if (!socket) {
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    const socketUrl = isDevelopment 
-      ? 'http://localhost:3000' 
-      : (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app');
-    
-    console.log('Initializing socket client with URL:', socketUrl);
-    
-    socket = createSocketClient(socketUrl, {
-      path: '/api/socket/io',
-      addTrailingSlash: false,
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      transports: ['polling', 'websocket'],
-      withCredentials: true,
+  if (socket) return socket;
+  if (isInitializing) return null;
+
+  isInitializing = true;
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const socketUrl = isDevelopment 
+    ? 'http://localhost:3000' 
+    : (process.env.NEXT_PUBLIC_SOCKET_URL || 'https://qa-app-brown.vercel.app');
+  
+  console.log('Initializing socket client with URL:', socketUrl);
+  
+  socket = createSocketClient(socketUrl, {
+    path: '/socket.io/',
+    addTrailingSlash: false,
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    transports: ['websocket', 'polling'],
+    withCredentials: true,
+    forceNew: false,
+    upgrade: true,
+    rememberUpgrade: true,
+    secure: !isDevelopment,
+    rejectUnauthorized: !isDevelopment,
+    extraHeaders: {
+      'Access-Control-Allow-Credentials': 'true'
+    }
+  });
+
+  // Add connection event handlers
+  socket.on('connect', () => {
+    console.log('Socket client connected successfully:', {
+      socketId: socket?.id,
+      url: socketUrl,
+      path: '/socket.io/',
+      transport: socket?.io?.engine?.transport?.name,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', {
+      error: error.message,
+      url: socketUrl,
+      path: '/socket.io/',
+      timestamp: new Date().toISOString(),
+      transportType: socket?.io?.engine?.transport?.name,
+      state: socket?.connected ? 'connected' : 'disconnected'
     });
 
-    socket.on('connect', () => {
-      console.log('Socket client connected successfully:', {
-        socketId: socket?.id,
-        url: socketUrl,
-        path: '/api/socket/io',
-        timestamp: new Date().toISOString()
-      });
-    });
+    // Only try transport fallback if not already on polling
+    if (socket?.io?.engine?.transport?.name === 'websocket') {
+      console.log('Falling back to polling transport...');
+      socket.io.opts.transports = ['polling', 'websocket'];
+    }
+  });
 
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', {
-        error: error.message,
-        url: socketUrl,
-        path: '/api/socket/io',
-        timestamp: new Date().toISOString(),
-        transportType: socket?.io?.engine?.transport?.name
-      });
+  socket.on('disconnect', (reason) => {
+    console.log('Socket client disconnected:', {
+      reason,
+      timestamp: new Date().toISOString(),
+      willReconnect: reason === 'io server disconnect' ? false : true
     });
+  });
 
-    socket.on('disconnect', (reason) => {
-      console.log('Socket client disconnected:', {
-        reason,
-        timestamp: new Date().toISOString()
-      });
+  socket.on('reconnect', (attemptNumber) => {
+    console.log('Socket client reconnected:', {
+      attemptNumber,
+      timestamp: new Date().toISOString()
     });
-  }
+  });
 
+  socket.on('reconnect_attempt', (attemptNumber) => {
+    console.log('Socket client reconnection attempt:', {
+      attemptNumber,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  isInitializing = false;
   return socket;
 }
 
-export function closeSocketConnection() {
+export function disconnectSocket() {
   if (socket) {
-    socket.close();
+    socket.disconnect();
     socket = null;
   }
 }

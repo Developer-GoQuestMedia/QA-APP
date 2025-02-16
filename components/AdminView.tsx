@@ -14,7 +14,7 @@
 
 import { Project, ProjectStatus, Episode } from '@/types/project';
 import { User, UserRole } from '@/types/user';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
@@ -151,45 +151,132 @@ const handleError = (error: Error): void => {
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const session = useSession();
-  // Add debug logging at component mount
+  const socketRef = useRef<ReturnType<typeof getSocketClient> | null>(null);
+  const projectsRef = useRef(projects);
+  const hasInitializedRef = useRef(false);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchProjectsWithLoading = useCallback(async () => {
+    try {
+      setIsProjectsLoading(true);
+      setLoadError(null);
+      await refetchProjects();
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+      setLoadError('Failed to load projects. Please try again.');
+    } finally {
+      setIsProjectsLoading(false);
+    }
+  }, [refetchProjects]);
+
+  // Memoize projects to prevent unnecessary rerenders
+  const memoizedProjects = useMemo(() => projects, [projects]);
+
+  // Socket connection effect - Only run once on mount
   useEffect(() => {
-    console.log('AdminView - Component mounted with projects:', {
-      projectsArray: projects,
-      isArray: Array.isArray(projects),
-      length: projects?.length,
-      projectDetails: projects?.map(p => ({
-        _id: p._id,
-        title: p.title,
-        status: p.status,
-        assignedTo: p.assignedTo?.length || 0
-      }))
-    });
+    if (!hasInitializedRef.current && session.data?.user?.id) {
+      console.log('Connecting to Socket.IO on client mount...');
+      socketRef.current = getSocketClient();
+      
+      if (socketRef.current) {
+        authenticateSocket(session.data.user.id);
+        
+        // Join project rooms for all projects
+        memoizedProjects.forEach(project => {
+          if (project._id) {
+            joinProjectRoom(project._id.toString());
+          }
+        });
+      }
 
-    // Initialize socket connection
-    const socket = getSocketClient();
-
-    if (socket && session.data?.user?.id) {
-      authenticateSocket(session.data.user.id);
-
-      // Join project rooms for all projects
-      projects.forEach(project => {
-        if (project._id) {
-          joinProjectRoom(project._id.toString());
-        }
-      });
+      hasInitializedRef.current = true;
     }
 
     // Cleanup function
     return () => {
-      if (socket) {
-        projects.forEach(project => {
+      if (socketRef.current) {
+        console.log('Cleaning up socket...');
+        memoizedProjects.forEach(project => {
           if (project._id) {
             leaveProjectRoom(project._id.toString());
           }
         });
+        socketRef.current = null;
       }
     };
-  }, [projects, session.data?.user?.id]);
+  }, [session.data?.user?.id]); // Remove memoizedProjects from dependencies
+
+  // Project fetching effect - Only fetch if no projects and not already fetching
+  useEffect(() => {
+    const shouldFetchProjects = !projectsRef.current?.length && !hasInitializedRef.current;
+    
+    if (shouldFetchProjects) {
+      console.log('AdminView - No projects found, fetching...');
+      void fetchProjectsWithLoading();
+    } else {
+      console.log('AdminView - Projects already loaded:', {
+        count: projectsRef.current?.length,
+        titles: projectsRef.current?.map(p => p.title)
+      });
+    }
+
+    projectsRef.current = memoizedProjects;
+  }, [memoizedProjects, refetchProjects, fetchProjectsWithLoading]);
+
+  // Show loading state
+  if (isProjectsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+          <p className="text-foreground">Loading projects...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg max-w-lg">
+          <p className="font-semibold mb-2">Error</p>
+          <p>{loadError}</p>
+          <button
+            onClick={() => void fetchProjectsWithLoading()}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Update project rooms when projects change
+  useEffect(() => {
+    if (socketRef.current && hasInitializedRef.current) {
+      const oldProjects = projectsRef.current || [];
+      const newProjects = memoizedProjects;
+
+      // Leave rooms for removed projects
+      oldProjects.forEach(oldProject => {
+        if (!newProjects.find(p => p._id === oldProject._id)) {
+          leaveProjectRoom(oldProject._id.toString());
+        }
+      });
+
+      // Join rooms for new projects
+      newProjects.forEach(newProject => {
+        if (!oldProjects.find(p => p._id === newProject._id)) {
+          joinProjectRoom(newProject._id.toString());
+        }
+      });
+
+      projectsRef.current = newProjects;
+    }
+  }, [memoizedProjects]);
 
   // =================
   // State Management
@@ -319,34 +406,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
     fetchInitialData();
   }, [projects, refetchProjects, isLoadingUsers]);
-
-  // Socket.IO setup for real-time updates
-  useEffect(() => {
-    console.log('Connecting to Socket.IO on client mount...');
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000');
-
-    socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
-    });
-
-    socket.on('notification', (data: { message: string; type: 'success' | 'error'; action?: string }) => {
-      console.log('Real-time notification received:', data);
-      notify(data.message, data.type);
-      // Only refetch for project-related changes
-      if (data.action && ['project_created', 'project_updated', 'project_deleted', 'users_assigned'].includes(data.action)) {
-        refetchProjects();
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-    });
-
-    return () => {
-      console.log('Cleaning up socket...');
-      socket.disconnect();
-    };
-  }, [notify, refetchProjects]);
 
   // Reset both selection and search when modal opens
   useEffect(() => {

@@ -5,7 +5,7 @@ setlocal
 set NODE_ENV=development
 set MONGODB_URI=mongodb+srv://vivekkumarsingh:dGeuK817ItxjmUb4@cluster0.vir7o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
 set MONGODB_DB=TestDB
-set REDIS_URL=redis://127.0.0.1:6379
+set UPSTASH_REDIS_REST_URL=redis://127.0.0.1:6379
 
 :: Start Redis if not running (requires Redis to be installed)
 redis-server.exe redis.windows.conf

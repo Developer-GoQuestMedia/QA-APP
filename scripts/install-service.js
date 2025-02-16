@@ -25,16 +25,16 @@ const svc = new Service({
       value: process.env.MONGODB_DB
     },
     {
+      name: "UPSTASH_REDIS_REST_URL",
+      value: process.env.UPSTASH_REDIS_REST_URL
+    },
+    {
+      name: "UPSTASH_REDIS_REST_TOKEN",
+      value: process.env.UPSTASH_REDIS_REST_TOKEN
+    },
+    {
       name: "REDIS_URL",
       value: process.env.REDIS_URL
-    },
-    {
-      name: "REDIS_TOKEN",
-      value: process.env.REDIS_TOKEN
-    },
-    {
-      name: "REDIS_TLS_URL",
-      value: process.env.REDIS_TLS_URL
     }
   ]
 });

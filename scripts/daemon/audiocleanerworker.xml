@@ -26,9 +26,9 @@
 	<env name="NODE_ENV" value="production"/>
 	<env name="MONGODB_URI" value="mongodb+srv://vivekkumarsingh:dGeuK817ItxjmUb4@cluster0.vir7o.mongodb.net/?retryWrites=true&amp;w=majority&amp;appName=Cluster0"/>
 	<env name="MONGODB_DB" value="TestDB"/>
-	<env name="REDIS_URL" value="https://decent-tadpole-13663.upstash.io"/>
-	<env name="REDIS_TOKEN" value="ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA"/>
-	<env name="REDIS_TLS_URL" value="redis://default:ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA@decent-tadpole-13663.upstash.io:6379"/>
+	<env name="UPSTASH_REDIS_REST_URL" value="https://decent-tadpole-13663.upstash.io"/>
+	<env name="UPSTASH_REDIS_REST_TOKEN" value="ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA"/>
+	<env name="REDIS_URL" value="redis://default:ATVfAAIjcDFjZWZlOWExZWJmNWQ0OTkxOTZjOGM4YzVmODAzODk2MHAxMA@decent-tadpole-13663.upstash.io:6379"/>
 	<serviceaccount>
 		<domain>GQM-IT-LTP-048</domain>
 		<user>LocalSystem</user>

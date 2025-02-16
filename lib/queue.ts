@@ -10,10 +10,10 @@ function getRedisConfig() {
   if (process.env.NODE_ENV === 'production') {
     // Production configuration (Upstash)
     return {
-      url: process.env.REDIS_URL,
-      token: process.env.REDIS_TOKEN,
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
       tls: {
-        url: process.env.REDIS_TLS_URL,
+        url: process.env.REDIS_URL,
         rejectUnauthorized: false
       },
       maxRetriesPerRequest: null,

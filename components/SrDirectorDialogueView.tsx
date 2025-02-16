@@ -310,6 +310,10 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   // Add state for selected voice model
   const [selectedVoiceModel, setSelectedVoiceModel] = useState<VoiceModel | null>(null);
 
+  // Add new state for tracking video state
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   // Get dialogues for selected character or all dialogues if no character selected
   const activeDialogues = useMemo(() => {
     if (!selectedCharacter) return dialoguesList;
@@ -1420,6 +1424,93 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     }
   };
 
+  // Add video event listeners
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setIsSyncedPlaying(false);
+      setIsPlayingConverted(false);
+      setIsPlayingVideoWithConverted(false);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handleError = (e: Event) => {
+      const error = (e as ErrorEvent).message || 'Error playing video';
+      setVideoError(error);
+      setIsPlaying(false);
+      console.error('Video playback error:', error);
+    };
+
+    const handleLoadedData = () => {
+      setIsVideoReady(true);
+      setVideoError(null);
+    };
+
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('error', handleError);
+    video.addEventListener('loadeddata', handleLoadedData);
+
+    return () => {
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('error', handleError);
+      video.removeEventListener('loadeddata', handleLoadedData);
+    };
+  }, [videoRef.current]);
+
+  // Update video play/pause handler
+  const handleVideoPlayPause = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      // Stop any other playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (convertedAudioRef.current) {
+        convertedAudioRef.current.pause();
+        convertedAudioRef.current = null;
+      }
+
+      // Reset all playback states
+      setIsSyncedPlaying(false);
+      setIsPlayingConverted(false);
+      setIsPlayingVideoWithConverted(false);
+
+      videoRef.current.muted = false;
+      
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        try {
+          await videoRef.current.play();
+        } catch (error) {
+          console.error('Failed to play video:', error);
+          setVideoError(error instanceof Error ? error.message : 'Failed to play video');
+          setIsPlaying(false);
+        }
+      }
+    } catch (error) {
+      console.error('Video playback error:', error);
+      setVideoError(error instanceof Error ? error.message : 'Video playback error');
+      setIsPlaying(false);
+    }
+  };
+
   if (!dialoguesList.length) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -1756,20 +1847,12 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         -5s
                       </button>
                       <button
-                        onClick={() => {
-                          if (videoRef.current) {
-                            videoRef.current.muted = false; // Ensure video audio is not muted
-                            if (isPlaying) {
-                              videoRef.current.pause();
-                            } else {
-                              videoRef.current.play();
-                            }
-                            setIsPlaying(!isPlaying);
-                          }
-                        }}
-                        className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
+                        onClick={handleVideoPlayPause}
+                        disabled={!isVideoReady || !!videoError}
+                        className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:opacity-50"
                       >
                         {isPlaying ? '⏸' : '▶'} Video
+                        {videoError && <span className="ml-1 text-red-200">⚠️</span>}
                       </button>
                       <button
                         onClick={() => {

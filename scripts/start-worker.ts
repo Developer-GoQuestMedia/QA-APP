@@ -15,7 +15,7 @@ config({ path: resolve(rootDir, '.env.local') });
 config({ path: resolve(rootDir, '.env') });
 
 // Verify environment variables are loaded
-const requiredVars = ['MONGODB_URI', 'MONGODB_DB', 'REDIS_URL'];
+const requiredVars = ['MONGODB_URI', 'MONGODB_DB', 'UPSTASH_REDIS_REST_URL'];
 const missingVars = requiredVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {

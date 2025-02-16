@@ -23,7 +23,7 @@ const displayBuildSummary = () => {
   console.log(chalk.white('• Build Size: Optimized'));
   console.log(chalk.white('• Static Pages: Generated'));
   console.log(chalk.white('• API Routes: Configured\n'));
-  console.log(chalk.cyan('Starting development server...\n'));
+  console.log(chalk.cyan('\nBuild Successfully Completed\n'));
 };
 
 // Main execution

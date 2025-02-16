@@ -10,12 +10,11 @@ function getRedisConfig() {
   if (process.env.NODE_ENV === 'production') {
     // Production configuration (Upstash)
     return {
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      tls: {
-        url: process.env.REDIS_URL,
-        rejectUnauthorized: false
-      },
+      host: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).hostname : undefined,
+      port: process.env.REDIS_URL ? parseInt(new URL(process.env.REDIS_URL).port) : 6379,
+      username: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).username : undefined,
+      password: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).password : undefined,
+      tls: { rejectUnauthorized: false },
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       retryStrategy: (times: number) => {
@@ -55,18 +54,7 @@ export const getRedisConnection = () => {
   if (!connection) {
     try {
       const config = getRedisConfig();
-      
-      if (process.env.NODE_ENV === 'production') {
-        // For Upstash in production
-        connection = new IORedis(config.url!, {
-          tls: config.tls,
-          maxRetriesPerRequest: null,
-          retryStrategy: config.retryStrategy
-        });
-      } else {
-        // For local development
-        connection = new IORedis(config);
-      }
+      connection = new IORedis(config);
 
       connection.on('error', (error: Error) => {
         console.error('Redis connection error:', error);

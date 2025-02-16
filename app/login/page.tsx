@@ -69,25 +69,45 @@ export default function Login() {
         setError('Invalid username or password')
       } else {
         console.log('Login successful, fetching user data')
-        // Get user data including session ID
-        const response = await axios.get('/api/users/me')
-        const userRole = response.data.role as UserRole
-        const sessionId = response.data.sessionId
+        
+        // Add retry logic for fetching user data
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 1000; // 1 second
 
-        console.log('User data fetched:', {
-          role: userRole,
-          sessionId,
-          timestamp: new Date().toISOString()
-        })
+        while (retryCount < maxRetries) {
+          try {
+            // Get user data including session ID
+            const response = await axios.get('/api/users/me')
+            const userRole = response.data.role as UserRole
+            const sessionId = response.data.sessionId
 
-        if (userRole in dashboardRoutes) {
-          const route = dashboardRoutes[userRole]
-          // Store session ID in localStorage for session tracking
-          localStorage.setItem('sessionId', sessionId)
-          // Use router.push for navigation
-          router.push(route)
-        } else {
-          setError('Invalid role configuration')
+            console.log('User data fetched:', {
+              role: userRole,
+              sessionId,
+              timestamp: new Date().toISOString(),
+              retryAttempt: retryCount
+            })
+
+            if (userRole in dashboardRoutes) {
+              const route = dashboardRoutes[userRole]
+              // Store session ID in localStorage for session tracking
+              localStorage.setItem('sessionId', sessionId)
+              // Use router.push for navigation
+              router.push(route)
+              return; // Exit on success
+            } else {
+              setError('Invalid role configuration')
+              break;
+            }
+          } catch (err) {
+            retryCount++;
+            if (retryCount === maxRetries) {
+              throw err; // Throw on final retry
+            }
+            console.log(`Retry attempt ${retryCount} for fetching user data`)
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
         }
       }
     } catch (err) {

@@ -1285,7 +1285,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
       // Create a new array to track updated dialogues
       let updatedDialoguesList = [...dialogues];
-
+      
       // Update each dialogue with the selected voice ID
       const updateResults = await Promise.all(characterDialogues.map(async (dialogue) => {
         const dialogueComponents = dialogue.dialogNumber.split('.');
@@ -1325,19 +1325,19 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
         try {
           const response = await axios.patch(
-            `/api/dialogues/update/${dialogue.dialogNumber}`,
-            updateData,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              params: {
-                databaseName: project?.databaseName,
-                collectionName: episode?.collectionName,
-                projectId
-              }
+          `/api/dialogues/update/${dialogue.dialogNumber}`,
+          updateData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            params: {
+              databaseName: project?.databaseName,
+              collectionName: episode?.collectionName,
+              projectId
             }
-          );
+          }
+        );
 
           // Verify the response contains the voice ID
           if (response.data?.voiceId !== selectedVoiceModel.id) {
@@ -1427,9 +1427,20 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
   // Add video event listeners
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) {
+      console.log('Video ref not available');
+      return;
+    }
+
+    console.log('Setting up video event listeners:', {
+      videoSrc: video.src,
+      readyState: video.readyState,
+      isVideoReady: isVideoReady,
+      hasError: !!videoError
+    });
 
     const handleEnded = () => {
+      console.log('Video ended');
       setIsPlaying(false);
       setIsSyncedPlaying(false);
       setIsPlayingConverted(false);
@@ -1437,23 +1448,51 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     };
 
     const handlePause = () => {
+      console.log('Video paused');
       setIsPlaying(false);
     };
 
     const handlePlay = () => {
+      console.log('Video started playing');
       setIsPlaying(true);
     };
 
     const handleError = (e: Event) => {
-      const error = (e as ErrorEvent).message || 'Error playing video';
-      setVideoError(error);
+      const videoElement = e.target as HTMLVideoElement;
+      const error = videoElement.error;
+      const errorMessage = error ? 
+        `Video Error: ${error.code} - ${error.message}` : 
+        'Unknown video error';
+      
+      console.error('Video Error:', {
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        videoSrc: videoElement.src,
+        readyState: videoElement.readyState
+      });
+      
+      setVideoError(errorMessage);
       setIsPlaying(false);
-      console.error('Video playback error:', error);
+      setIsVideoReady(false);
     };
 
     const handleLoadedData = () => {
+      console.log('Video loaded successfully:', {
+        duration: video.duration,
+        readyState: video.readyState,
+        src: video.src
+      });
       setIsVideoReady(true);
       setVideoError(null);
+    };
+
+    const handleLoadStart = () => {
+      console.log('Video load started');
+      setIsVideoReady(false);
+    };
+
+    const handleWaiting = () => {
+      console.log('Video is waiting/buffering');
     };
 
     video.addEventListener('ended', handleEnded);
@@ -1461,6 +1500,8 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
     video.addEventListener('play', handlePlay);
     video.addEventListener('error', handleError);
     video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('loadstart', handleLoadStart);
+    video.addEventListener('waiting', handleWaiting);
 
     return () => {
       video.removeEventListener('ended', handleEnded);
@@ -1468,14 +1509,26 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('error', handleError);
       video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('loadstart', handleLoadStart);
+      video.removeEventListener('waiting', handleWaiting);
     };
   }, [videoRef.current]);
 
   // Update video play/pause handler
   const handleVideoPlayPause = async () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      console.log('Video ref not available for playback');
+      return;
+    }
 
     try {
+      console.log('Attempting video playback:', {
+        isCurrentlyPlaying: isPlaying,
+        videoReadyState: videoRef.current.readyState,
+        hasError: !!videoError,
+        videoSrc: videoRef.current.src
+      });
+
       // Stop any other playback
       if (audioRef.current) {
         audioRef.current.pause();
@@ -1495,37 +1548,36 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
       
       if (isPlaying) {
         videoRef.current.pause();
+        console.log('Video paused successfully');
       } else {
         try {
           await videoRef.current.play();
+          console.log('Video started playing successfully');
         } catch (error) {
-          console.error('Failed to play video:', error);
+          console.error('Failed to play video:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            videoState: {
+              readyState: videoRef.current.readyState,
+              paused: videoRef.current.paused,
+              currentTime: videoRef.current.currentTime,
+              src: videoRef.current.src
+            }
+          });
           setVideoError(error instanceof Error ? error.message : 'Failed to play video');
           setIsPlaying(false);
         }
       }
     } catch (error) {
-      console.error('Video playback error:', error);
+      console.error('Video playback error:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        videoRef: !!videoRef.current
+      });
       setVideoError(error instanceof Error ? error.message : 'Video playback error');
       setIsPlaying(false);
     }
   };
 
-  if (!dialoguesList.length) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No Dialogues Available
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            There are no dialogues available for review.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // Update video element to show loading state
   return (
     <div className="w-full h-screen flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Top Header Bar */}
@@ -1598,21 +1650,21 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                   allVoiceModels.find(m => m.id === dialoguesWithVoice[0]?.voiceId)?.name : null;
 
                 return (
-                  <button
-                    key={character}
-                    onClick={() => {
-                      handleCharacterSelection(character, dialogues);
-                    }}
-                    className={`w-full px-3 py-2 rounded text-left text-sm ${
-                      selectedCharacter === character
-                        ? 'bg-blue-500 text-white'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
+                <button
+                  key={character}
+                  onClick={() => {
+                    handleCharacterSelection(character, dialogues);
+                  }}
+                  className={`w-full px-3 py-2 rounded text-left text-sm ${
+                    selectedCharacter === character
+                      ? 'bg-blue-500 text-white'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="font-medium">{character}</div>
-                        <div className="text-xs opacity-80">{dialogues.length} lines</div>
+                  <div className="font-medium">{character}</div>
+                  <div className="text-xs opacity-80">{dialogues.length} lines</div>
                       </div>
                       {hasVoiceAssigned && (
                         <div className={`text-xs px-1.5 py-0.5 rounded ${
@@ -1627,7 +1679,7 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
                         </div>
                       )}
                     </div>
-                  </button>
+                </button>
                 );
               })}
             </div>
@@ -1825,11 +1877,27 @@ export default function SrDirectorDialogueView({ dialogues: initialDialogues, pr
 
               {/* Video Player */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="aspect-video bg-black">
+                <div className="aspect-video bg-black relative">
+                  {!isVideoReady && !videoError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
+                      <div className="text-white text-sm">Loading video...</div>
+                    </div>
+                  )}
+                  {videoError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-red-900 bg-opacity-50">
+                      <div className="text-white text-sm px-4 text-center">{videoError}</div>
+                    </div>
+                  )}
                   <video
                     ref={videoRef}
                     src={currentDialogue?.videoUrl}
                     className="w-full h-full object-contain"
+                    onLoadStart={() => {
+                      console.log('Video load starting:', {
+                        url: currentDialogue?.videoUrl,
+                        timestamp: new Date().toISOString()
+                      });
+                    }}
                   />
                 </div>
                 <div className="p-2 border-t border-gray-200 dark:border-gray-700">

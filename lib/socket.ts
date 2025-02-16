@@ -13,7 +13,9 @@ const SOCKET_CONFIG: Partial<ServerOptions> = {
   path: '/socket.io/',
   addTrailingSlash: false,
   cors: {
-    origin: '*',
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://qa-app-brown.vercel.app']
+      : '*',
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Credentials']
@@ -31,7 +33,11 @@ const SOCKET_CONFIG: Partial<ServerOptions> = {
     name: 'io',
     path: '/',
     httpOnly: true,
-    sameSite: 'lax' as const
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    domain: process.env.NODE_ENV === 'production' 
+      ? 'qa-app-brown.vercel.app'
+      : undefined
   },
   connectTimeout: 45000,
   perMessageDeflate: false,
@@ -197,8 +203,9 @@ export function getSocketClient() {
 
   try {
     isInitializing = true;
-    const baseUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
-                   (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://qa-app-brown.vercel.app'
+      : (process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000');
 
     console.log('Initializing socket client with URL:', baseUrl);
 
@@ -210,7 +217,8 @@ export function getSocketClient() {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       transports: SOCKET_CONFIG.transports,
-      withCredentials: true
+      withCredentials: true,
+      secure: process.env.NODE_ENV === 'production'
     };
 
     socket = createSocketClient(baseUrl, clientConfig);

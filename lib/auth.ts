@@ -204,7 +204,7 @@ export const authOptions: NextAuthOptions = {
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         domain: process.env.NODE_ENV === 'production' 
-          ? '.vercel.app'  // Allow cookies for all subdomains on vercel.app
+          ? 'qa-app-brown.vercel.app'  // Use the exact domain
           : undefined
       }
     },
@@ -216,7 +216,7 @@ export const authOptions: NextAuthOptions = {
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         domain: process.env.NODE_ENV === 'production' 
-          ? '.vercel.app'
+          ? 'qa-app-brown.vercel.app'
           : undefined
       }
     },
@@ -228,7 +228,7 @@ export const authOptions: NextAuthOptions = {
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         domain: process.env.NODE_ENV === 'production' 
-          ? '.vercel.app'
+          ? 'qa-app-brown.vercel.app'
           : undefined
       }
     }

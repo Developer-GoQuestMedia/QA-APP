@@ -5,6 +5,9 @@ const nextConfig = {
     NEXTAUTH_URL: process.env.NODE_ENV === 'production' 
       ? 'https://qa-app-brown.vercel.app'
       : process.env.NEXTAUTH_URL || 'http://localhost:3000',
+    NEXT_PUBLIC_APP_URL: process.env.NODE_ENV === 'production'
+      ? 'https://qa-app-brown.vercel.app'
+      : 'http://localhost:3000',
     NEXT_PUBLIC_SOCKET_URL: process.env.NEXT_PUBLIC_SOCKET_URL,
   },
   typescript: {

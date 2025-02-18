@@ -39,7 +39,7 @@ export async function POST(
 
     // Get voice conversions and original SFX
     const voiceConversions = targetEpisode.steps?.step6?.voiceConversions;
-    const sfxAudio = targetEpisode.steps?.step1?.musicAndSoundEffectsPath;
+    const sfxAudio = targetEpisode.steps?.step1?.extracted_musicPath;
 
     if (!voiceConversions || !Array.isArray(voiceConversions)) {
       return NextResponse.json(
@@ -72,7 +72,7 @@ export async function POST(
       {
         voiceConversions,
         sfxAudioPath: sfxAudio,
-        sfxAudioKey: targetEpisode.steps?.step1?.musicAndSoundEffectsKey,
+        sfxAudioKey: targetEpisode.steps?.step1?.extracted_musicKey,
         episodeId: params.episodeId,
       },
       {

@@ -21,10 +21,10 @@ interface Episode {
       videoKey: string;
       episodeId: string;
     };
-    cleanedSpeechPath: string;
-    cleanedSpeechKey: string;
-    musicAndSoundEffectsPath: string;
-    musicAndSoundEffectsKey: string;
+    extracted_speechPath: string;
+    extracted_speechKey: string;
+    extracted_musicPath: string;
+    extracted_musicKey: string;
     updatedAt: { $date: string };
   };
 }

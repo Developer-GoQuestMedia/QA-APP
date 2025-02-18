@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
-import AdminView from '@/components/AdminView'
+import AdminView from '@/components/Admin/AdminView'
 import DashboardLayout from '@/components/DashboardLayout'
 import { Project } from '@/types/project'
 import axios from 'axios'

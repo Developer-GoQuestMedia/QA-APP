@@ -3,7 +3,7 @@
 
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import VoiceOverDialogueView from '@/components/VoiceOverDialogueView'
+import VoiceOverDialogueView from '@/components/VoiceOver/VoiceOverDialogueView'
 import { Dialogue } from '@/types/dialogue'
 import { Project, Episode as ProjectEpisode, ProjectStatus } from '@/types/project'
 import axios from 'axios'

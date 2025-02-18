@@ -1,13 +1,9 @@
-import { Server as NetServer } from 'http';
 import { NextRequest, NextResponse } from 'next/server';
 import { Server as SocketIOServer } from 'socket.io';
-import { initSocketServer } from '@/lib/socket';
+import { Server as NetServer } from 'http';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-
-// Set runtime config
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { authOptions } from '../auth/auth.config';
+import { initSocketServer } from '@/lib/socket';
 
 // Map to store active connections
 const activeConnections = new Map<string, { userId?: string; rooms: Set<string> }>();
@@ -30,22 +26,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get the server instance
+    const server = (req as any).socket?.server as NetServer;
+    
+    if (!server) {
+      console.error('Socket initialization failed: HTTP Server not available');
+      return NextResponse.json({ error: 'Server not available' }, { status: 500 });
+    }
+
     // Initialize Socket.IO if not already initialized
-    if (!io) {
-      // Access the server from the request
-      const server = (req as any).socket?.server as NetServer;
-
-      if (!server) {
-        console.error('Socket initialization failed: HTTP Server not available');
-        throw new Error('HTTP Server not available');
-      }
-
-      if (!server.io) {
-        console.log('Initializing Socket.IO server...');
-        io = initSocketServer(server);
-      } else {
-        io = server.io;
-      }
+    if (!server.io) {
+      console.log('Initializing Socket.IO server...');
+      io = initSocketServer(server);
+      server.io = io;
+    } else {
+      io = server.io;
     }
 
     // Return success response with CORS headers
@@ -59,17 +54,30 @@ export async function GET(req: NextRequest) {
           ? 'https://qa-app-brown.vercel.app'
           : '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Access-Control-Allow-Credentials',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Credentials': 'true',
         'Content-Type': 'application/json',
       },
     });
-  } catch (error: any) {
-    console.error('Error in Socket.IO initialization:', error);
+  } catch (error) {
+    console.error('Socket initialization error:', error);
     return NextResponse.json({ 
-      error: 'Failed to initialize Socket.IO',
-      details: error.message,
-      timestamp: new Date().toISOString()
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, {
+    headers: {
+      'Access-Control-Allow-Origin': process.env.NODE_ENV === 'production' 
+        ? 'https://qa-app-brown.vercel.app'
+        : '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
+    },
+  });
 } 

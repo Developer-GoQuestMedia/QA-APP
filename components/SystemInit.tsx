@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
@@ -8,8 +8,12 @@ export default function SystemInit() {
   const { data: session, status } = useSession()
   const [hasCleared, setHasCleared] = useState(false)
   const router = useRouter()
+  const initRef = useRef(false)
 
   useEffect(() => {
+    // Skip initialization if already done
+    if (initRef.current) return;
+
     const initSystem = async () => {
       console.log('System initialization started:', {
         timestamp: new Date().toISOString(),
@@ -57,6 +61,9 @@ export default function SystemInit() {
           timestamp: new Date().toISOString(),
           success: true
         })
+        
+        // Mark initialization as complete
+        initRef.current = true
       } catch (error) {
         console.error('System initialization error:', {
           error,

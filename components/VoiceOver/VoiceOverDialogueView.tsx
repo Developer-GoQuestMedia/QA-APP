@@ -3,10 +3,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
-import { type Dialogue } from '../types/dialogue'
-import { type Episode, type Project } from '../types/project'
-import { formatTime, getNumberValue, calculateDuration } from '../utils/formatters'
-import { useAudioRecording } from '../hooks/useAudioRecording'
+import { type Dialogue } from '../../types/dialogue'
+import { type Episode, type Project } from '../../types/project'
+import { formatTime, getNumberValue, calculateDuration } from '../../utils/formatters'
+import { useAudioRecording } from '../../hooks/useAudioRecording'
 import axios from 'axios'
 import AudioVisualizer from './AudioVisualizer'
 import RecordingTimer from './RecordingTimer'
@@ -862,16 +862,27 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   useEffect(() => {
     if (!currentDialogue || !dialoguesList.length) return;
     
-    // Update maxDuration based on current dialogue
-    const duration = calculateDuration(currentDialogue.timeStart, currentDialogue.timeEnd);
-    setMaxDuration(duration);
+    // Update maxDuration based on current dialogue and handle invalid cases
+    setMaxDuration(calculateDuration(
+      currentDialogue?.timeStart,
+      currentDialogue?.timeEnd
+    ) || 3); // Default 3 seconds if duration is invalid
     
     // Only update index if it's different
     const index = dialoguesList.findIndex(d => d._id === currentDialogue.dialogNumber);
     if (index !== -1 && index !== currentDialogueIndex) {
       setCurrentDialogueIndex(index);
     }
-  }, [currentDialogue, dialoguesList, calculateDuration]); // Remove currentDialogueIndex from deps
+
+    // Log warning if time values are invalid
+    if (!currentDialogue.timeStart || !currentDialogue.timeEnd) {
+      console.warn('Invalid time values in dialogue:', {
+        dialogueId: currentDialogue._id,
+        timeStart: currentDialogue.timeStart,
+        timeEnd: currentDialogue.timeEnd
+      });
+    }
+  }, [currentDialogue, dialoguesList]); // Remove calculateDuration from deps as it's stable
 
   // Update the dialogue change effect
   useEffect(() => {

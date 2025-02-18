@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import TranslatorView from '@/components/TranslatorView'
+import TranslatorView from '@/components/Translator/TranslatorView'
 import { useProjects } from '@/hooks/useProjects'
 import LoadingState from '@/components/LoadingState'
 import ErrorState from '@/components/ErrorState'

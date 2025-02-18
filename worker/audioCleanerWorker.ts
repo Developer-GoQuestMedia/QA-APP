@@ -50,10 +50,10 @@ const createAudioCleanerWorker = () => {
             { 'episodes._id': new ObjectId(episodeId) },
             {
               $set: {
-                'episodes.$.cleanedSpeechPath': data.cleanedSpeechPath,
-                'episodes.$.cleanedSpeechKey': data.cleanedSpeechKey,
-                'episodes.$.musicAndSoundEffectsPath': data.musicAndSoundEffectsPath,
-                'episodes.$.musicAndSoundEffectsKey': data.musicAndSoundEffectsKey,
+                'episodes.$.extracted_speechPath': data.extracted_speechPath,
+                'episodes.$.extracted_speechKey': data.extracted_speechKey,
+                'episodes.$.extracted_musicPath': data.extracted_musicPath,
+                'episodes.$.extracted_musicKey': data.extracted_musicKey,
                 'episodes.$.status': 'processing',
                 'episodes.$.step': 2,
                 'episodes.$.lastProcessed': new Date(),

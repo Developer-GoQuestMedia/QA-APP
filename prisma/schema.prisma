@@ -34,6 +34,14 @@ enum EpisodeStatus {
   error
 }
 
+enum DialogueStatus {
+  pending
+  transcribed
+  translated
+  recorded
+  approved
+}
+
 model User {
   id              String      @id @default(auto()) @map("_id") @db.ObjectId
   username        String      @unique
@@ -85,22 +93,20 @@ model Dialogue {
   timeEnd         String
   character       String
   videoUrl        String
-  dialogue        Json      // Contains original, translated, adapted
-  emotions        Json?     // Contains primary and secondary emotions
+  dialogue        Json      // { original: string, translated: string, adapted: string }
+  emotions        Json?     // { primary: { emotion: string, intensity: number }, secondary: { emotion: string, intensity: number } }
   direction       String?
   lipMovements    String?
   sceneContext    String?
   technicalNotes  String?
   culturalNotes   String?
-  status          String
+  status          DialogueStatus
   voiceOverUrl    String?
   voiceOverNotes  String?
   directorNotes   String?
   recordingStatus String?
-  words           Json?     // Array of WordDetail objects
-  scenario        Json?     // Scenario object
+  projectId       String    @db.ObjectId
+  project         Project   @relation(fields: [projectId], references: [id])
   updatedAt       DateTime  @updatedAt
   updatedBy       String?
-  project         Project   @relation(fields: [projectId], references: [id])
-  projectId       String    @db.ObjectId
 }

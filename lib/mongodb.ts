@@ -61,3 +61,12 @@ export async function connectToDatabase() {
 // Export the promisified client for use in other modules
 export { clientPromise }
 
+export async function getMongoDb() {
+  const clientResolved = await clientPromise;
+  console.log('Debug - MongoDB Connection:', {
+    dbName,
+    uri: uri.replace(/\/\/[^@]+@/, '//***:***@') // Log URI with hidden credentials
+  });
+  return clientResolved.db(dbName);
+}
+

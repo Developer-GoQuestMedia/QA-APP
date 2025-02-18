@@ -1,4 +1,4 @@
-export type UserRole = 'transcriber' | 'translator' | 'voiceOver' | 'director' | 'srDirector' | 'admin';
+export type UserRole = 'transcriber' | 'translator' | 'voiceOver' | 'admin';
 
 interface SessionLog {
   loginTime: string | Date;

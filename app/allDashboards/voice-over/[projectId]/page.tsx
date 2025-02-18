@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialogues } from '@/hooks/useDialogues'
-import VoiceOverDialogueView from '../../../../components/VoiceOverDialogueView'
+import VoiceOverDialogueView from '../../../../components/VoiceOver/VoiceOverDialogueView'
 import { Project } from '@/types/project'
 import { Dialogue } from '@/types/dialogue'
 import { Episode } from '@/types/project'

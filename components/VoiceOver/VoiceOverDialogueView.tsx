@@ -1138,6 +1138,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
           uploadFormData.append('dialogueId', currentDialogue.dialogNumber);
           uploadFormData.append('projectId', projectId);
           uploadFormData.append('sceneNumber', sceneNumber);
+          uploadFormData.append('characterName', currentDialogue.characterName || 'Unknown');
 
           // Upload both versions
           const uploadResponse = await axios.post('/api/voice-over/upload-both', uploadFormData, {

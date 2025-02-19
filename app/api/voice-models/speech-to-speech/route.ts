@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { rateLimit } from '@/lib/rate-limit';
-import { Redis } from '@upstash/redis';
+import { getRedisClient, executeRedisOperation } from '@/lib/redis';
 import { z } from 'zod';
 
 // Set runtime config
@@ -12,10 +12,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // Initialize Redis client (singleton)
-const redis = new Redis({
-  url: process.env.REDIS_URL || '',
-  token: process.env.REDIS_TOKEN || '',
-});
+const redis = getRedisClient();
 
 // Input validation schema
 const requestSchema = z.object({
@@ -72,7 +69,7 @@ async function retryOperation<T>(
 }
 
 async function updateProgress(key: string, status: string, percent: number) {
-  try {
+  await executeRedisOperation(async () => {
     await redis.set(key, JSON.stringify({
       status,
       percent,
@@ -81,10 +78,7 @@ async function updateProgress(key: string, status: string, percent: number) {
 
     // Expire progress after 1 hour
     await redis.expire(key, 60 * 60);
-  } catch (error) {
-    console.error('Failed to update progress:', error);
-    // Non-critical error, continue processing
-  }
+  }, undefined);
 }
 
 export async function POST(request: NextRequest) {

@@ -1,12 +1,9 @@
-import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getRedisClient, executeRedisOperation } from './redis'
 
 // Initialize Redis client
-const redis = new Redis({
-  url: process.env.REDIS_URL || '',
-  token: process.env.REDIS_TOKEN || '',
-})
+const redis = getRedisClient()
 
 export interface RateLimitConfig {
   maxRequests: number
@@ -27,7 +24,7 @@ interface RateLimitInfo {
 
 // Cleanup expired rate limit keys
 async function cleanupExpiredKeys() {
-  try {
+  await executeRedisOperation(async () => {
     const keys = await redis.keys('rate-limit:*')
     const now = Date.now()
     
@@ -37,15 +34,17 @@ async function cleanupExpiredKeys() {
         await redis.del(key)
       }
     }
-  } catch (error) {
-    console.error('Failed to cleanup rate limit keys:', error)
-  }
+  }, undefined)
 }
 
-// Periodically cleanup (1% chance per request)
+let lastCleanup = 0
+const CLEANUP_INTERVAL = 60 * 1000 // 1 minute
+
 async function maybeCleanup() {
-  if (Math.random() < 0.01) {
+  const now = Date.now()
+  if (now - lastCleanup > CLEANUP_INTERVAL) {
     await cleanupExpiredKeys()
+    lastCleanup = now
   }
 }
 
@@ -60,7 +59,9 @@ export async function rateLimit(
     await maybeCleanup()
 
     // Get current rate limit info
-    const info = await redis.get<RateLimitInfo>(key) || { currentRequests: 0 }
+    const info = await executeRedisOperation(async () => {
+      return await redis.get<RateLimitInfo>(key)
+    }, { currentRequests: 0 })
 
     // Check if in backoff period
     if (info.backoffUntil && info.backoffUntil > Date.now()) {
@@ -85,7 +86,9 @@ export async function rateLimit(
 
     // Set expiry and update info
     const windowSeconds = Math.ceil(config.windowMs / 1000)
-    await redis.set(key, info, { ex: windowSeconds })
+    await executeRedisOperation(async () => {
+      await redis.set(key, info, { ex: windowSeconds })
+    }, undefined)
 
     const remainingRequests = config.maxRequests - info.currentRequests
 
@@ -99,7 +102,9 @@ export async function rateLimit(
       // Set backoff period for repeat offenders
       if (config.backoffMs) {
         info.backoffUntil = Date.now() + config.backoffMs
-        await redis.set(key, info, { ex: Math.ceil(config.backoffMs / 1000) })
+        await executeRedisOperation(async () => {
+          await redis.set(key, info, { ex: Math.ceil(config.backoffMs / 1000) })
+        }, undefined)
       }
 
       return new NextResponse(

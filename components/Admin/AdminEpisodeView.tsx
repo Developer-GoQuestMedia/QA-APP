@@ -7,6 +7,8 @@ import type { LucideIcon } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import axios from 'axios'
 import { log } from 'console';
+import { toast } from 'react-hot-toast';
+import { ObjectId } from 'mongodb';
 
 interface AdminEpisodeViewProps {
   project?: Project;
@@ -84,7 +86,7 @@ const DIALOGUE_STATUS_CONFIG: Record<DialogueStatus, {
   class: string;
   label: string;
 }> = {
-  'approved': { 
+  'approved': {
     icon: CheckCircle2,
     class: 'text-green-500',
     label: 'Approved'
@@ -109,7 +111,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
     console.error('checkR2Files validation error:', { error, projectName });
     throw error;
   }
-  
+
   if (!episodeName) {
     const error = new Error('Episode name is required');
     console.error('checkR2Files validation error:', { error, episodeName });
@@ -146,7 +148,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
     const params = new URLSearchParams();
     params.append('databaseName', sanitizedProjectName);
     params.append('collectionName', sanitizedEpisodeName);
-    
+
     // Only append files if they are provided and valid
     if (files && files.length > 0) {
       files.forEach((file, index) => {
@@ -154,7 +156,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
           console.warn('Invalid file entry:', { index, file, type: typeof file });
           return;
         }
-        
+
         const trimmedFile = file.trim();
         if (trimmedFile) {
           params.append('files[]', trimmedFile);
@@ -165,7 +167,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
     }
 
     const url = `/api/r2/check-files?${params.toString()}`;
-    console.log('Making R2 check request to:', { 
+    console.log('Making R2 check request to:', {
       url,
       params: Object.fromEntries(params.entries())
     });
@@ -217,15 +219,14 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
             headers: error.config?.headers
           }
         });
-        
+
         // Throw a more informative error
         throw new Error(
-          `R2 check failed (${error.response?.status}): ${
-            error.response?.data?.error || error.response?.statusText || error.message
+          `R2 check failed (${error.response?.status}): ${error.response?.data?.error || error.response?.statusText || error.message
           }`
         );
       }
-      
+
       // For non-axios errors, provide as much context as possible
       console.error('R2 check unexpected error:', {
         error,
@@ -233,7 +234,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined
       });
-      
+
       throw error;
     }
   } catch (error) {
@@ -249,7 +250,7 @@ const checkR2Files = async (projectName: string, episodeName: string, files: str
 };
 
 // Update DB with R2 file paths
-const updateDBWithR2Paths = async (episodeId: string, r2Paths: { 
+const updateDBWithR2Paths = async (episodeId: string, r2Paths: {
   extracted_speechPath: string;
   extracted_speechKey: string;
   extracted_musicPath: string;
@@ -284,19 +285,19 @@ const validateAudioExtraction = async (episode: Episode, currentProject?: Projec
 
     // Validate input parameters with detailed error messages
     if (!episode || !episode.name) {
-      console.warn('Invalid episode data:', { 
+      console.warn('Invalid episode data:', {
         hasEpisode: !!episode,
         episodeId: episode?._id,
-        hasName: !!episode?.name 
+        hasName: !!episode?.name
       });
       return false;
     }
 
     if (!currentProject?.title) {
-      console.warn('Invalid project data:', { 
+      console.warn('Invalid project data:', {
         hasProject: !!currentProject,
         projectId: currentProject?._id,
-        hasTitle: !!currentProject?.title 
+        hasTitle: !!currentProject?.title
       });
       return false;
     }
@@ -315,9 +316,9 @@ const validateAudioExtraction = async (episode: Episode, currentProject?: Projec
     const speechFile = `${episode.name}_extracted_speech.wav`;
     const musicFile = `${episode.name}_extracted_music.wav`;
     const filesToCheck = [speechFile, musicFile];
-    
+
     try {
-      console.log('Checking R2 files:', { 
+      console.log('Checking R2 files:', {
         projectTitle: currentProject.title,
         episodeName: episode.name,
         files: filesToCheck
@@ -337,27 +338,27 @@ const validateAudioExtraction = async (episode: Episode, currentProject?: Projec
         });
         throw error;
       });
-      
+
       if (!r2Result) {
         console.warn('No R2 result returned');
         return false;
       }
 
       const { exists, notFound, baseUrl } = r2Result;
-      
+
       // If files exist but not in DB, update DB
       if (exists.length > 0) {
         const needsUpdate = !episode.steps?.audioExtraction?.extracted_speechPath ||
-                          !episode.steps?.audioExtraction?.extracted_musicPath;
+          !episode.steps?.audioExtraction?.extracted_musicPath;
 
         if (needsUpdate) {
           const r2Paths: any = {};
-          
+
           if (exists.includes(speechFile)) {
             r2Paths.extracted_speechPath = `${baseUrl}/${speechFile}`;
             r2Paths.extracted_speechKey = `${currentProject.title}/${episode.name}/${speechFile}`;
           }
-          
+
           if (exists.includes(musicFile)) {
             r2Paths.extracted_musicPath = `${baseUrl}/${musicFile}`;
             r2Paths.extracted_musicKey = `${currentProject.title}/${episode.name}/${musicFile}`;
@@ -378,7 +379,7 @@ const validateAudioExtraction = async (episode: Episode, currentProject?: Projec
           }
         }
       }
-      
+
       return exists.length === filesToCheck.length;
     } catch (error) {
       console.error('validateAudioExtraction failed:', {
@@ -465,13 +466,13 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
       try {
         const storedProject = sessionStorage.getItem('currentProject');
         const storedEpisode = sessionStorage.getItem('currentEpisode');
-        
+
         if (storedProject) {
           const parsedProject = JSON.parse(storedProject);
           setCurrentProject(parsedProject);
           console.debug('Loaded project from sessionStorage:', parsedProject);
         }
-        
+
         if (storedEpisode) {
           const parsedEpisode = JSON.parse(storedEpisode);
           setCurrentEpisode(parsedEpisode);
@@ -511,11 +512,12 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   // Calculate episode statistics
   const calculateEpisodeStats = (episode: Episode): EpisodeStats => {
     const steps = episode.steps || {};
-    const totalSteps = Object.keys(steps).length;
-    const completedSteps = Object.values(steps).filter(
-      (step) => step?.status === 'completed'
-    ).length;
-    
+    const totalSteps = Object.keys(STEP_CONFIG).length;
+    const completedSteps = Object.keys(STEP_CONFIG).reduce((count, key) => {
+      const step = steps[key as keyof typeof STEP_CONFIG];
+      return count + (step?.status === 'completed' ? 1 : 0);
+    }, 0);
+
     return {
       totalSteps,
       completedSteps,
@@ -523,104 +525,65 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
       status: episode.status || 'pending'
     };
   };
-
   // Add refresh function
-  const refreshEpisodeData = async () => {
-    if (!currentEpisode?._id || !currentProject?._id) {
-      console.error('Missing episode or project ID for refresh:', {
-        episodeId: currentEpisode?._id,
-        projectId: currentProject?._id,
-        currentEpisode,
-        currentProject
-      });
-      return null;
-    }
-
+  const refreshEpisodeData = async (): Promise<Episode | null> => {
     try {
       setIsRefreshing(true);
-      console.debug('Starting episode data refresh:', {
-        episodeId: currentEpisode._id,
-        projectId: currentProject._id,
-        url: `/api/episodes/${currentEpisode._id}?projectId=${currentProject._id}`
-      });
+      const url = `/api/episodes/${currentEpisode?._id}?projectId=${currentProject?._id}`;
 
-      const response = await axios.get(
-        `/api/episodes/${currentEpisode._id}?projectId=${currentProject._id}`
-      );
+      const response = await axios.get(url);
+      const refreshedEpisode = response.data?.episode;
 
-      console.debug('Episode refresh response:', {
-        status: response.status,
-        statusText: response.statusText,
-        hasData: !!response.data,
-        hasEpisode: !!response.data?.episode,
-        episodeData: response.data?.episode
-      });
-
-      if (!response.data?.episode) {
-        console.warn('No episode data returned from refresh:', {
-          responseData: response.data,
-          currentEpisodeId: currentEpisode._id
+      if (refreshedEpisode) {
+        console.debug('Successfully refreshed episode data:', {
+          episodeId: refreshedEpisode._id,
+          episodeName: refreshedEpisode.name
         });
-        return null;
+        return refreshedEpisode;
       }
 
-      // Validate the refreshed episode data
-      const refreshedEpisode = response.data.episode;
-      if (!refreshedEpisode._id || !refreshedEpisode.name) {
-        console.warn('Refreshed episode data is invalid:', {
-          hasId: !!refreshedEpisode._id,
-          hasName: !!refreshedEpisode.name,
-          refreshedEpisode
-        });
-        return null;
-      }
-
-      console.debug('Successfully refreshed episode data:', {
-        episodeId: refreshedEpisode._id,
-        episodeName: refreshedEpisode.name,
-        hasVideoKey: !!refreshedEpisode.videoKey,
-        videoKey: refreshedEpisode.videoKey
-      });
-
-      return refreshedEpisode;
+      toast.error('Failed to refresh episode data');
+      return null;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage = error.response?.status === 404
-          ? 'Project or episode not found. Please verify the data exists in the database.'
-          : 'Failed to refresh episode data. Please try again.';
-        
-        console.error('Axios error refreshing episode data:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          message: error.message,
-          config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            params: error.config?.params
-          }
-        });
-        
-        // Add toast notification here if you have a toast library
-        // toast.error(errorMessage);
-      } else {
-        console.error('Unexpected error refreshing episode data:', error);
-        // Add toast notification here if you have a toast library
-        // toast.error('An unexpected error occurred while refreshing episode data.');
-      }
+      console.error('Error refreshing episode:', error);
+      toast.error('Failed to refresh episode data');
       return null;
     } finally {
-      setIsRefreshing(false); // Reset loading state
+      setIsRefreshing(false);
     }
   };
 
-  // Update the refresh button click handler
+  // Update handleRefreshClick
   const handleRefreshClick = async () => {
     const updatedEpisode = await refreshEpisodeData();
     if (updatedEpisode) {
       setCurrentEpisode(updatedEpisode);
-      // Add toast notification here if you have a toast library
-      // toast.success('Episode data refreshed successfully');
+      toast.success('Episode refreshed');
+    }
+  };
+
+  // Add handleTranscriberClick
+  const handleTranscriberClick = async () => {
+    try {
+      if (!currentProject?._id || !currentEpisode?.name) {
+        console.error('Missing required data:', {
+          projectId: currentProject?._id,
+          episodeName: currentEpisode?.name
+        });
+        toast.error('Missing required project or episode data');
+        return;
+      }
+
+      // Navigate to transcriber page
+      const url = `/admin/project/${currentProject._id}/episodes/${encodeURIComponent(currentEpisode.name)}/transcriber`;
+      window.location.href = url;
+
+    } catch (error) {
+      console.error('Navigation Error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+      toast.error('Failed to open transcriber');
     }
   };
 
@@ -722,7 +685,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
           });
 
           const validationResult = await validate(refreshedEpisode);
-          
+
           // If validation returns false, it means there was an error or DB was updated
           if (validationResult === false) {
             await refreshEpisodeData();
@@ -748,16 +711,16 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
             // Check for specific files - using just the filenames
             const speechFile = `${refreshedEpisode.name}_extracted_speech.wav`;
             const musicFile = `${refreshedEpisode.name}_extracted_music.wav`;
-            
+
             // Define files to check
             const filesToCheck = [speechFile, musicFile];
 
-            console.log('Checking R2 files:', { 
+            console.log('Checking R2 files:', {
               projectName: currentProject.title,
               episodeName: refreshedEpisode.name,
               filesToCheck
             });
-            
+
             const r2Files = await checkR2Files(currentProject.title, refreshedEpisode.name, filesToCheck);
             if (r2Files && r2Files.exists.length > 0) {
               console.warn('Audio files already exist. Refreshing data...', r2Files);
@@ -776,21 +739,21 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
           episodeId: refreshedEpisode._id,
           step: stepKey,
           // Add step-specific data
-          ...(stepKey === 'audioExtraction' && { 
+          ...(stepKey === 'audioExtraction' && {
             videoPath: refreshedEpisode.videoPath,
             videoKey: refreshedEpisode.videoKey,
             episodeName: refreshedEpisode.name
           }),
-          ...(stepKey === 'transcription' && { 
+          ...(stepKey === 'transcription' && {
             audioPath: refreshedEpisode.steps?.audioExtraction?.extracted_speechPath,
             audioKey: refreshedEpisode.steps?.audioExtraction?.extracted_speechKey
           }),
-          ...(stepKey === 'translation' && { 
-            dialogues: refreshedEpisode.steps?.transcription?.transcriptionData?.dialogues 
+          ...(stepKey === 'translation' && {
+            dialogues: refreshedEpisode.steps?.transcription?.transcriptionData?.dialogues
           }),
-          ...(stepKey === 'voiceAssignment' && { 
+          ...(stepKey === 'voiceAssignment' && {
             dialogues: refreshedEpisode.steps?.translation?.translationData?.dialogues,
-            characterVoices: refreshedEpisode.steps?.voiceAssignment?.characterVoices 
+            characterVoices: refreshedEpisode.steps?.voiceAssignment?.characterVoices
           })
         };
 
@@ -899,7 +862,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   if (currentEpisode) {
     const stats = calculateEpisodeStats(currentEpisode);
     const steps = currentEpisode.steps || {};
-    
+
     return (
       <div className="p-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
@@ -907,7 +870,14 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Episode Details
             </h2>
-            <div className="flex space-x-2">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleTranscriberClick}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                <Mic className="w-4 h-4 mr-2" />
+                Open Transcriber
+              </button>
               <button
                 onClick={handleRefreshClick}
                 disabled={isRefreshing}
@@ -916,38 +886,20 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
               >
                 <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-              {currentEpisode.status === 'processing' ? (
-                <button
-                  onClick={() => {/* Implement pause */}}
-                  className="p-2 text-yellow-500 hover:text-yellow-700"
-                  title="Pause Processing"
-                >
-                  <Pause className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => {/* Implement resume */}}
-                  className="p-2 text-green-500 hover:text-green-700"
-                  title="Resume Processing"
-                >
-                  <Play className="w-5 h-5" />
-                </button>
-              )}
             </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  currentEpisode.status === 'uploaded'
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${currentEpisode.status === 'uploaded'
                     ? 'bg-green-100 text-green-800 dark:bg-green-200 dark:text-green-900'
                     : currentEpisode.status === 'processing'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900'
-                    : currentEpisode.status === 'error'
-                    ? 'bg-red-100 text-red-800 dark:bg-red-200 dark:text-red-900'
-                    : 'bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900'
-                }`}>
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900'
+                      : currentEpisode.status === 'error'
+                        ? 'bg-red-100 text-red-800 dark:bg-red-200 dark:text-red-900'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900'
+                  }`}>
                   {currentEpisode.status}
                 </span>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -955,8 +907,8 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                 </h3>
               </div>
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Last updated: {currentEpisode.updatedAt ? 
-                  formatDistanceToNow(new Date(currentEpisode.updatedAt), { addSuffix: true }) : 
+                Last updated: {currentEpisode.updatedAt ?
+                  formatDistanceToNow(new Date(currentEpisode.updatedAt), { addSuffix: true }) :
                   'Never'}
               </span>
             </div>
@@ -984,7 +936,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
               {/* Processing Steps */}
               {Object.entries(STEP_CONFIG).map(([key, config]) => {
                 const step = steps[key as keyof Episode['steps']];
-                
+
                 return (
                   <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-4">
@@ -1111,7 +1063,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                                 ))}
                               </div>
                             )}
-                            
+
                             {step.voiceConversions && (
                               <div className="space-y-2">
                                 <h4 className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1147,12 +1099,12 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
                   Dialogues ({currentEpisode.dialogueCount})
                 </h3>
-                
+
                 <div className="space-y-4">
                   {currentEpisode.dialogues.map((dialogue) => {
                     const StatusIcon = DIALOGUE_STATUS_CONFIG[dialogue.status as DialogueStatus]?.icon || XCircle;
                     const statusClass = DIALOGUE_STATUS_CONFIG[dialogue.status as DialogueStatus]?.class || 'text-gray-500';
-                    
+
                     return (
                       <div key={dialogue.dialogNumber} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                         <div className="flex items-start justify-between mb-4">
@@ -1180,13 +1132,13 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                               )}
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center space-x-2">
                             {dialogue.recordedAudioUrl && (
                               <div className="flex flex-col items-end space-y-1">
-                                <audio 
-                                  src={dialogue.recordedAudioUrl} 
-                                  controls 
+                                <audio
+                                  src={dialogue.recordedAudioUrl}
+                                  controls
                                   className="w-48"
                                 />
                                 <span className="text-xs text-gray-500">
@@ -1196,9 +1148,9 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                             )}
                             {dialogue.voiceOverUrl && (
                               <div className="flex flex-col items-end space-y-1">
-                                <audio 
-                                  src={dialogue.voiceOverUrl} 
-                                  controls 
+                                <audio
+                                  src={dialogue.voiceOverUrl}
+                                  controls
                                   className="w-48"
                                 />
                                 <span className="text-xs text-gray-500">
@@ -1225,12 +1177,6 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                               <div>
                                 <h5 className="font-medium text-gray-700 dark:text-gray-300">Lip Movements</h5>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                  {dialogue.lipMovements}
-                                </p>
-                              </div>
-                              <div>
-                                <h5 className="font-medium text-gray-700 dark:text-gray-300">Emotions</h5>
-                                <p className="text-gray-600 dark:text-gray-400">
                                   Primary: {dialogue.emotions.primary.emotion} ({dialogue.emotions.primary.intensity})
                                   {dialogue.emotions.secondary.emotion !== 'Neutral' && (
                                     <>, Secondary: {dialogue.emotions.secondary.emotion} ({dialogue.emotions.secondary.intensity})</>
@@ -1243,8 +1189,17 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                                   {dialogue.tone}
                                 </p>
                               </div>
+                              <div>
+                                <h5 className="font-medium text-gray-700 dark:text-gray-300">Emotions</h5>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                  Primary: {dialogue.emotions.primary.emotion} ({dialogue.emotions.primary.intensity})
+                                  {dialogue.emotions.secondary.emotion !== 'Neutral' && (
+                                    <>, Secondary: {dialogue.emotions.secondary.emotion} ({dialogue.emotions.secondary.intensity})</>
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                            
+
                             {dialogue.directorNotes && (
                               <div>
                                 <h5 className="font-medium text-gray-700 dark:text-gray-300">Director Notes</h5>
@@ -1253,7 +1208,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                                 </p>
                               </div>
                             )}
-                            
+
                             {dialogue.voiceOverNotes && (
                               <div>
                                 <h5 className="font-medium text-gray-700 dark:text-gray-300">Voice Over Notes</h5>
@@ -1262,7 +1217,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                                 </p>
                               </div>
                             )}
-                            
+
                             {dialogue.words && dialogue.words.length > 0 && (
                               <div>
                                 <h5 className="font-medium text-gray-700 dark:text-gray-300">Word Timing</h5>
@@ -1335,9 +1290,9 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
       .sort((a, b) => {
         const aValue = a[sortConfig.key as keyof Episode];
         const bValue = b[sortConfig.key as keyof Episode];
-        
+
         if (typeof aValue === 'string' && typeof bValue === 'string') {
-          return sortConfig.direction === 'asc' 
+          return sortConfig.direction === 'asc'
             ? aValue.localeCompare(bValue)
             : bValue.localeCompare(aValue);
         }
@@ -1354,7 +1309,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   // Handle bulk actions
   const handleBulkAction = async (action: 'delete' | 'reprocess') => {
     if (selectedEpisodes.size === 0) return;
-    
+
     setIsProcessing(true);
     try {
       // Implement bulk actions here
@@ -1379,7 +1334,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
               Total Episodes: {filteredEpisodes.length}
             </p>
           </div>
-          
+
           {/* Bulk Actions */}
           {selectedEpisodes.size > 0 && (
             <div className="flex items-center space-x-2">
@@ -1415,7 +1370,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
             className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           />
         </div>
-        
+
         <div className="flex space-x-4">
           <select
             value={statusFilter}
@@ -1428,7 +1383,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
             <option value="error">Error</option>
             <option value="completed">Completed</option>
           </select>
-          
+
           <button
             onClick={() => setSortConfig({
               key: sortConfig.key,
@@ -1476,7 +1431,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                   }}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-4"
                 />
-                
+
                 <div className="flex-1 cursor-pointer" onClick={async () => {
                   if (loadingEpisodeId === episodeIdStr) {
                     console.debug('Click handler: Episode already loading', { episodeIdStr });
@@ -1523,15 +1478,14 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
                 }}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        episode.status === 'uploaded'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${episode.status === 'uploaded'
                           ? 'bg-green-100 text-green-800 dark:bg-green-200 dark:text-green-900'
                           : episode.status === 'processing'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900'
-                          : episode.status === 'error'
-                          ? 'bg-red-100 text-red-800 dark:bg-red-200 dark:text-red-900'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900'
-                      }`}>
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-200 dark:text-blue-900'
+                            : episode.status === 'error'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-200 dark:text-red-900'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-200 dark:text-gray-900'
+                        }`}>
                         {episode.status}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">

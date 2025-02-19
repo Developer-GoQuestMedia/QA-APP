@@ -128,13 +128,13 @@ const getTimeStamp = () => {
  * Custom hook for handling admin notifications
  */
 function useNotifyAdmin() {
-  return (message: string, type: 'success' | 'error' = 'success') => {
+  return useCallback((message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') {
       toast.error(message);
     } else {
       toast.success(message);
     }
-  };
+  }, []);
 }
 
 /**
@@ -151,11 +151,37 @@ const handleError = (error: Error): void => {
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   const session = useSession();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const notify = useNotifyAdmin();
   const socketRef = useRef<ReturnType<typeof getSocketClient> | null>(null);
   const projectsRef = useRef(projects);
   const hasInitializedRef = useRef(false);
   const [isProjectsLoading, setIsProjectsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const handleAddEpisodes = useCallback(async (projectId: string, files: FileList) => {
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => {
+        formData.append('videos', file);
+      });
+
+      const response = await axios.post(`/api/admin/projects/${projectId}/add-episodes`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        await refetchProjects();
+        notify('Episodes added successfully', 'success');
+      }
+    } catch (error) {
+      console.error('Error adding episodes:', error);
+      notify('Failed to add episodes', 'error');
+    }
+  }, [refetchProjects, notify]);
 
   const fetchProjectsWithLoading = useCallback(async () => {
     try {
@@ -350,9 +376,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // =================
   // Hooks
   // =================
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const notify = useNotifyAdmin();
 
   // =================
   // Data Fetching
@@ -463,7 +486,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
 
     let filtered = projects.filter((project: Project) => {
-      const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = project.title?.toLowerCase().includes(searchTerm.toLowerCase());
       console.log('Checking project:', {
         title: project.title,
         status: project.status,
@@ -1911,6 +1934,27 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <span className="text-lg">×</span>
             </button>
 
+            {/* Add Upload Button */}
+            <div className="mb-4">
+              <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
+                <div className="flex items-center">
+                  <Plus className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Add New Episodes</span>
+                </div>
+                <input
+                  type="file"
+                  multiple
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleAddEpisodes(selectedProjectForEpisodes._id.toString(), e.target.files);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {selectedProjectForEpisodes.episodes && selectedProjectForEpisodes.episodes.length > 0 ? (
                 selectedProjectForEpisodes.episodes.map((episode) => (
@@ -1937,23 +1981,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
-                          if (!selectedProjectForEpisodes || !episode) {
-                            console.warn('Missing project or episode data:', {
-                              project: selectedProjectForEpisodes,
-                              episode
-                            });
-                            return;
-                          }
-
-                          // Store the current project and episode data
-                          try {
-                            sessionStorage.setItem('currentProject', JSON.stringify(selectedProjectForEpisodes));
-                            sessionStorage.setItem('currentEpisode', JSON.stringify(episode));
-                          } catch (error) {
-                            console.error('Error storing project/episode data:', error);
-                          }
-
-                          // Navigate with state
+                          if (!selectedProjectForEpisodes || !episode) return;
                           try {
                             const projectId = selectedProjectForEpisodes._id.toString();
                             const episodeId = episode._id.toString();
@@ -1979,6 +2007,16 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
+                      <button
+                        onClick={() => {
+                          setSelectedEpisode(episode);
+                          setShowDeleteConfirm(true);
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      >
+                        Delete
+                        <Trash2 className="ml-1.5 w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1987,6 +2025,59 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   No episodes available
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add this new modal for episode deletion confirmation */}
+      {showDeleteConfirm && selectedEpisode && selectedProjectForEpisodes && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[1000]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              Delete Episode
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete episode "{selectedEpisode.name}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setSelectedEpisode(null);
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(
+                      `/api/admin/projects/${selectedProjectForEpisodes._id}/add-episodes?episodeId=${selectedEpisode._id}`,
+                      {
+                        method: 'DELETE',
+                      }
+                    );
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                      notify('Episode deleted successfully');
+                      await refetchProjects();
+                      setShowDeleteConfirm(false);
+                      setSelectedEpisode(null);
+                    } else {
+                      notify('Failed to delete episode: ' + data.error, 'error');
+                    }
+                  } catch (error) {
+                    console.error('Error deleting episode:', error);
+                    notify('Failed to delete episode', 'error');
+                  }
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -2007,9 +2098,4 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       />
     </div>
   );
-}
-
-// Function to notify admin view (if needed elsewhere)
-function notifyAdmin(message: string) {
-  console.log('Admin Notification:', message);
 }

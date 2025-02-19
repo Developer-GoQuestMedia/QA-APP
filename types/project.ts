@@ -80,7 +80,7 @@ export interface Episode {
     lastModified?: Date;
   }>;
   steps: {
-    audioExtraction?: {
+    audioExtraction: {
       status: 'pending' | 'processing' | 'completed' | 'error';
       extracted_speechPath?: string;
       extracted_speechKey?: string;
@@ -89,7 +89,7 @@ export interface Episode {
       updatedAt?: Date;
       error?: string;
     };
-    transcription?: {
+    transcription: {
       status: 'pending' | 'processing' | 'completed' | 'error';
       transcriptionData?: {
         dialogues: Array<{
@@ -98,12 +98,13 @@ export interface Episode {
           characterName: string;
           startTime: number;
           endTime: number;
+          videoClipUrl?: string;
         }>;
       };
       updatedAt?: Date;
       error?: string;
     };
-    videoClips?: {
+    videoClips: {
       status: 'pending' | 'processing' | 'completed' | 'error';
       clips?: Array<{
         id: string;
@@ -116,7 +117,7 @@ export interface Episode {
       updatedAt?: Date;
       error?: string;
     };
-    translation?: {
+    translation: {
       status: 'pending' | 'processing' | 'completed' | 'error';
       translationData?: {
         dialogues: Array<{
@@ -127,12 +128,13 @@ export interface Episode {
           characterName: string;
           startTime: number;
           endTime: number;
+          videoClipUrl?: string;
         }>;
       };
       updatedAt?: Date;
       error?: string;
     };
-    voiceAssignment?: {
+    voiceAssignment: {
       status: 'pending' | 'processing' | 'completed' | 'error';
       characterVoices?: Array<{
         characterName: string;

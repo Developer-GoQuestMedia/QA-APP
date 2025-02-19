@@ -1,142 +1,201 @@
-import { NextResponse } from 'next/server';
-import { getMongoDb } from '@/lib/mongodb';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { episodeId: string } }
 ) {
   try {
-    const { searchParams } = new URL(request.url);
+    // Log incoming request details
+    const requestUrl = new URL(request.url);
+    console.debug('Episode GET request details:', {
+      method: request.method,
+      url: request.url,
+      params,
+      headers: Object.fromEntries(request.headers.entries()),
+      searchParams: Object.fromEntries(requestUrl.searchParams.entries())
+    });
+
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    console.debug('Authentication status:', {
+      hasSession: !!session,
+      userRole: session?.user?.role,
+      userEmail: session?.user?.email
+    });
+
+    if (!session || session.user.role !== 'admin') {
+      const error = {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized access',
+        details: {
+          hasSession: !!session,
+          userRole: session?.user?.role
+        }
+      };
+      console.warn('Unauthorized access attempt:', error);
+      return NextResponse.json({ error }, { status: 401 });
+    }
+
+    // Get and validate parameters
+    const { episodeId } = params;
+    const { searchParams } = requestUrl;
     const projectId = searchParams.get('projectId');
-    const episodeId = params.episodeId;
 
-    console.log('Debug - Received params:', { 
-      projectId, 
-      episodeId,
-      projectIdType: typeof projectId,
-      episodeIdType: typeof episodeId
-    });
-
-    if (!projectId || !episodeId) {
-      return NextResponse.json(
-        { error: 'Missing required parameters' },
-        { status: 400 }
-      );
-    }
-
-    const db = await getMongoDb();
-
-    // Improve project query with error handling
-    let projectObjectId;
-    try {
-      projectObjectId = new ObjectId(projectId);
-    } catch (error) {
-      console.error('Invalid project ID format:', projectId);
-      return NextResponse.json(
-        { error: 'Invalid project ID format' },
-        { status: 400 }
-      );
-    }
-
-    // First find the project with more detailed query
-    const project = await db.collection('projects').findOne(
-      { _id: projectObjectId },
-      { projection: { episodes: 1, title: 1 } } // Only fetch needed fields
-    );
-
-    console.log('Debug - Project query:', {
-      queryId: projectObjectId.toString(),
-      found: !!project,
-      hasEpisodes: !!project?.episodes,
-      episodeCount: project?.episodes?.length,
-      projectTitle: project?.title
-    });
-
-    if (!project) {
-      return NextResponse.json(
-        { error: 'Project not found', details: { projectId } },
-        { status: 404 }
-      );
-    }
-
-    // Then find the episode within the project's episodes array
-    const episode = project.episodes?.find((ep: any) => {
-      // Convert both IDs to strings for comparison
-      const epId = ep._id instanceof ObjectId 
-        ? ep._id.toString() 
-        : typeof ep._id === 'object' && ep._id?.$oid 
-          ? ep._id.$oid 
-          : String(ep._id);
-      
-      // Since episodeId is a string from params, we just need to ensure it's a string
-      const targetEpisodeId = String(episodeId);
-
-      console.log('Debug - Comparing episode IDs:', {
-        episodeId: targetEpisodeId,
-        currentEpId: epId,
-        episodeData: ep,
-        matches: epId === targetEpisodeId
-      });
-
-      return epId === targetEpisodeId;
-    });
-
-    console.log('Debug - Episode found:', {
-      found: !!episode,
-      episodeId,
-      episodeData: episode
-    });
-
-    if (!episode) {
-      return NextResponse.json(
-        { error: 'Episode not found in project', details: {
-          projectId,
+    // Validate parameters
+    if (!episodeId || !projectId) {
+      const error = {
+        code: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters',
+        details: {
           episodeId,
-          availableEpisodeIds: project.episodes?.map((ep: any) => {
-            const epId = ep._id instanceof ObjectId 
-              ? ep._id.toString() 
-              : typeof ep._id === 'object' && ep._id?.$oid 
-                ? ep._id.$oid 
-                : String(ep._id);
-            return { id: epId, name: ep.name };
-          })
-        }},
-        { status: 404 }
-      );
+          projectId,
+          searchParams: Object.fromEntries(searchParams.entries())
+        }
+      };
+      console.warn('Missing parameters:', error);
+      return NextResponse.json({ error }, { status: 400 });
     }
 
-    // Normalize episode data before returning
-    const normalizedEpisode = {
-      ...episode,
-      videoKey: episode.videoKey || episode.videokey, // Handle inconsistent casing
-      _id: episode._id instanceof ObjectId 
-        ? episode._id.toString() 
-        : typeof episode._id === 'object' && episode._id?.$oid 
-          ? episode._id.$oid 
-          : String(episode._id)
-    };
+    // Validate ObjectId format
+    if (!ObjectId.isValid(episodeId) || !ObjectId.isValid(projectId)) {
+      const error = {
+        code: 'INVALID_ID_FORMAT',
+        message: 'Invalid ID format',
+        details: {
+          episodeId,
+          projectId,
+          isValidEpisodeId: ObjectId.isValid(episodeId),
+          isValidProjectId: ObjectId.isValid(projectId)
+        }
+      };
+      console.warn('Invalid ID format:', error);
+      return NextResponse.json({ error }, { status: 400 });
+    }
 
-    return NextResponse.json({ episode: normalizedEpisode });
-  } catch (error) {
-    console.error('Error fetching episode:', {
-      error,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      params: {
-        url: request.url,
-        episodeId: params.episodeId,
-        projectId: new URL(request.url).searchParams.get('projectId')
+    // Connect to database
+    const { db } = await connectToDatabase();
+    
+    // Convert and validate ObjectIds
+    const projectObjId = new ObjectId(projectId);
+    const episodeObjId = new ObjectId(episodeId);
+    
+    // Log query parameters with more detail
+    console.debug('Database query details:', {
+      projectId,
+      episodeId,
+      projectObjId: projectObjId.toString(),
+      episodeObjId: episodeObjId.toString(),
+      query: { 
+        _id: projectObjId,
+        'episodes._id': episodeObjId
       }
     });
 
-    const errorMessage = error instanceof Error 
-      ? `Failed to fetch episode data: ${error.message}`
-      : 'Failed to fetch episode data';
-
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
+    // First check if project exists
+    const projectExists = await db.collection('projects').findOne(
+      { _id: projectObjId },
+      { projection: { _id: 1 } }
     );
+
+    if (!projectExists) {
+      const error = {
+        code: 'PROJECT_NOT_FOUND',
+        message: 'Project not found',
+        details: { 
+          projectId,
+          projectObjId: projectObjId.toString()
+        }
+      };
+      console.warn('Project not found:', error);
+      return NextResponse.json({ error }, { status: 404 });
+    }
+
+    // Then check if episode exists in project
+    const project = await db.collection('projects').findOne(
+      { 
+        _id: projectObjId,
+        'episodes._id': episodeObjId
+      },
+      {
+        projection: {
+          'episodes.$': 1
+        }
+      }
+    );
+
+    // Log raw query result for debugging
+    console.debug('Raw database query result:', {
+      hasProject: !!project,
+      projectData: project,
+      hasEpisodes: !!project?.episodes,
+      episodeCount: project?.episodes?.length,
+      firstEpisode: project?.episodes?.[0] ? {
+        _id: project.episodes[0]._id?.toString(),
+        name: project.episodes[0].name
+      } : null
+    });
+
+    if (!project) {
+      const error = {
+        code: 'EPISODE_NOT_FOUND',
+        message: 'Episode not found in project',
+        details: { 
+          projectId,
+          episodeId,
+          projectObjId: projectObjId.toString(),
+          episodeObjId: episodeObjId.toString()
+        }
+      };
+      console.warn('Episode not found in project:', error);
+      return NextResponse.json({ error }, { status: 404 });
+    }
+
+    const episode = project.episodes[0];
+    if (!episode) {
+      const error = {
+        code: 'EPISODE_NOT_FOUND',
+        message: 'Episode not found in project',
+        details: { projectId, episodeId }
+      };
+      console.warn('Episode not found:', error);
+      return NextResponse.json({ error }, { status: 404 });
+    }
+
+    // Log successful response
+    console.debug('Successful episode fetch:', {
+      episodeId: episode._id,
+      episodeName: episode.name,
+      status: episode.status
+    });
+
+    return NextResponse.json({
+      success: true,
+      episode
+    });
+  } catch (error: any) {
+    // Enhanced error logging
+    const errorDetails = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      type: typeof error,
+      isError: error instanceof Error,
+      keys: Object.keys(error || {})
+    };
+    
+    console.error('Error fetching episode:', errorDetails);
+    
+    return NextResponse.json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch episode',
+        details: errorDetails
+      }
+    }, { status: 500 });
   }
 } 

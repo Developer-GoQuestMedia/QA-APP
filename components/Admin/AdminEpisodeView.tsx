@@ -565,14 +565,31 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   // Add handleTranscriberClick
   const handleTranscriberClick = async () => {
     try {
-      if (!currentProject?._id || !currentEpisode?.name) {
-        console.error('Missing required data:', {
-          projectId: currentProject?._id,
-          episodeName: currentEpisode?.name
-        });
-        toast.error('Missing required project or episode data');
+      // Validate project data
+      if (!currentProject) {
+        console.error('Project data is missing');
+        toast.error('Project data is missing');
         return;
       }
+
+      if (!currentProject._id) {
+        console.error('Project ID is missing');
+        toast.error('Project ID is missing');
+        return;
+      }
+
+      // Validate episode data
+      if (!currentEpisode?.name) {
+        console.error('Episode name is missing');
+        toast.error('Episode name is missing');
+        return;
+      }
+
+      // Log navigation attempt
+      console.debug('Navigating to transcriber:', {
+        projectId: currentProject._id,
+        episodeName: currentEpisode.name
+      });
 
       // Navigate to transcriber page
       const url = `/admin/project/${currentProject._id}/episodes/${encodeURIComponent(currentEpisode.name)}/transcriber`;
@@ -581,7 +598,9 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
     } catch (error) {
       console.error('Navigation Error:', {
         error,
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
+        projectData: currentProject,
+        episodeData: currentEpisode
       });
       toast.error('Failed to open transcriber');
     }

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import AdminEpisodeView from '@/components/Admin/AdminEpisodeView';
-import { Episode } from '@/types/project';
+import { Episode, Project } from '@/types/project';
 import { toast } from 'react-toastify';
 
 export default function EpisodeDetailsPage() {
@@ -15,6 +15,7 @@ export default function EpisodeDetailsPage() {
   const episodeName = params?.episodeName as string;
   
   const [episode, setEpisode] = useState<Episode | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,7 +26,7 @@ export default function EpisodeDetailsPage() {
       return;
     }
 
-    async function fetchEpisode() {
+    async function fetchData() {
       try {
         setIsLoading(true);
         setError('');
@@ -36,22 +37,34 @@ export default function EpisodeDetailsPage() {
           timestamp: new Date().toISOString()
         });
 
-        const res = await axios.get(`/api/projects/${projectId}/episodes/${encodeURIComponent(episodeName)}`);
-        
-        if (!res.data?.episode) {
+        // First fetch project data
+        const projectRes = await axios.get(`/api/admin/projects/${projectId}`);
+        if (!projectRes.data?.data) {
+          throw new Error('Invalid project data received');
+        }
+        setProject(projectRes.data.data);
+
+        // Then fetch episode data
+        const episodeRes = await axios.get(`/api/projects/${projectId}/episodes/${encodeURIComponent(episodeName)}`);
+        if (!episodeRes.data?.episode) {
           throw new Error('Invalid episode data received');
         }
 
-        setEpisode(res.data.episode);
+        setEpisode(episodeRes.data.episode);
         console.log('Episode data loaded:', {
-          episodeId: res.data.episode._id,
-          name: res.data.episode.name,
-          status: res.data.episode.status,
+          episodeId: episodeRes.data.episode._id,
+          name: episodeRes.data.episode.name,
+          status: episodeRes.data.episode.status,
           timestamp: new Date().toISOString()
         });
+
+        // Store data in sessionStorage for other components
+        sessionStorage.setItem('currentProject', JSON.stringify(projectRes.data.data));
+        sessionStorage.setItem('currentEpisode', JSON.stringify(episodeRes.data.episode));
+
       } catch (err: any) {
-        const errorMessage = err?.response?.data?.error || err.message || 'Failed to fetch episode';
-        console.error('Error fetching episode:', {
+        const errorMessage = err?.response?.data?.error || err.message || 'Failed to fetch data';
+        console.error('Error fetching data:', {
           error: errorMessage,
           projectId,
           episodeName,
@@ -64,7 +77,7 @@ export default function EpisodeDetailsPage() {
       }
     }
 
-    fetchEpisode();
+    fetchData();
   }, [projectId, episodeName]);
 
   const goBack = () => {
@@ -136,7 +149,7 @@ export default function EpisodeDetailsPage() {
           ← Back to Project
         </button>
 
-        {episode && <AdminEpisodeView episodeData={episode} />}
+        {episode && project && <AdminEpisodeView project={project} episodeData={episode} />}
       </div>
     </div>
   );

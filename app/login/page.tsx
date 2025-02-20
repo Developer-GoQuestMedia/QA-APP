@@ -2,9 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import axios from 'axios'
 import ThemeToggle from '../components/ThemeToggle'
+
+// Update the route type to use Next.js route type
+type DashboardRoute = 
+  | '/allDashboards/admin'
+  | '/allDashboards/director'
+  | '/allDashboards/srDirector'
+  | '/allDashboards/transcriber'
+  | '/allDashboards/translator'
+  | '/allDashboards/voice-over'
 
 const dashboardRoutes = {
   admin: '/allDashboards/admin',
@@ -16,6 +25,12 @@ const dashboardRoutes = {
 } as const
 
 type UserRole = keyof typeof dashboardRoutes
+
+// Helper function to handle route navigation safely
+const navigateToRoute = (router: ReturnType<typeof useRouter>, path: string) => {
+  // Using replace to avoid adding to history stack
+  window.location.href = path
+}
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -30,8 +45,8 @@ export default function Login() {
     if (status === 'authenticated' && session?.user?.role) {
       const userRole = session.user.role as UserRole
       if (userRole in dashboardRoutes) {
-        const route = dashboardRoutes[userRole]
-        router.push(route)
+        const route = dashboardRoutes[userRole] as DashboardRoute
+        navigateToRoute(router, route)
       }
     }
   }, [status, session, router])
@@ -100,11 +115,10 @@ export default function Login() {
           })
 
           if (userRole in dashboardRoutes) {
-            const route = dashboardRoutes[userRole]
+            const route = dashboardRoutes[userRole] as DashboardRoute
             // Store session ID in localStorage for session tracking
             localStorage.setItem('sessionId', sessionId)
-            // Use router.push for navigation
-            router.push(route)
+            navigateToRoute(router, route)
             return
           } else {
             throw new Error('Invalid role configuration')

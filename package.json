@@ -8,7 +8,7 @@
     "dev-custom": "tsx server.ts",
     "dev:no-warnings": "node --no-warnings ./node_modules/.bin/next dev",
     "build:next": "prisma generate && next build && prisma generate",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "cross-env NODE_ENV=production tsx server.ts",
     "start:port": "next start -p",
     "lint": "next lint",

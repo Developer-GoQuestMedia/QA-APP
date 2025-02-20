@@ -80,7 +80,7 @@ export interface Dialogue {
   projectId?: string;
   updatedAt?: string;
   updatedBy?: string;
-  _id?: string;
+  _id?: ObjectId | string;
   scenario?: Scenario;
   deleteVoiceOver?: boolean;
 }

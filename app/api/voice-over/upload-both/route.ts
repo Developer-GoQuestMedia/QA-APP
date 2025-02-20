@@ -56,13 +56,14 @@ export async function POST(request: NextRequest) {
     const originalAudio = formData.get('originalAudio') as File;
     const processedAudio = formData.get('processedAudio') as File;
     const dialogueId = formData.get('dialogueId') as string;
+    const dialogNumber = formData.get('dialogNumber') as string;
     const projectId = formData.get('projectId') as string;
     const sceneNumber = formData.get('sceneNumber') as string;
     // New: Retrieve characterName from form data
     const characterName = formData.get('characterName') as string;
 
     // 3. Validate required fields
-    if (!originalAudio || !processedAudio || !dialogueId || !projectId || !sceneNumber || !characterName) {
+    if (!originalAudio || !processedAudio || !dialogueId ||!dialogNumber || !projectId || !sceneNumber || !characterName) {
       return NextResponse.json(
         {
           error: 'Missing required fields',
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
             originalAudio: !!originalAudio,
             processedAudio: !!processedAudio,
             dialogueId,
+            dialogNumber,
             projectId,
             sceneNumber,
             characterName: !!characterName,
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Parse dialogue number
-    const dialogueComponents = parseDialogueNumber(dialogueId);
+    const dialogueComponents = parseDialogueNumber(dialogNumber);
 
     // 5. Connect to master database
     const { db: masterDb, client } = await connectToDatabase();
@@ -148,7 +150,7 @@ export async function POST(request: NextRequest) {
       },
       {
         $set: {
-          'dialogues.$.voiceOverUrl': processedUrl,
+          'dialogues.$.voiceOverUrl': originalUrl,
           'dialogues.$.originalVoiceOverUrl': originalUrl,
           'dialogues.$.processedVoiceOverUrl': processedUrl,
           'dialogues.$.status': 'voice-over-added',

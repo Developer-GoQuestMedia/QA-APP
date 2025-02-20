@@ -8,16 +8,16 @@ export function getRedisClient() {
     return redisClient;
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    // Production: Use Upstash Redis
+  if (process.env.NODE_ENV === 'production' && process.env.REDIS_URL && process.env.REDIS_TOKEN) {
+    // Production: Use Upstash Redis only if credentials are available
     redisClient = new UpstashRedis({
-      url: process.env.REDIS_URL || '',
-      token: process.env.REDIS_TOKEN || '',
+      url: process.env.REDIS_URL,
+      token: process.env.REDIS_TOKEN,
     });
 
     console.log('Initialized Upstash Redis client for production');
   } else {
-    // Development: Use local Redis
+    // Development or fallback: Use local Redis
     redisClient = new IORedis({
       host: '127.0.0.1',
       port: 6379,

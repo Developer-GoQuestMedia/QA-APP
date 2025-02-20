@@ -528,7 +528,7 @@ const debouncedLogEvent = debounce((event: string, data: any) => {
 export default function VoiceOverDialogueView({ dialogues: initialDialogues, projectId, episode, project }: DialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
-  // console.log('initialDialogues', initialDialogues);
+
 
   // Memoize sortedDialogues to prevent unnecessary recalculation
   // const sortedDialogues = useMemo(() => 
@@ -538,6 +538,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   // );
 
   const sortedDialogues = initialDialogues;
+  // console.log('sortedDialogues', sortedDialogues);
 
   
   const [dialoguesList, setDialoguesList] = useState(sortedDialogues);
@@ -602,38 +603,82 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
   // Add audio player ref for remote audio
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
-  // Move function declarations to the top
+  // Add a ref to track if we've updated duration for current audio
+  const audioUpdateRef = useRef<string | null>(null);
+
+  // Add audio duration ref
+  const currentAudioDurationRef = useRef<number>(0);
+
+  // Add refs for tracking playing states
+  const isPlayingRef = useRef<boolean>(false);
+  const isSyncedPlayingRef = useRef<boolean>(false);
+  const localAudioBlobRef = useRef<Blob | null>(null);
+
+  // Add a cleanup ref to track if we're in cleanup mode
+  const isCleaningUpRef = useRef(false);
+
   const updateAudioDuration = useCallback(async (blob: Blob | string) => {
     try {
+      // Skip if we've already updated duration for this audio
+      const audioKey = typeof blob === 'string' ? blob : URL.createObjectURL(blob);
+      if (audioUpdateRef.current === audioKey && currentAudioDurationRef.current > 0) {
+        return;
+      }
+      audioUpdateRef.current = audioKey;
+
       const audio = new Audio();
+      let objectUrl: string | null = null;
+
       if (blob instanceof Blob) {
-        audio.src = URL.createObjectURL(blob);
+        objectUrl = URL.createObjectURL(blob);
+        audio.src = objectUrl;
       } else {
         audio.src = blob;
       }
 
-      await new Promise((resolve) => {
-        audio.addEventListener('loadedmetadata', () => {
-          setAudioDuration(audio.duration);
-          resolve(true);
-        });
-        audio.addEventListener('error', () => {
-          console.error('Error loading audio duration');
-          setAudioDuration(0);
-          resolve(false);
-        });
-      });
+      await new Promise<void>((resolve, reject) => {
+        const handleLoadedMetadata = () => {
+          const newDuration = audio.duration;
+          // Only update state if duration has actually changed
+          if (Math.abs(currentAudioDurationRef.current - newDuration) > 0.1) {
+            currentAudioDurationRef.current = newDuration;
+            setAudioDuration(newDuration);
+          }
+          cleanup();
+          resolve();
+        };
 
-      if (blob instanceof Blob) {
-        URL.revokeObjectURL(audio.src);
-      }
+        const handleError = () => {
+          console.error('Error loading audio duration');
+          currentAudioDurationRef.current = 0;
+          setAudioDuration(0);
+          cleanup();
+          reject(new Error('Failed to load audio'));
+        };
+
+        const cleanup = () => {
+          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.removeEventListener('error', handleError);
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+          }
+        };
+
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('error', handleError);
+      });
     } catch (error) {
       console.error('Error getting audio duration:', error);
+      currentAudioDurationRef.current = 0;
       setAudioDuration(0);
     }
-  }, []);
+  }, []); // No dependencies needed since we use refs
 
   const cleanupAudioStates = useCallback(() => {
+    // If we're already cleaning up, don't trigger another cleanup
+    if (isCleaningUpRef.current) return;
+    isCleaningUpRef.current = true;
+
     // Stop and cleanup audio playback
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
@@ -644,77 +689,244 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       audioRef.current = null;
     }
 
-    // Reset states
-    setIsPlaying(false);
-    setIsSyncedPlaying(false);
-    setLocalAudioBlob(null);
-    setPlayingState(false);
-    setAudioDuration(0);
+    // Update refs first
+    isPlayingRef.current = false;
+    isSyncedPlayingRef.current = false;
+    localAudioBlobRef.current = null;
+    currentAudioDurationRef.current = 0;
+
+    // Only update states if we're not unmounting
+    if (!isCleaningUpRef.current) {
+      // Use requestAnimationFrame to batch updates in the next frame
+      requestAnimationFrame(() => {
+        setIsPlaying(false);
+        setIsSyncedPlaying(false);
+        setLocalAudioBlob(null);
+        setPlayingState(false);
+        setAudioDuration(0);
+        isCleaningUpRef.current = false;
+      });
+    }
   }, [setPlayingState]);
 
-  // Function to handle playing remote audio
-  const handlePlayRemoteAudio = useCallback(() => {
-    if (!currentDialogue?.voiceOverUrl) return;
+  // Update the togglePlayPause function to use refs
+  const togglePlayPause = useCallback(() => {
+    if (videoRef.current) {
+      if (isPlayingRef.current) {
+        videoRef.current.pause();
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play();
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+      }
+    }
+  }, []);
 
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current = null;
-      setPlayingState(false);
+  // Update handleSyncedPlayback to use refs
+  const handleSyncedPlayback = useCallback(() => {
+    if (isSyncedPlayingRef.current) {
+      // Stop both video and audio
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      isSyncedPlayingRef.current = false;
+      isPlayingRef.current = false;
+      setIsSyncedPlaying(false);
+      setIsPlaying(false);
       return;
     }
+    
+    const playSync = async () => {
+      try {
+        if (!videoRef.current) return;
 
-    const audio = new Audio(currentDialogue.voiceOverUrl);
-    audioPlayerRef.current = audio;
+        // Create audio element
+        const audio = new Audio();
+        if (localAudioBlob) {
+          audio.src = URL.createObjectURL(localAudioBlob);
+        } else if (currentDialogue?.voiceOverUrl) {
+          audio.src = currentDialogue.voiceOverUrl;
+        } else {
+          return;
+        }
 
-    audio.addEventListener('ended', () => {
-      setPlayingState(false);
-      audioPlayerRef.current = null;
-    });
+        audioRef.current = audio;
 
-    audio.addEventListener('error', () => {
-      setPlayingState(false);
-      audioPlayerRef.current = null;
-      setError('Failed to play audio');
-    });
+        // Set up cleanup on audio end
+        audio.addEventListener('ended', () => {
+          isSyncedPlayingRef.current = false;
+          isPlayingRef.current = false;
+          setIsSyncedPlaying(false);
+          setIsPlaying(false);
+          if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.muted = false;
+          }
+          URL.revokeObjectURL(audio.src);
+          audioRef.current = null;
+        });
 
-    audio.play().then(() => {
-      setPlayingState(true);
-    }).catch(error => {
-      console.error('Failed to play audio:', error);
-      setError('Failed to play audio');
-      audioPlayerRef.current = null;
-    });
-  }, [currentDialogue?.voiceOverUrl, setPlayingState]);
+        // Mute video audio
+        videoRef.current.muted = true;
 
-  // Combined play function
-  const handlePlayAudio = useCallback(() => {
-    if (localAudioBlob) {
-      handlePlayRecording();
-    } else if (currentDialogue?.voiceOverUrl) {
-      handlePlayRemoteAudio();
-    }
-  }, [localAudioBlob, currentDialogue?.voiceOverUrl, handlePlayRecording, handlePlayRemoteAudio]);
+        // Start playback
+        videoRef.current.currentTime = 0;
+        await Promise.all([
+          videoRef.current.play(),
+          audio.play()
+        ]);
 
-  // Cleanup audio on unmount or dialogue change
+        isSyncedPlayingRef.current = true;
+        isPlayingRef.current = true;
+        setIsSyncedPlaying(true);
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('Failed to start synced playback:', error);
+        isSyncedPlayingRef.current = false;
+        isPlayingRef.current = false;
+        setIsSyncedPlaying(false);
+        setIsPlaying(false);
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.muted = false;
+        }
+      }
+    };
+
+    playSync();
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl]);
+
+  // Update video event listeners to use refs
   useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      const handlePlay = () => {
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+      };
+      const handlePause = () => {
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      };
+      const handleLoadStart = () => setIsVideoLoading(true);
+      const handleLoadEnd = () => setIsVideoLoading(false);
+
+      video.addEventListener('play', handlePlay);
+      video.addEventListener('pause', handlePause);
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleLoadEnd);
+      video.addEventListener('error', handleLoadEnd);
+      
+      return () => {
+        video.removeEventListener('play', handlePlay);
+        video.removeEventListener('pause', handlePause);
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleLoadEnd);
+        video.removeEventListener('error', handleLoadEnd);
+      };
+    }
+  }, [currentDialogue?.videoClipUrl]);
+
+  // Add a debounced dialogue change handler
+  const debouncedDialogueChange = useMemo(
+    () => debounce((dialogue: Dialogue) => {
+      if (!dialogue) return;
+      
+      logEvent('Current dialogue changed', {
+        dialogueId: dialogue.dialogNumber,
+        dialogueNumber: dialogue.dialogNumber,
+        characterName: dialogue.characterName,
+        hasVoiceOver: !!dialogue.voiceOverUrl,
+        timeStart: dialogue.timeStart,
+        timeEnd: dialogue.timeEnd,
+        index: currentDialogueIndex,
+        total: dialoguesList.length
+      });
+    }, 300),
+    [currentDialogueIndex, dialoguesList.length]
+  );
+
+  // Update the dialogue change effect
+  useEffect(() => {
+    if (!currentDialogue || currentDialogue._id === undefined) return;
+    
+    isCleaningUpRef.current = false;
+    
+    // Reset refs when dialogue changes
+    audioUpdateRef.current = null;
+    currentAudioDurationRef.current = 0;
+    isPlayingRef.current = false;
+    isSyncedPlayingRef.current = false;
+    localAudioBlobRef.current = null;
+    
+    // Clean up previous audio states
+    cleanupAudioStates();
+    
+    // Update audio duration for new dialogue if it has a voiceOver
+    if (currentDialogue.voiceOverUrl) {
+      updateAudioDuration(currentDialogue.voiceOverUrl);
+    }
+
+    // Log dialogue change with proper debounce
+    debouncedDialogueChange(currentDialogue);
+
     return () => {
+      isCleaningUpRef.current = true;
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current = null;
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      debouncedDialogueChange.cancel();
     };
-  }, [currentDialogue?._id]);
+  }, [currentDialogue?._id, cleanupAudioStates, updateAudioDuration, debouncedDialogueChange]);
 
-  // Update local audio blob when recording changes
+  // Update the audio blob state effect
   useEffect(() => {
-    setLocalAudioBlob(audioBlob);
-  }, [audioBlob]);
+    const hasLocalBlob = !!localAudioBlob;
+    const hasExistingRecording = !!currentDialogue?.voiceOverUrl;
+    
+    if (hasLocalBlob || hasExistingRecording) {
+      logEvent('Audio blob state changed:', {
+        hasLocalBlob,
+        localBlobSize: localAudioBlob?.size,
+        hasExistingRecording
+      });
+    }
+  }, [localAudioBlob, currentDialogue?.voiceOverUrl]); // Keep minimal dependencies
 
-  // Navigation handlers
+  // Remove duplicate useEffect for recording duration
+  useEffect(() => {
+    if (currentDialogue?._id && recordingDuration) {
+      setCurrentRecordingDuration(recordingDuration);
+      
+      // Store in localStorage if needed
+      if (maxDuration) {
+        const key = `recording_duration_${currentDialogue.dialogNumber}`;
+        localStorage.setItem(key, recordingDuration.toString());
+      }
+    }
+  }, [currentDialogue?._id, recordingDuration, maxDuration]);
+
+  // Add hasChanges function after state initialization
   const hasChanges = useCallback(() => {
     return localAudioBlob !== null;
   }, [localAudioBlob]);
 
+  // Update navigation handlers
   const handleNext = useCallback(() => {
     if (hasChanges()) {
       setConfirmationType('navigation');
@@ -722,9 +934,10 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       setPendingNavigationIndex(currentDialogueIndex + 1);
       setShowConfirmation(true);
     } else if (currentDialogueIndex < dialoguesList.length - 1) {
+      cleanupAudioStates();
       setCurrentDialogueIndex(prev => prev + 1);
     }
-  }, [currentDialogueIndex, dialoguesList.length, hasChanges, setConfirmationType, setNavigationDirection, setPendingNavigationIndex, setShowConfirmation]);
+  }, [currentDialogueIndex, dialoguesList.length, hasChanges, cleanupAudioStates]);
 
   const handlePrevious = useCallback(() => {
     if (currentDialogueIndex > 0) {
@@ -734,10 +947,11 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         setPendingNavigationIndex(currentDialogueIndex - 1);
         setShowConfirmation(true);
       } else {
+        cleanupAudioStates();
         setCurrentDialogueIndex(prev => prev - 1);
       }
     }
-  }, [currentDialogueIndex, hasChanges]);
+  }, [currentDialogueIndex, hasChanges, cleanupAudioStates]);
 
   const handleDeleteRecording = async () => {
     if (!currentDialogue) return;
@@ -801,6 +1015,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
   const handleDiscardChanges = async () => {
     try {
+      isCleaningUpRef.current = false;
       cleanupAudioStates();
 
       if (confirmationType === 'navigation') {
@@ -820,43 +1035,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       setTimeout(() => setError(''), 3000);
     }
   };
-
-  // Video control functions
-  const togglePlayPause = useCallback(() => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  }, [isPlaying]);
-
-  // Add video event listeners
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      const handlePlay = () => setIsPlaying(true);
-      const handlePause = () => setIsPlaying(false);
-      const handleLoadStart = () => setIsVideoLoading(true);
-      const handleLoadEnd = () => setIsVideoLoading(false);
-
-      video.addEventListener('play', handlePlay);
-      video.addEventListener('pause', handlePause);
-      video.addEventListener('loadstart', handleLoadStart);
-      video.addEventListener('canplay', handleLoadEnd);
-      video.addEventListener('error', handleLoadEnd);
-      
-      return () => {
-        video.removeEventListener('play', handlePlay);
-        video.removeEventListener('pause', handlePause);
-        video.removeEventListener('loadstart', handleLoadStart);
-        video.removeEventListener('canplay', handleLoadEnd);
-        video.removeEventListener('error', handleLoadEnd);
-      };
-    }
-  }, [currentDialogue?.videoClipUrl]);
 
   // First, combine the duplicate useEffect for maxDuration and currentIndex
   useEffect(() => {
@@ -884,42 +1062,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
     }
   }, [currentDialogue, dialoguesList]); // Remove calculateDuration from deps as it's stable
 
-  // Update the dialogue change effect
-  useEffect(() => {
-    if (!currentDialogue || currentDialogue._id === undefined) return;
-
-    const dialogueId = currentDialogue._id;
-    
-    // Clean up previous audio states
-    cleanupAudioStates();
-    
-    // Update audio duration for new dialogue if it has a voiceOver
-    if (currentDialogue.voiceOverUrl) {
-      updateAudioDuration(currentDialogue.voiceOverUrl);
-    }
-
-    // Log dialogue change with debounce
-    debouncedLogEvent('Current dialogue changed', {
-      dialogueId: currentDialogue.dialogNumber,
-      dialogueNumber: currentDialogue.dialogNumber,
-      characterName: currentDialogue.characterName,
-      hasVoiceOver: !!currentDialogue.voiceOverUrl,
-      timeStart: currentDialogue.timeStart,
-      timeEnd: currentDialogue.timeEnd,
-      index: currentDialogueIndex,
-      total: dialoguesList.length
-    });
-
-    return () => {
-      cleanupAudioStates();
-      debouncedLogEvent.cancel(); // Cancel any pending logs on cleanup
-    };
-  }, [
-    currentDialogue?._id, // Only depend on the ID change
-    cleanupAudioStates,
-    updateAudioDuration
-  ]); // Remove unnecessary dependencies
-
   // Update the audio blob state effect
   useEffect(() => {
     const hasLocalBlob = !!localAudioBlob;
@@ -933,103 +1075,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       });
     }
   }, [localAudioBlob, currentDialogue?.voiceOverUrl]); // Keep minimal dependencies
-
-  // Remove duplicate useEffect for recording duration
-  useEffect(() => {
-    if (currentDialogue?._id && recordingDuration) {
-      setCurrentRecordingDuration(recordingDuration);
-      
-      // Store in localStorage if needed
-      if (maxDuration) {
-        const key = `recording_duration_${currentDialogue.dialogNumber}`;
-        localStorage.setItem(key, recordingDuration.toString());
-      }
-    }
-  }, [currentDialogue?._id, recordingDuration, maxDuration]);
-
-  // Add function to handle synced playback
-  const handleSyncedPlayback = useCallback(() => {
-    if (isSyncedPlaying) {
-      // Stop both video and audio
-      if (videoRef.current) {
-        videoRef.current.pause();
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setIsSyncedPlaying(false);
-      setIsPlaying(false);
-      return;
-    }
-    
-    const playSync = async () => {
-      try {
-        if (!videoRef.current) return;
-
-        // Create audio element
-        const audio = new Audio();
-      if (localAudioBlob) {
-          audio.src = URL.createObjectURL(localAudioBlob);
-        } else if (currentDialogue?.voiceOverUrl) {
-          audio.src = currentDialogue.voiceOverUrl;
-        } else {
-          return;
-        }
-
-        audioRef.current = audio;
-
-        // Set up cleanup on audio end
-        audio.addEventListener('ended', () => {
-          setIsSyncedPlaying(false);
-          setIsPlaying(false);
-          if (videoRef.current) {
-            videoRef.current.pause();
-            videoRef.current.muted = false; // Restore video audio
-          }
-          URL.revokeObjectURL(audio.src);
-          audioRef.current = null;
-        });
-
-        // Mute video audio
-        videoRef.current.muted = true;
-
-        // Start playback
-        videoRef.current.currentTime = 0;
-        await Promise.all([
-          videoRef.current.play(),
-          audio.play()
-        ]);
-
-        setIsSyncedPlaying(true);
-        setIsPlaying(true);
-      } catch (error) {
-        console.error('Failed to start synced playback:', error);
-        setIsSyncedPlaying(false);
-        setIsPlaying(false);
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current = null;
-        }
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.muted = false; // Restore video audio on error
-        }
-      }
-    };
-
-    playSync();
-  }, [localAudioBlob, currentDialogue?.voiceOverUrl, isSyncedPlaying]);
-
-  // Add cleanup for synced playback
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, [currentDialogue?._id]);
 
   // Add recording state logging
   useEffect(() => {
@@ -1057,26 +1102,20 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
 
   // Add cleanup effect for dialogue changes
   useEffect(() => {
-    // Clean up audio when switching dialogues
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current = null;
-    }
-    
-    // Reset states
-    setIsPlaying(false);
-    setLocalAudioBlob(null);
-    
     return () => {
-      // Cleanup on unmount
+      isCleaningUpRef.current = true;
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current = null;
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, [currentDialogue?._id]);
 
-  // Update handleApproveAndSave to include processing and dual upload
+  // Update handleApproveAndSave to fix recording upload
   const handleApproveAndSave = async () => {
     if (!currentDialogue || !currentDialogue.dialogNumber) {
       logEvent('Save attempted with invalid dialogue', {
@@ -1127,27 +1166,36 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
             noiseReductionFormData,
             {
               headers: { 'Content-Type': 'multipart/form-data' },
-              responseType: 'blob'
+              responseType: 'blob',
+              timeout: 60000 // Increase timeout for processing
             }
           );
 
           // Prepare form data with both audio versions
           const uploadFormData = new FormData();
-          uploadFormData.append('originalAudio', localAudioBlob);
-          uploadFormData.append('processedAudio', processedAudioResponse.data);
-          uploadFormData.append('dialogueId', currentDialogue.dialogNumber);
+          uploadFormData.append('originalAudio', new Blob([localAudioBlob], { type: 'audio/wav' }));
+          uploadFormData.append('processedAudio', new Blob([processedAudioResponse.data], { type: 'audio/wav' }));
+          uploadFormData.append('dialogueId', currentDialogue._id?.toString() || "");
+          uploadFormData.append('dialogNumber', currentDialogue.dialogNumber);
           uploadFormData.append('projectId', projectId);
           uploadFormData.append('sceneNumber', sceneNumber);
           uploadFormData.append('characterName', currentDialogue.characterName || 'Unknown');
 
-          // Upload both versions
+          // Upload both versions with increased timeout
           const uploadResponse = await axios.post('/api/voice-over/upload-both', uploadFormData, {
             headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 30000
+            timeout: 60000, // Increase timeout for upload
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total!);
+              logEvent('Upload progress', {
+                dialogueId: currentDialogue.dialogNumber,
+                progress: percentCompleted
+              });
+            }
           });
 
           if (!uploadResponse.data?.processedUrl) {
-            throw new Error('Failed to upload audio');
+            throw new Error('Failed to upload audio: No URL returned');
           }
 
           // Update voiceOverUrl
@@ -1194,13 +1242,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
             });
             setCurrentDialogueIndex(pendingNavigationIndex);
             setPendingNavigationIndex(null);
-          } else if (currentDialogueIndex < dialoguesList.length - 1) {
-            logEvent('Auto-advancing to next dialogue', {
-              from: currentDialogueIndex,
-              to: currentDialogueIndex + 1,
-              totalDialogues: dialoguesList.length
-            });
-            setCurrentDialogueIndex(prev => prev + 1);
           }
 
         } catch (uploadError: any) {
@@ -1208,9 +1249,10 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
             dialogueId: currentDialogue.dialogNumber,
             error: uploadError.message,
             status: uploadError.response?.status,
+            responseData: uploadError.response?.data,
             timestamp: new Date().toISOString()
           }, 'error');
-          throw new Error('Failed to process and upload voice-over recording: ' + uploadError.message);
+          throw new Error(`Failed to process and upload voice-over recording: ${uploadError.message}`);
         }
       }
       
@@ -1247,7 +1289,6 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
             setPendingNavigationIndex(currentDialogueIndex - 1);
             setShowConfirmation(true);
           } else {
-            // Clean up audio states before navigation
             cleanupAudioStates();
             setCurrentDialogueIndex(prev => prev - 1);
           }
@@ -1255,13 +1296,12 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
       } else {
         // Swipe left - go to next
         if (currentDialogueIndex < dialoguesList.length - 1) {
-          if (localAudioBlob) {
+          if (hasChanges()) {
             setConfirmationType('navigation');
             setNavigationDirection('next');
             setPendingNavigationIndex(currentDialogueIndex + 1);
             setShowConfirmation(true);
           } else {
-            // Clean up audio states before navigation
             cleanupAudioStates();
             setCurrentDialogueIndex(prev => prev + 1);
           }
@@ -1366,7 +1406,7 @@ export default function VoiceOverDialogueView({ dialogues: initialDialogues, pro
         isPlayingRecording={isPlayingRecording}
         startRecording={startRecording}
         stopRecording={stopRecording}
-        handlePlayRecording={handlePlayAudio}
+        handlePlayRecording={handlePlayRecording}
         hasRecording={!!localAudioBlob || !!currentDialogue?.voiceOverUrl}
         hasExistingRecording={!!currentDialogue?.voiceOverUrl}
         currentIndex={currentDialogueIndex}

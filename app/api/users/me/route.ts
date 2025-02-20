@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { headers } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,21 +9,58 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions)
     
+    console.log('Session check details:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      nextAuthUrl: process.env.NEXTAUTH_URL
+    })
+    
     if (!session) {
-      console.error('No session found')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ 
+        error: 'No session found',
+        debug: {
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV
+        }
+      }, { status: 401 })
     }
 
     if (!session.user) {
-      console.error('No user in session:', session)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ 
+        error: 'No user in session',
+        debug: {
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV
+        }
+      }, { status: 401 })
     }
 
-    return NextResponse.json(session.user)
+    return NextResponse.json({
+      ...session.user,
+      debug: {
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV
+      }
+    })
   } catch (error) {
-    console.error('Error fetching user data:', error)
+    console.error('Error in /api/users/me:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    })
+    
     return NextResponse.json(
-      { error: 'Failed to fetch user data' },
+      { 
+        error: 'Failed to fetch user data',
+        debug: {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV
+        }
+      },
       { status: 500 }
     )
   }

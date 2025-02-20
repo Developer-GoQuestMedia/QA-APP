@@ -67,47 +67,60 @@ export default function Login() {
           timestamp: new Date().toISOString()
         })
         setError('Invalid username or password')
-      } else {
-        console.log('Login successful, fetching user data')
-        
-        // Add retry logic for fetching user data
-        let retryCount = 0;
-        const maxRetries = 3;
-        const retryDelay = 1000; // 1 second
+        setIsLoading(false)
+        return
+      }
 
-        while (retryCount < maxRetries) {
-          try {
-            // Get user data including session ID
-            const response = await axios.get('/api/users/session')
-            const userRole = response.data.role as UserRole
-            const sessionId = response.data.sessionId
+      console.log('Login successful, fetching user data')
+      
+      // Add retry logic for fetching user data
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 1000; // 1 second
+      let lastError = null;
 
-            console.log('User data fetched:', {
-              role: userRole,
-              sessionId,
-              timestamp: new Date().toISOString(),
-              retryAttempt: retryCount
-            })
-
-            if (userRole in dashboardRoutes) {
-              const route = dashboardRoutes[userRole]
-              // Store session ID in localStorage for session tracking
-              localStorage.setItem('sessionId', sessionId)
-              // Use router.push for navigation
-              router.push(route)
-              return; // Exit on success
-            } else {
-              setError('Invalid role configuration')
-              break;
+      while (retryCount < maxRetries) {
+        try {
+          // Get user data including session ID
+          const response = await axios.get('/api/users/session', {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
             }
-          } catch (err) {
-            retryCount++;
-            if (retryCount === maxRetries) {
-              throw err; // Throw on final retry
-            }
-            console.log(`Retry attempt ${retryCount} for fetching user data`)
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          })
+
+          const userRole = response.data.role as UserRole
+          const sessionId = response.data.sessionId
+
+          console.log('User data fetched:', {
+            role: userRole,
+            sessionId,
+            timestamp: new Date().toISOString(),
+            retryAttempt: retryCount
+          })
+
+          if (userRole in dashboardRoutes) {
+            const route = dashboardRoutes[userRole]
+            // Store session ID in localStorage for session tracking
+            localStorage.setItem('sessionId', sessionId)
+            // Use router.push for navigation
+            router.push(route)
+            return
+          } else {
+            throw new Error('Invalid role configuration')
           }
+        } catch (err) {
+          lastError = err
+          retryCount++;
+          console.log(`Retry attempt ${retryCount} for fetching user data:`, {
+            error: err instanceof Error ? err.message : 'Unknown error',
+            timestamp: new Date().toISOString()
+          })
+          
+          if (retryCount === maxRetries) {
+            throw lastError
+          }
+          await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount)); // Exponential backoff
         }
       }
     } catch (err) {
@@ -117,7 +130,7 @@ export default function Login() {
         timestamp: new Date().toISOString(),
         type: err instanceof Error ? err.constructor.name : typeof err
       })
-      setError('An error occurred during login')
+      setError('An error occurred during login. Please try again.')
     } finally {
       console.log('Login attempt completed:', {
         timestamp: new Date().toISOString(),

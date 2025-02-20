@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { headers } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +44,7 @@ export async function GET() {
       }
     })
   } catch (error) {
-    console.error('Error in /api/users/me:', {
+    console.error('Error in /api/users/session:', {
       error: error instanceof Error ? error.message : 'Unknown error',
       type: error instanceof Error ? error.constructor.name : typeof error,
       environment: process.env.NODE_ENV,

@@ -78,7 +78,7 @@ export default function Login() {
         while (retryCount < maxRetries) {
           try {
             // Get user data including session ID
-            const response = await axios.get('/api/users/me')
+            const response = await axios.get('/api/users/session')
             const userRole = response.data.role as UserRole
             const sessionId = response.data.sessionId
 

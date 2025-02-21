@@ -4,8 +4,13 @@ import { authOptions } from '@/lib/auth'
 import { headers } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET() {
+  const headersList = headers()
+  const host = headersList.get('host')
+  const origin = headersList.get('origin')
+  
   try {
     const session = await getServerSession(authOptions)
     
@@ -17,9 +22,10 @@ export async function GET() {
       nextAuthUrl: process.env.NEXTAUTH_URL,
       vercelUrl: process.env.VERCEL_URL,
       headers: {
-        host: headers().get('host'),
-        origin: headers().get('origin'),
-        referer: headers().get('referer')
+        host,
+        origin,
+        referer: headersList.get('referer'),
+        cookie: headersList.get('cookie')?.substring(0, 100) + '...' // Log partial cookie for debugging
       }
     })
     
@@ -30,12 +36,16 @@ export async function GET() {
           timestamp: new Date().toISOString(),
           environment: process.env.NODE_ENV,
           nextAuthUrl: process.env.NEXTAUTH_URL,
-          vercelUrl: process.env.VERCEL_URL
+          vercelUrl: process.env.VERCEL_URL,
+          host,
+          origin
         }
       }, { 
         status: 401,
         headers: {
-          'Cache-Control': 'no-store, max-age=0'
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       })
     }
@@ -47,12 +57,16 @@ export async function GET() {
           timestamp: new Date().toISOString(),
           environment: process.env.NODE_ENV,
           nextAuthUrl: process.env.NEXTAUTH_URL,
-          vercelUrl: process.env.VERCEL_URL
+          vercelUrl: process.env.VERCEL_URL,
+          host,
+          origin
         }
       }, { 
         status: 401,
         headers: {
-          'Cache-Control': 'no-store, max-age=0'
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       })
     }
@@ -63,11 +77,15 @@ export async function GET() {
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
         nextAuthUrl: process.env.NEXTAUTH_URL,
-        vercelUrl: process.env.VERCEL_URL
+        vercelUrl: process.env.VERCEL_URL,
+        host,
+        origin
       }
     }, {
       headers: {
-        'Cache-Control': 'no-store, max-age=0'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     })
   } catch (error) {
@@ -77,7 +95,9 @@ export async function GET() {
       environment: process.env.NODE_ENV,
       timestamp: new Date().toISOString(),
       nextAuthUrl: process.env.NEXTAUTH_URL,
-      vercelUrl: process.env.VERCEL_URL
+      vercelUrl: process.env.VERCEL_URL,
+      host,
+      origin
     })
     
     return NextResponse.json(
@@ -88,13 +108,17 @@ export async function GET() {
           timestamp: new Date().toISOString(),
           environment: process.env.NODE_ENV,
           nextAuthUrl: process.env.NEXTAUTH_URL,
-          vercelUrl: process.env.VERCEL_URL
+          vercelUrl: process.env.VERCEL_URL,
+          host,
+          origin
         }
       },
       { 
         status: 500,
         headers: {
-          'Cache-Control': 'no-store, max-age=0'
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       }
     )

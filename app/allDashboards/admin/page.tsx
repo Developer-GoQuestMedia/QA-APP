@@ -1,107 +1,107 @@
 'use client'
 
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useState, useEffect, useCallback } from 'react'
 import AdminView from '@/components/Admin/AdminView'
-// import DashboardLayout from '@/components/DashboardLayout'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import { useRouter } from 'next/navigation'
 import { Project } from '@/types/project'
-import axios from 'axios'
 
-export default function Page() {
-  const { data: session, status } = useSession()
+export default function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const { data: session, status } = useSession()
+  const router = useRouter()
 
-  // If you want to ensure fetchProjects has stable identity, wrap in useCallback:
-  // Otherwise, simple inline definition is okay.
+  // Memoize user info to prevent unnecessary re-renders
+  const userInfo = useMemo(() => ({
+    role: session?.user?.role as string | undefined,
+    userId: session?.user?.id as string | undefined
+  }), [session?.user?.role, session?.user?.id])
+
+  // Fetch projects only when session is authenticated and user info is available
   const fetchProjects = useCallback(async () => {
-    try {
-      console.log('Admin dashboard: Fetching projects...', {
-        timestamp: new Date().toISOString(),
-        userId: session?.user?.id,
-        userRole: session?.user?.role
-      })
+    if (!userInfo.userId || !userInfo.role) return
 
-      const { data } = await axios.get('/api/admin/projects')
-      const projectsWithDates = data.data.map((project: Omit<Project, 'updatedAt' | 'createdAt'> & {
-        updatedAt: string;
-        createdAt?: string;
-        _id: string;
-      }) => ({
-        ...project,
-        updatedAt: new Date(project.updatedAt),
-        createdAt: project.createdAt ? new Date(project.createdAt) : undefined
-      }))
+    console.log('Admin dashboard: Fetching projects...', {
+      timestamp: new Date().toISOString(),
+      userId: userInfo.userId,
+      userRole: userInfo.role
+    })
+
+    try {
+      const response = await fetch('/api/projects')
+      const data = await response.json()
 
       console.log('Admin dashboard: Projects fetched successfully:', {
         timestamp: new Date().toISOString(),
-        projectCount: projectsWithDates.length,
-        projectIds: projectsWithDates.map((p: { _id: string }) => p._id),
-        userRole: session?.user?.role
+        projectCount: data.length,
+        projectIds: data.map((p: Project) => p._id),
+        userRole: userInfo.role
       })
 
-      setProjects(projectsWithDates)
+      setProjects(data)
     } catch (error) {
       console.error('Admin dashboard: Error fetching projects:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
-        userId: session?.user?.id,
-        userRole: session?.user?.role
+        error,
+        userRole: userInfo.role
       })
+    } finally {
+      setIsLoading(false)
     }
-  }, [session?.user?.id, session?.user?.role])
+  }, [userInfo.userId, userInfo.role])
 
+  // Handle authentication and role check
   useEffect(() => {
     console.log('Admin dashboard: Component mounted', {
       timestamp: new Date().toISOString(),
       sessionStatus: status,
-      userRole: session?.user?.role,
-      userId: session?.user?.id
+      userRole: userInfo.role,
+      userId: userInfo.userId
     })
 
+    if (status === 'unauthenticated') {
+      router.replace('/login')
+      return
+    }
+
     if (status === 'authenticated') {
+      if (userInfo.role !== 'admin') {
+        console.error('Admin dashboard: Unauthorized access attempt', {
+          timestamp: new Date().toISOString(),
+          userRole: userInfo.role
+        })
+        router.replace('/unauthorized')
+        return
+      }
       fetchProjects()
     }
-    // We only run once on authentication check
-  }, [status, fetchProjects, session?.user?.role, session?.user?.id])
+  }, [status, userInfo.role, router, fetchProjects])
 
-  // Removed the second effect that was calling `fetchProjects` again:
-  // useEffect(() => {
-  //   fetchProjects();
-  // }, [fetchProjects]);
-
-  if (status === 'loading') {
+  // Show loading state
+  if (status === 'loading' || !userInfo.role) {
     console.log('Admin dashboard: Loading state', {
       timestamp: new Date().toISOString(),
       sessionStatus: status
     })
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="text-foreground">Loading session...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
-  if (status === 'unauthenticated') {
-    console.log('Admin dashboard: Unauthenticated access attempt', {
-      timestamp: new Date().toISOString(),
-      pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown'
-    })
-    return null
-  }
-
+  // Show dashboard
   console.log('Admin dashboard: Rendering dashboard', {
     timestamp: new Date().toISOString(),
     projectCount: projects.length,
-    userRole: session?.user?.role,
-    userId: session?.user?.id
+    userRole: userInfo.role,
+    userId: userInfo.userId
   })
 
   return (
-    // <DashboardLayout title="Admin Dashboard q">
-      <AdminView projects={projects} refetchProjects={fetchProjects} />
-    // </DashboardLayout>
+    <div className="container mx-auto px-4">
+      <AdminView 
+        projects={projects} 
+        refetchProjects={fetchProjects}
+      />
+    </div>
   )
 }

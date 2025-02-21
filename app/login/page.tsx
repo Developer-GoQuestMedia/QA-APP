@@ -7,13 +7,14 @@ import axios from 'axios'
 import ThemeToggle from '../components/ThemeToggle'
 
 // Update the route type to use Next.js route type
-type DashboardRoute = 
+type AppRoute = 
   | '/allDashboards/admin'
   | '/allDashboards/director'
   | '/allDashboards/srDirector'
   | '/allDashboards/transcriber'
   | '/allDashboards/translator'
   | '/allDashboards/voice-over'
+  | '/unauthorized'
 
 const dashboardRoutes = {
   admin: '/allDashboards/admin',
@@ -26,140 +27,179 @@ const dashboardRoutes = {
 
 type UserRole = keyof typeof dashboardRoutes
 
+// Helper function to handle route navigation safely
+const navigateToRoute = (router: ReturnType<typeof useRouter>, path: AppRoute | '/unauthorized') => {
+  router.push(path)
+}
+
 // Helper function to get redirect path based on role
-const getRoleBasedRedirectPath = (role: string): string => {
+const getRoleBasedRedirectPath = (role: string): AppRoute => {
   if (role in dashboardRoutes) {
-    return dashboardRoutes[role as UserRole];
+    return dashboardRoutes[role as UserRole] as AppRoute;
   }
   console.error('Invalid role for redirect:', role);
   return '/unauthorized';
 };
-
-// Helper function to handle route navigation safely
-const navigateToRoute = (router: ReturnType<typeof useRouter>, path: string) => {
-  // Using replace to avoid adding to history stack
-  window.location.href = path
-}
 
 export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { data: session, status, update } = useSession()
 
+  // Debug logging for session state changes
   useEffect(() => {
-    // If we're already authenticated, redirect to the appropriate dashboard
-    if (status === 'authenticated' && session?.user?.role) {
-      const redirectPath = getRoleBasedRedirectPath(session.user.role);
-      navigateToRoute(router, redirectPath);
+    console.log('[Session Debug]', {
+      timestamp: new Date().toISOString(),
+      status,
+      hasSession: !!session,
+      userRole: session?.user?.role,
+      currentPath: window.location.pathname
+    })
+  }, [session, status])
+
+  // Handle client-side initialization
+  useEffect(() => {
+    const startTime = performance.now()
+    setIsClient(true)
+    console.log('[Client Init]', {
+      timestamp: new Date().toISOString(),
+      timeToInit: `${(performance.now() - startTime).toFixed(2)}ms`,
+      currentPath: window.location.pathname
+    })
+  }, [])
+
+  const handleNavigation = async (role: string) => {
+    try {
+      const redirectPath = getRoleBasedRedirectPath(role)
+      console.log('[Navigation Attempt]', {
+        timestamp: new Date().toISOString(),
+        redirectPath,
+        currentPath: window.location.pathname,
+        method: 'direct'
+      })
+      
+      // Force a hard navigation
+      window.location.href = redirectPath
+    } catch (err) {
+      console.error('[Navigation Error]', {
+        timestamp: new Date().toISOString(),
+        error: err,
+        currentPath: window.location.pathname
+      })
     }
-  }, [status, session, router])
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    
-    console.log('Login attempt initiated:', { timestamp: new Date().toISOString() });
-    
+    e.preventDefault()
+    if (!username || !password) return
+
+    const loginStartTime = performance.now()
+    console.log('[Login Start]', {
+      timestamp: new Date().toISOString(),
+      username,
+      currentPath: window.location.pathname
+    })
+
     try {
-      console.log('Calling NextAuth signIn with credentials');
+      setError('')
+      setIsLoading(true)
+
+      const signInStartTime = performance.now()
       const result = await signIn('credentials', {
         username,
         password,
-        redirect: false,
-      });
-      
-      console.log('SignIn result:', {
-        ok: result?.ok,
-        error: result?.error,
-        timestamp: new Date().toISOString()
-      });
+        redirect: false
+      })
+      console.log('[SignIn Complete]', {
+        timestamp: new Date().toISOString(),
+        hasError: !!result?.error,
+        timeToSignIn: `${(performance.now() - signInStartTime).toFixed(2)}ms`,
+        currentPath: window.location.pathname
+      })
 
-      if (result?.ok) {
-        console.log('Login successful, fetching user data');
-        let retryCount = 0;
-        const maxRetries = 3;
-        const retryDelay = 1000; // 1 second
-
-        while (retryCount < maxRetries) {
-          try {
-            const response = await fetch('/api/users/session', {
-              method: 'GET',
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-              },
-              credentials: 'include'
-            });
-
-            if (response.ok) {
-              const userData = await response.json();
-              console.log('User data fetched successfully:', {
-                role: userData.role,
-                username: userData.username,
-                timestamp: new Date().toISOString()
-              });
-              
-              const redirectPath = getRoleBasedRedirectPath(userData.role);
-              navigateToRoute(router, redirectPath);
-              return;
-            } else {
-              console.log(`Retry attempt ${retryCount + 1} for fetching user data:`, {
-                status: response.status,
-                statusText: response.statusText,
-                timestamp: new Date().toISOString()
-              });
-              retryCount++;
-              if (retryCount < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching user data:', {
-              error: error instanceof Error ? error.message : 'Unknown error',
-              attempt: retryCount + 1,
-              timestamp: new Date().toISOString()
-            });
-            retryCount++;
-            if (retryCount < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-            }
-          }
-        }
-        
-        console.error('Failed to fetch user data after retries');
-        setError('Failed to complete login process. Please try again.');
-      } else {
-        console.error('Login failed:', {
-          error: result?.error,
-          timestamp: new Date().toISOString()
-        });
-        setError(result?.error || 'Invalid credentials');
+      if (result?.error) {
+        setError('Invalid username or password')
+        return
       }
-    } catch (error) {
-      console.error('Unexpected login error:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        type: error instanceof Error ? error.constructor.name : typeof error,
-        timestamp: new Date().toISOString()
-      });
-      setError('An unexpected error occurred. Please try again.');
+
+      // Force session update after successful login
+      const updateStartTime = performance.now()
+      console.log('[Session Update Start]', {
+        timestamp: new Date().toISOString(),
+        currentPath: window.location.pathname
+      })
+      
+      await update()
+
+      // Get the updated session
+      const updatedSession = await fetch('/api/auth/session')
+      const sessionData = await updatedSession.json()
+      
+      console.log('[Session Update Complete]', {
+        timestamp: new Date().toISOString(),
+        timeToUpdate: `${(performance.now() - updateStartTime).toFixed(2)}ms`,
+        totalLoginTime: `${(performance.now() - loginStartTime).toFixed(2)}ms`,
+        currentPath: window.location.pathname,
+        sessionData
+      })
+
+      // Immediately navigate if we have a role
+      if (sessionData?.user?.role) {
+        await handleNavigation(sessionData.user.role)
+      } else {
+        console.error('[Session Error]', {
+          timestamp: new Date().toISOString(),
+          error: 'No role found in session after update',
+          sessionData
+        })
+      }
+
+    } catch (err) {
+      console.error('[Login Error]', {
+        timestamp: new Date().toISOString(),
+        error: err,
+        timeElapsed: `${(performance.now() - loginStartTime).toFixed(2)}ms`,
+        currentPath: window.location.pathname
+      })
+      setError('An error occurred during login')
     } finally {
-      setIsLoading(false);
-      console.log('Login attempt completed:', { timestamp: new Date().toISOString() });
+      setIsLoading(false)
     }
-  };
+  }
+
+  // Show loading state during initial client-side render
+  if (!isClient) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="p-8 rounded-lg shadow-lg w-full max-w-md">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-300 rounded w-3/4 mx-auto"></div>
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-300 rounded"></div>
+              <div className="h-10 bg-gray-300 rounded"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-300 rounded"></div>
+              <div className="h-10 bg-gray-300 rounded"></div>
+            </div>
+            <div className="h-10 bg-gray-300 rounded"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="fixed top-4 right-4">
+      <div className="absolute p-8 top-0 right-0">
         <ThemeToggle />
       </div>
-      
       <div className="bg-card p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6 text-foreground">Login</h1>
+        <h1 className="text-2xl font-bold text-center mb-6 text-foreground">Login to QA App</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
@@ -172,6 +212,7 @@ export default function Login() {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full p-2 rounded-md border bg-background text-foreground"
               required
+              suppressHydrationWarning
             />
           </div>
           <div>
@@ -185,21 +226,21 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-2 rounded-md border bg-background text-foreground"
               required
+              suppressHydrationWarning
             />
           </div>
           {error && (
-            <div className="text-red-500 text-sm text-center">
-              {error}
-            </div>
+            <div className="text-red-500 text-sm text-center">{error}</div>
           )}
           <button
             type="submit"
             disabled={isLoading}
             className={`w-full py-2 rounded-md text-white transition-colors ${
-              isLoading
-                ? 'bg-gray-400 cursor-not-allowed'
+              isLoading 
+                ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-primary hover:bg-primary/90'
             }`}
+            suppressHydrationWarning
           >
             {isLoading ? 'Logging in...' : 'Login'}
           </button>

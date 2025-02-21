@@ -8,47 +8,60 @@ export function getRedisClient() {
     return redisClient;
   }
 
-  if (process.env.NODE_ENV === 'production' && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    // Production: Use Upstash Redis REST client
-    redisClient = new UpstashRedis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-
-    console.log('Initialized Upstash Redis client for production');
-  } else {
-    // Development or fallback: Use local Redis
-    redisClient = new IORedis({
-      host: '127.0.0.1',
-      port: 6379,
-      maxRetriesPerRequest: null,
-      retryStrategy: (times: number) => {
-        if (times > 3) {
-          console.error('Redis connection failed after 3 retries');
-          return null;
-        }
-        const delay = Math.min(times * 200, 1000);
-        return delay;
-      },
-      commandTimeout: 5000,
-      maxLoadingRetryTime: 3000,
-      enableOfflineQueue: true,
-      connectTimeout: 10000,
-      lazyConnect: true
-    });
-
-    // For local Redis only, try to set eviction policy
-    if (redisClient instanceof IORedis) {
-      redisClient.config('SET', 'maxmemory', '2gb').catch(() => {
-        console.warn('Failed to set Redis maxmemory configuration');
+  // Check for Upstash Redis configuration
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    // Use Upstash Redis REST client
+    try {
+      redisClient = new UpstashRedis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      
-      redisClient.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
-        console.warn('Failed to set Redis eviction policy');
-      });
+
+      console.log('Initialized Upstash Redis client');
+    } catch (error) {
+      console.error('Failed to initialize Upstash Redis client:', error);
+      throw error;
     }
+  } else if (process.env.NODE_ENV !== 'production') {
+    // Development: Use local Redis
+    try {
+      redisClient = new IORedis({
+        host: '127.0.0.1',
+        port: 6379,
+        maxRetriesPerRequest: null,
+        retryStrategy: (times: number) => {
+          if (times > 3) {
+            console.error('Redis connection failed after 3 retries');
+            return null;
+          }
+          const delay = Math.min(times * 200, 1000);
+          return delay;
+        },
+        commandTimeout: 5000,
+        maxLoadingRetryTime: 3000,
+        enableOfflineQueue: true,
+        connectTimeout: 10000,
+        lazyConnect: true
+      });
 
-    console.log('Initialized local Redis client for development');
+      // For local Redis only, try to set eviction policy
+      if (redisClient instanceof IORedis) {
+        redisClient.config('SET', 'maxmemory', '2gb').catch(() => {
+          console.warn('Failed to set Redis maxmemory configuration');
+        });
+        
+        redisClient.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
+          console.warn('Failed to set Redis eviction policy');
+        });
+      }
+
+      console.log('Initialized local Redis client for development');
+    } catch (error) {
+      console.error('Failed to initialize local Redis client:', error);
+      throw error;
+    }
+  } else {
+    throw new Error('Redis configuration missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables');
   }
 
   return redisClient;

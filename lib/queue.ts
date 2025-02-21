@@ -7,38 +7,39 @@ import type { Redis } from 'ioredis';
  * Redis connection configuration
  */
 function getRedisConfig() {
-  if (process.env.NODE_ENV === 'production') {
-    // Production configuration (Upstash)
-    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      throw new Error('Missing required Redis configuration for production');
-    }
-    
-    const redisUrl = `redis://default:${process.env.UPSTASH_REDIS_REST_TOKEN}@${new URL(process.env.UPSTASH_REDIS_REST_URL).host}:6379`;
-    const url = new URL(redisUrl);
-    
-    return {
-      host: url.hostname,
-      port: parseInt(url.port),
-      username: url.username,
-      password: url.password,
-      tls: { rejectUnauthorized: false },
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-      commandTimeout: 5000,
-      maxLoadingRetryTime: 3000,
-      enableOfflineQueue: true,
-      connectTimeout: 10000,
-      lazyConnect: true,
-      retryStrategy: (times: number) => {
-        if (times > 3) {
-          console.error('Redis connection failed after 3 retries');
-          return null;
+  // Check for Upstash Redis configuration
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      const redisUrl = `redis://default:${process.env.UPSTASH_REDIS_REST_TOKEN}@${new URL(process.env.UPSTASH_REDIS_REST_URL).host}:6379`;
+      const url = new URL(redisUrl);
+      
+      return {
+        host: url.hostname,
+        port: parseInt(url.port),
+        username: url.username,
+        password: url.password,
+        tls: { rejectUnauthorized: false },
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        commandTimeout: 5000,
+        maxLoadingRetryTime: 3000,
+        enableOfflineQueue: true,
+        connectTimeout: 10000,
+        lazyConnect: true,
+        retryStrategy: (times: number) => {
+          if (times > 3) {
+            console.error('Redis connection failed after 3 retries');
+            return null;
+          }
+          const delay = Math.min(times * 200, 1000);
+          return delay;
         }
-        const delay = Math.min(times * 200, 1000);
-        return delay;
-      }
-    };
-  } else {
+      };
+    } catch (error) {
+      console.error('Failed to parse Redis URL:', error);
+      throw error;
+    }
+  } else if (process.env.NODE_ENV !== 'production') {
     // Local development configuration
     return {
       host: '127.0.0.1',
@@ -59,6 +60,8 @@ function getRedisConfig() {
         return delay;
       }
     };
+  } else {
+    throw new Error('Redis configuration missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables');
   }
 }
 

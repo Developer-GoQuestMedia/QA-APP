@@ -8,11 +8,11 @@ export function getRedisClient() {
     return redisClient;
   }
 
-  if (process.env.NODE_ENV === 'production' && process.env.REDIS_URL && process.env.REDIS_TOKEN) {
-    // Production: Use Upstash Redis only if credentials are available
+  if (process.env.NODE_ENV === 'production' && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    // Production: Use Upstash Redis REST client
     redisClient = new UpstashRedis({
-      url: process.env.REDIS_URL,
-      token: process.env.REDIS_TOKEN,
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
 
     console.log('Initialized Upstash Redis client for production');

@@ -9,11 +9,18 @@ import type { Redis } from 'ioredis';
 function getRedisConfig() {
   if (process.env.NODE_ENV === 'production') {
     // Production configuration (Upstash)
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error('Missing required Redis configuration for production');
+    }
+    
+    const redisUrl = `redis://default:${process.env.UPSTASH_REDIS_REST_TOKEN}@${new URL(process.env.UPSTASH_REDIS_REST_URL).host}:6379`;
+    const url = new URL(redisUrl);
+    
     return {
-      host: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).hostname : undefined,
-      port: process.env.REDIS_URL ? parseInt(new URL(process.env.REDIS_URL).port) : 6379,
-      username: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).username : undefined,
-      password: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).password : undefined,
+      host: url.hostname,
+      port: parseInt(url.port),
+      username: url.username,
+      password: url.password,
       tls: { rejectUnauthorized: false },
       maxRetriesPerRequest: null,
       enableReadyCheck: false,

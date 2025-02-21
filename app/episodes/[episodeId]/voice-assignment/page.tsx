@@ -3,7 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { redirect } from 'next/navigation';
-import VoiceAssignmentView from '@/components/VoiceAssignmentView';
+import VoiceAssignmentView from '@/components/VoiceOver/VoiceAssignmentView';
 
 interface PageProps {
   params: {

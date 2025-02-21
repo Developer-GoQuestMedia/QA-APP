@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialogues } from '@/hooks/useDialogues'
-import TranslatorDialogueView from '../../../../components/TranslatorDialogueView'
+import TranslatorDialogueView from '../../../../components/Translator/TranslatorDialogueView'
 
 export default function TranslatorProjectPage({
   params,

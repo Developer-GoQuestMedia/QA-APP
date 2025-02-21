@@ -56,27 +56,41 @@ export async function POST(request: NextRequest) {
     const originalAudio = formData.get('originalAudio') as File;
     const processedAudio = formData.get('processedAudio') as File;
     const dialogueId = formData.get('dialogueId') as string;
+    const dialogNumber = formData.get('dialogNumber') as string;
     const projectId = formData.get('projectId') as string;
     const sceneNumber = formData.get('sceneNumber') as string;
+    // New: Retrieve characterName from form data
+    const characterName = formData.get('characterName') as string;
 
     // 3. Validate required fields
-    if (!originalAudio || !processedAudio || !dialogueId || !projectId || !sceneNumber) {
-      return NextResponse.json({ 
-        error: 'Missing required fields',
-        details: { originalAudio: !!originalAudio, processedAudio: !!processedAudio, dialogueId, projectId, sceneNumber }
-      }, { status: 400 });
+    if (!originalAudio || !processedAudio || !dialogueId ||!dialogNumber || !projectId || !sceneNumber || !characterName) {
+      return NextResponse.json(
+        {
+          error: 'Missing required fields',
+          details: {
+            originalAudio: !!originalAudio,
+            processedAudio: !!processedAudio,
+            dialogueId,
+            dialogNumber,
+            projectId,
+            sceneNumber,
+            characterName: !!characterName,
+          },
+        },
+        { status: 400 }
+      );
     }
 
     // 4. Parse dialogue number
-    const dialogueComponents = parseDialogueNumber(dialogueId);
+    const dialogueComponents = parseDialogueNumber(dialogNumber);
 
     // 5. Connect to master database
     const { db: masterDb, client } = await connectToDatabase();
-    
+
     // 6. Get project details
-    const projectDoc = await masterDb.collection('projects').findOne(
-      { _id: new ObjectId(projectId) }
-    );
+    const projectDoc = await masterDb.collection('projects').findOne({
+      _id: new ObjectId(projectId),
+    });
 
     if (!projectDoc) {
       throw new Error('Project not found in master database');
@@ -84,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     // 7. Connect to project's database
     const projectDb = client.db(projectDoc.databaseName);
-    
+
     // 8. Find episode collection
     const paddedEpisodeNumber = padNumber(dialogueComponents.episodeNumber);
     const episode = projectDoc.episodes.find((ep: any) => {
@@ -99,25 +113,30 @@ export async function POST(request: NextRequest) {
     // 9. Generate file paths using project/episode structure
     const projectNumber = dialogueComponents.projectNumber;
     const episodeNumber = padNumber(dialogueComponents.episodeNumber);
-    const sanitizedCharacterName = dialogue.characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    // Updated: use characterName from form data instead of undefined "dialogue"
+    const sanitizedCharacterName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const basePath = `project_${projectNumber}/episode_${episodeNumber}`;
     const originalKey = `${basePath}/converted_audio/${sanitizedCharacterName}/original/${dialogueId}.wav`;
     const processedKey = `${basePath}/converted_audio/${sanitizedCharacterName}/processed/${dialogueId}.wav`;
 
     // 10. Upload both files to R2
     await Promise.all([
-      s3Client.send(new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: originalKey,
-        Body: Buffer.from(await originalAudio.arrayBuffer()),
-        ContentType: 'audio/wav',
-      })),
-      s3Client.send(new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: processedKey,
-        Body: Buffer.from(await processedAudio.arrayBuffer()),
-        ContentType: 'audio/wav',
-      }))
+      s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: originalKey,
+          Body: Buffer.from(await originalAudio.arrayBuffer()),
+          ContentType: 'audio/wav',
+        })
+      ),
+      s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: processedKey,
+          Body: Buffer.from(await processedAudio.arrayBuffer()),
+          ContentType: 'audio/wav',
+        })
+      ),
     ]);
 
     // 11. Generate public URLs
@@ -126,45 +145,49 @@ export async function POST(request: NextRequest) {
 
     // 12. Update dialogue in database with both URLs
     const updateResult = await projectDb.collection(episode.collectionName).updateOne(
-      { 
-        'dialogues.dialogNumber': dialogueId
+      {
+        'dialogues.dialogNumber': dialogueId,
       },
       {
         $set: {
-          'dialogues.$.voiceOverUrl': processedUrl,          // Main URL (processed)
-          'dialogues.$.originalVoiceOverUrl': originalUrl,    // Original recording
-          'dialogues.$.processedVoiceOverUrl': processedUrl,  // Processed recording
+          'dialogues.$.voiceOverUrl': originalUrl,
+          'dialogues.$.originalVoiceOverUrl': originalUrl,
+          'dialogues.$.processedVoiceOverUrl': processedUrl,
           'dialogues.$.status': 'voice-over-added',
           'dialogues.$.updatedAt': new Date(),
-          'dialogues.$.updatedBy': session.user.id
-        }
+          'dialogues.$.updatedBy': session.user.id,
+        },
       }
     );
 
     if (updateResult.matchedCount === 0) {
-      throw new Error(`Dialogue ${dialogueId} not found in episode collection ${episode.collectionName}`);
+      throw new Error(
+        `Dialogue ${dialogueId} not found in episode collection ${episode.collectionName}`
+      );
     }
 
     // 13. Return success response with all URLs
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       originalUrl,
       processedUrl,
-      voiceOverUrl: processedUrl,          // Main URL
-      originalVoiceOverUrl: originalUrl,    // Original recording URL
-      processedVoiceOverUrl: processedUrl,  // Processed recording URL
+      voiceOverUrl: processedUrl,
+      originalVoiceOverUrl: originalUrl,
+      processedVoiceOverUrl: processedUrl,
       dialogueId,
       sceneNumber,
       databaseName: projectDoc.databaseName,
-      collectionName: episode.collectionName
+      collectionName: episode.collectionName,
     });
-
   } catch (error: any) {
     console.error('Error uploading voice-over:', error);
-    return NextResponse.json({ 
-      error: 'Failed to upload voice-over',
-      details: error.message,
-      stack: error.stack
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Failed to upload voice-over',
+        details: error.message,
+        stack: error.stack,
+      },
+      { status: 500 }
+    );
   }
-} 
+}

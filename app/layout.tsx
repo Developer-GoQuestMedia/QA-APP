@@ -2,15 +2,9 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import dynamic from 'next/dynamic'
 import SystemInit from '@/components/SystemInit'
 import { Toaster } from 'react-hot-toast'
-
-const SpeedInsights = dynamic(() => 
-  process.env.NODE_ENV === 'production'
-    ? import('@vercel/speed-insights/next').then(mod => mod.SpeedInsights)
-    : Promise.resolve(() => null)
-, { ssr: false })
+import SpeedInsightsClient from './components/SpeedInsightsClient'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -48,7 +42,7 @@ export default function RootLayout({
           {children}
           <Toaster position="bottom-right" />
         </Providers>
-        <SpeedInsights />
+        <SpeedInsightsClient />
       </body>
     </html>
   )

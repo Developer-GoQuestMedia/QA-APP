@@ -1,18 +1,33 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { rateLimit } from '@/lib/rate-limit';
+import { getRedisClient, executeRedisOperation } from '@/lib/redis';
+import { z } from 'zod';
 
 // Set runtime config
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Initialize Redis client (singleton)
+const redis = getRedisClient();
+
+// Input validation schema
+const requestSchema = z.object({
+  voiceId: z.string().min(1),
+  recordedAudioUrl: z.string().url(),
+  dialogueNumber: z.string().min(1),
+  characterName: z.string().min(1)
+});
+
 // Get R2 configuration
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL;
 const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 
-if (!BUCKET_NAME) {
-  console.error('R2_BUCKET_NAME is not configured in environment variables');
+if (!BUCKET_NAME || !R2_PUBLIC_URL) {
+  throw new Error('R2 storage configuration is missing');
 }
 
 // Initialize S3 client for R2
@@ -27,63 +42,117 @@ const s3Client = new S3Client({
 
 const ELEVEN_LABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
 
-export async function POST(request: Request) {
+if (!ELEVEN_LABS_API_KEY) {
+  throw new Error('ELEVEN_LABS_API_KEY is not configured');
+}
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  retries: number = MAX_RETRIES,
+  delay: number = RETRY_DELAY
+): Promise<T> {
   try {
+    return await operation();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    await sleep(delay);
+    return retryOperation(operation, retries - 1, delay * 2);
+  }
+}
+
+async function updateProgress(key: string, status: string, percent: number) {
+  await executeRedisOperation(async () => {
+    await redis.set(key, JSON.stringify({
+      status,
+      percent,
+      timestamp: new Date().toISOString()
+    }));
+
+    // Expire progress after 1 hour
+    await redis.expire(key, 60 * 60);
+  }, undefined);
+}
+
+export async function POST(request: NextRequest) {
+  const progressKey = `progress:${request.ip || 'anonymous'}:${Date.now()}`;
+  
+  try {
+    // Check rate limit
+    const rateLimitResult = await rateLimit(request, {
+      maxRequests: 50,
+      windowMs: 60 * 1000 // 1 minute
+    });
+
+    if (rateLimitResult) {
+      return rateLimitResult;
+    }
+
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify API key exists
-    if (!ELEVEN_LABS_API_KEY) {
-      console.error('ElevenLabs API key is not configured');
-      return NextResponse.json(
-        { error: 'ElevenLabs API is not properly configured' },
-        { status: 500 }
-      );
-    }
+    // Validate request body
+    const body = await request.json();
+    const validationResult = requestSchema.safeParse(body);
 
-    // Verify R2 configuration
-    if (!BUCKET_NAME || !R2_PUBLIC_URL) {
-      console.error('R2 storage is not properly configured');
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'R2 storage is not properly configured' },
-        { status: 500 }
-      );
-    }
-
-    // Get request body
-    const { voiceId, recordedAudioUrl, dialogueNumber, characterName } = await request.json();
-
-    if (!voiceId || !recordedAudioUrl || !dialogueNumber || !characterName) {
-      return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { 
+          error: 'Invalid request data',
+          details: validationResult.error.errors 
+        },
         { status: 400 }
       );
     }
 
+    const { voiceId, recordedAudioUrl, dialogueNumber, characterName } = validationResult.data;
+
+    // Update progress key with session info
+    const progressKey = `progress:${session.user.id}:${dialogueNumber}`;
+    await updateProgress(progressKey, 'Started processing audio', 0);
+
     try {
-      // Fetch the audio file with proper headers for R2
-      const audioResponse = await fetch(recordedAudioUrl, {
-        headers: {
-          'Accept': 'audio/wav,audio/*;q=0.9,*/*;q=0.8',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        cache: 'no-store'
+      // Fetch the audio file with retry
+      const audioResponse = await retryOperation(async () => {
+        const response = await fetch(recordedAudioUrl, {
+          headers: {
+            'Accept': 'audio/wav,audio/*;q=0.9,*/*;q=0.8',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          },
+          cache: 'no-store'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
+        }
+
+        return response;
       });
 
-      if (!audioResponse.ok) {
-        throw new Error(`Failed to fetch audio: ${audioResponse.status} ${audioResponse.statusText}`);
-      }
+      await updateProgress(progressKey, 'Audio file fetched', 20);
 
       const audioBlob = await audioResponse.blob();
       
-      // Verify we got audio data
       if (audioBlob.size === 0) {
         throw new Error('Received empty audio file');
       }
+
+      if (audioBlob.size > 10 * 1024 * 1024) { // 10MB limit
+        throw new Error('Audio file too large. Maximum size is 10MB');
+      }
+
+      await updateProgress(progressKey, 'Preparing audio for processing', 40);
 
       const formData = new FormData();
       formData.append('audio', audioBlob, 'input.wav');
@@ -91,55 +160,60 @@ export async function POST(request: Request) {
       formData.append('remove_background_noise', 'true');
       formData.append('output_format', 'pcm_44100');
 
-      // Call ElevenLabs API with explicit headers
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/speech-to-speech/${voiceId}`,
-        {
-          method: 'POST',
-          headers: {
-            'xi-api-key': ELEVEN_LABS_API_KEY,
-            'Accept': 'audio/wav',
-          },
-          body: formData,
-        }
-      );
+      // Call ElevenLabs API with retry
+      const response = await retryOperation(async () => {
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/speech-to-speech/${voiceId}`,
+          {
+            method: 'POST',
+            headers: {
+              'xi-api-key': ELEVEN_LABS_API_KEY || '',
+              'Accept': 'audio/wav',
+            } as HeadersInit,
+            body: formData,
+          }
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('ElevenLabs API Error:', errorData);
-        throw new Error(JSON.stringify(errorData));
-      }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(JSON.stringify(errorData));
+        }
+
+        return response;
+      });
+
+      await updateProgress(progressKey, 'Voice conversion completed', 60);
 
       // Get audio data as Buffer
       const audioData = Buffer.from(await response.arrayBuffer());
       
-      // Generate R2 path with project/episode/converted_audio/character structure
+      // Generate R2 path
       const sanitizedDialogueNumber = dialogueNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
       const sanitizedCharacterName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-      const dialogueComponents = dialogueNumber.split('.');
-      const projectNumber = dialogueComponents[0];
-      const episodeNumber = dialogueComponents[1].padStart(2, '0');
+      const [projectNumber, episodeRaw] = dialogueNumber.split('.');
+      const episodeNumber = episodeRaw.padStart(2, '0');
       const r2Key = `project_${projectNumber}/episode_${episodeNumber}/converted_audio/${sanitizedCharacterName}/${sanitizedDialogueNumber}.wav`;
+
+      await updateProgress(progressKey, 'Uploading processed audio', 80);
       
-      console.log('Uploading to R2:', {
-        bucket: BUCKET_NAME,
-        key: r2Key,
-        characterName: characterName,
-        projectNumber,
-        episodeNumber,
-        contentType: 'audio/wav',
-        dataSize: audioData.length
+      // Upload to R2 with retry
+      await retryOperation(async () => {
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: r2Key,
+            Body: audioData,
+            ContentType: 'audio/wav',
+            Metadata: {
+              'character-name': characterName,
+              'dialogue-number': dialogueNumber,
+              'processed-by': session.user.email || 'unknown'
+            }
+          })
+        );
       });
 
-      // Upload to R2
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: r2Key,
-          Body: audioData,
-          ContentType: 'audio/wav',
-        })
-      );
+      await updateProgress(progressKey, 'Processing completed', 100);
 
       // Generate public URL
       const publicUrl = `https://${R2_PUBLIC_URL}/${r2Key}`;
@@ -150,25 +224,23 @@ export async function POST(request: Request) {
         dialogueNumber: dialogueNumber
       });
 
-    } catch (fetchError: any) {
-      console.error('Error processing audio:', fetchError);
-      return NextResponse.json(
-        { 
-          error: 'Failed to process audio',
-          details: fetchError.message 
-        },
-        { status: 500 }
-      );
+    } catch (processingError: any) {
+      await updateProgress(progressKey, `Error: ${processingError.message}`, -1);
+      throw processingError;
     }
 
   } catch (error: any) {
     console.error('Error in speech-to-speech conversion:', error);
+    
+    // Ensure progress is updated on error
+    await updateProgress(progressKey, `Failed: ${error.message}`, -1);
+    
     return NextResponse.json(
       { 
         error: 'Failed to process speech-to-speech conversion',
         details: error.message 
       },
-      { status: 500 }
+      { status: error.status || 500 }
     );
   }
 } 

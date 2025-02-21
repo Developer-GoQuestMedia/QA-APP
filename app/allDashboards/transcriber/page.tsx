@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import TranscriberView from '@/components/TranscriberView'
+import TranscriberView from '@/components/Transcriber/TranscriberView'
 import { useProjects } from '@/hooks/useProjects'
 import LoadingState from '@/components/LoadingState'
 import ErrorState from '@/components/ErrorState'

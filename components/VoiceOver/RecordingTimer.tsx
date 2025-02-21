@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Alert } from './ui/alert';
+import { Alert } from '../ui/alert';
 
 interface RecordingTimerProps {
   isRecording: boolean;

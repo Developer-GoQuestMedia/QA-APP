@@ -3,9 +3,59 @@ import { connectToDatabase } from '@/lib/mongodb'
 import bcrypt from 'bcryptjs'
 import type { NextAuthOptions } from 'next-auth'
 import crypto from 'crypto'
+import { MongoClient, Db, ObjectId } from 'mongodb'
+import { z } from 'zod'
+
+// Password validation schema
+const passwordSchema = z.string().min(8).regex(
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+  'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+)
+
+// User type definition
+interface User {
+  _id: ObjectId
+  email: string
+  password: string
+  role: string
+  username: string
+  lastLogin?: Date
+  sessionsLog?: SessionLog[]
+}
+
+interface SessionLog {
+  loginTime: Date
+  userAgent: string
+  ip: string
+  sessionId: string
+}
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('Please define the NEXTAUTH_SECRET environment variable')
+}
+
+// Cleanup old login attempts
+async function cleanupOldLoginAttempts(db: Db) {
+  try {
+    await db.collection('loginAttempts').deleteMany({
+      timestamp: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Older than 24 hours
+    })
+  } catch (error) {
+    console.error('Failed to cleanup old login attempts:', error)
+  }
+}
+
+async function logFailedAttempt(db: Db, email: string) {
+  await db.collection('loginAttempts').insertOne({
+    email,
+    timestamp: new Date(),
+    success: false
+  })
+  
+  // Cleanup old attempts periodically
+  if (Math.random() < 0.1) { // 10% chance to trigger cleanup
+    await cleanupOldLoginAttempts(db)
+  }
 }
 
 export const authOptions: NextAuthOptions = {
@@ -13,48 +63,52 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: { label: "Email", type: "email" },
+        username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials, req) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error('Please enter your email and password')
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error('Please provide both username and password')
         }
 
         try {
           const { db } = await connectToDatabase()
-          const user = await db.collection('users').findOne({ 
-            email: credentials.email 
-          })
+          const user = await db.collection('users').findOne({ username: credentials.username })
 
           if (!user) {
-            throw new Error('Invalid email or password')
+            throw new Error('No user found with this username')
           }
 
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password,
-            user.password
-          )
+          const isValid = await bcrypt.compare(credentials.password, user.password)
 
-          if (!isPasswordValid) {
-            throw new Error('Invalid email or password')
+          if (!isValid) {
+            throw new Error('Invalid password')
           }
 
-          // Update last login and sessions log
-          const sessionId = crypto.randomUUID();
-          const sessionLog = {
+          // Generate a unique session ID
+          const sessionId = crypto.randomUUID()
+
+          const sessionLog: SessionLog = {
             loginTime: new Date(),
             userAgent: req.headers?.['user-agent'] || 'unknown',
+            ip: req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || 'unknown',
             sessionId
           }
 
+          // Update user's session log
           await db.collection('users').updateOne(
-            { _id: user._id },
+            { _id: new ObjectId(user._id) },
             {
               $set: { 
                 lastLogin: new Date(),
-                'sessionsLog.0': sessionLog
-              }
+                lastActivityAt: new Date()
+              },
+              $push: { 
+                sessionsLog: { 
+                  $each: [sessionLog],
+                  $slice: -10 
+                }
+              } as any // Type assertion needed for MongoDB operations
             }
           )
 
@@ -73,11 +127,21 @@ export const authOptions: NextAuthOptions = {
       }
     })
   ],
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 24 hours
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  pages: {
+    signIn: '/login',
+    error: '/login',
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.email = user.email
         token.role = user.role
         token.username = user.username
         token.sessionId = user.sessionId
@@ -85,24 +149,41 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.email = token.email as string
-        session.user.role = token.role as string
-        session.user.username = token.username as string
-        session.user.name = token.name as string
-        session.user.sessionId = token.sessionId as string
+      if (token) {
+        session.user.role = token.role
+        session.user.username = token.username
+        session.user.sessionId = token.sessionId
       }
       return session
     }
   },
-  pages: {
-    signIn: '/login',
+  events: {
+    async signIn({ user, account }) {
+      console.log('User signed in:', {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        timestamp: new Date().toISOString()
+      })
+    },
+    async signOut({ token }) {
+      try {
+        const { db } = await connectToDatabase()
+        
+        // Update last logout time and activity
+        await db.collection('users').updateOne(
+          { _id: new ObjectId(token.sub) },
+          {
+            $set: {
+              lastLogout: new Date(),
+              lastActivityAt: new Date()
+            }
+          }
+        )
+      } catch (error) {
+        console.error('Error updating logout time:', error)
+      }
+    }
   },
-  session: {
-    strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
+  debug: process.env.NODE_ENV === 'development'
 } 

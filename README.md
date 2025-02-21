@@ -24,7 +24,7 @@ User's session is created with a role (admin, director, transcriber, translator,
 Middleware verifies the session / user role**
 
 If not authenticated, it redirects to /login.
-If user is authenticated, it checks if the requested route is allowed by the user’s role.
+If user is authenticated, it checks if the requested route is allowed by the user's role.
 Otherwise, it redirects to the correct dashboard or denies access.
 User lands on their dashboard (e.g., /allDashboards/admin or /allDashboards/director, etc.).
 
@@ -49,7 +49,7 @@ director/
 transcriber/
 translator/
 voice-over/
-These pages fetch data relevant to each role’s tasks (like listing projects assigned to them).
+These pages fetch data relevant to each role's tasks (like listing projects assigned to them).
 Data Flow:
 A user visits allDashboards/[role].
 The page checks session (via next-auth/react hooks).
@@ -59,7 +59,7 @@ The page uses React Query hooks (useProjects, etc.) to fetch data from /api/proj
 Sub-routes for specialized Admin views (e.g. progress).
 Data Flow:
 Admin user visits /admin/project/[projectId]/progress.
-Frontend calls /api/admin/projects/[projectId]/progress to get the project’s progress stats (transcribed, translated, voice-over, etc.).
+Frontend calls /api/admin/projects/[projectId]/progress to get the project's progress stats (transcribed, translated, voice-over, etc.).
 The server queries MongoDB to aggregate dialogue statuses and returns a JSON response.
 /app/api/:
 
@@ -124,10 +124,10 @@ globals.css + Tailwind config: Project-wide styles.
 2.2. /components/
 2.2.1. Shared UI Components
 Button.tsx / Card.tsx / ThemeToggle.tsx:
-Basic, reusable UI elements or “atoms.”
+Basic, reusable UI elements or "atoms."
 Also exist in the /app/components/ path (some duplication or transitional refactor is visible in the repo).
 2.2.2. Role-Specific Views
-These are the more complex screens or “feature components,” each tailored to a user role or workflow:
+These are the more complex screens or "feature components," each tailored to a user role or workflow:
 
 AdminView.tsx:
 
@@ -136,7 +136,7 @@ Data fetched with React Query from /api/admin/* routes.
 The UI manipulates the DB by calling admin endpoints.
 TranscriberView.tsx, TranslatorView.tsx, DirectorView.tsx, VoiceOverView.tsx
 
-Each shows a list of “assigned” projects for that role.
+Each shows a list of "assigned" projects for that role.
 Clicking a project navigates to [projectId]/page.tsx with a specialized dialogue interface (e.g., for transcription or translation).
 TranscriberDialogueView.tsx, TranslatorDialogueView.tsx, DirectorDialogueView.tsx, VoiceOverDialogueView.tsx
 
@@ -145,15 +145,15 @@ They rely heavily on React Query + custom hooks (useDialogues, useEpisodes, useA
 2.2.3. Other Utility Components
 DashboardLayout.tsx: A layout with a top nav bar, signOut button, etc., specifically used in some older approach (possibly replaced by Next.js layout?).
 AudioVisualizer.tsx: Visualizes real-time audio waveforms from a MediaStream.
-RecordingTimer.tsx: A small bar + time tracker that shows how long you’ve been recording audio.
+RecordingTimer.tsx: A small bar + time tracker that shows how long you've been recording audio.
 2.3. /hooks/
 useAudioRecording.ts:
 
-A custom React hook that handles the complexities of accessing the user’s microphone, streaming audio, storing it into a Blob, stopping/starting recording, and giving you a final audio file.
+A custom React hook that handles the complexities of accessing the user's microphone, streaming audio, storing it into a Blob, stopping/starting recording, and giving you a final audio file.
 This hook is used in the VoiceOverDialogueView.tsx and other places that let you record audio.
 useDialogues.ts, useEpisodes.ts, useProject.ts, useProjects.ts:
 
-A set of “React Query hooks” that fetch data from the relevant endpoints.
+A set of "React Query hooks" that fetch data from the relevant endpoints.
 For instance, useProjects calls /api/projects and caches them. useDialogues calls /api/dialogues?projectId=....
 2.4. /lib/
 mongodb.ts:
@@ -186,14 +186,14 @@ cn.ts: Merges Tailwind classes with clsx + tailwind-merge.
 This file is crucial in Next.js 13+ for server-side path protection:
 
 Checks if user is authenticated (inspects JWT from NextAuth).
-Enforces route restrictions based on the user’s role:
-E.g., if a user with role “transcriber” tries to access /allDashboards/director/..., it redirects them to /allDashboards/transcriber.
+Enforces route restrictions based on the user's role:
+E.g., if a user with role "transcriber" tries to access /allDashboards/director/..., it redirects them to /allDashboards/transcriber.
 Redirects to /login if no token (unauthenticated).
 The role -> path relationships are defined in ROLE_ROUTES.
-Effectively, the “front door” to all pages like /allDashboards/director/ is locked if your token role doesn’t match.
+Effectively, the "front door" to all pages like /allDashboards/director/ is locked if your token role doesn't match.
 
 3. Detailed Data Flow
-Here’s an example end-to-end flow for an Admin user:
+Here's an example end-to-end flow for an Admin user:
 
 Login:
 
@@ -205,7 +205,7 @@ Middleware (middleware.ts) checks:
 It sees the token, sees role=admin, and allows /allDashboards/admin route.
 Admin Dashboard (/app/allDashboards/admin/page.tsx):
 
-The React component uses React Query’s useProjects() -> calls /api/projects -> GET returns all projects from db.collection('projects').
+The React component uses React Query's useProjects() -> calls /api/projects -> GET returns all projects from db.collection('projects').
 The Admin sees the list of projects, can click on one, or can create a new project.
 Creating a Project:
 
@@ -219,13 +219,13 @@ Returns success JSON.
 Admin can Assign a User to a Project:
 
 Calls /api/admin/projects/[projectId]/assign via POST with { usernames: ["transcriber1"] }.
-The server finds the user doc in users collection, updates projects collection’s assignedTo array with their role.
-The assigned user now sees that project in their dashboard because the front-end filters for “my assigned projects.”
+The server finds the user doc in users collection, updates projects collection's assignedTo array with their role.
+The assigned user now sees that project in their dashboard because the front-end filters for "my assigned projects."
 
 4. Role-Specific Use Cases
 Transcriber logs in, sees only projects assigned to them with role=transcriber.
 
-They open a project’s dialogues screen (/allDashboards/transcriber/[projectId]).
+They open a project's dialogues screen (/allDashboards/transcriber/[projectId]).
 That calls useDialogues(projectId) -> /api/dialogues?projectId=xyz.
 They transcribe text, and upon saving, the front-end calls PATCH /api/dialogues/[dialogueId] with { status: 'transcribed', dialogue: {...} }.
 Translator does a similar flow but updates status to translated and sets dialogue.translated field.
@@ -234,7 +234,7 @@ Director can approve or request revision on the dialogue. Also can leave directo
 
 VoiceOver user can record audio via useAudioRecording, then calls /api/upload-voice-over to store the WAV file. Finally sets the dialogue.voiceOverUrl in the DB.
 
-Admin is basically “God mode”—manages all data, including user creation, project creation, assignment, deletion.
+Admin is basically "God mode"—manages all data, including user creation, project creation, assignment, deletion.
 
 5. Conclusion
 Overall, the QA App:
@@ -244,8 +244,8 @@ MongoDB as the main data store, with partial usage of Prisma in certain endpoint
 NextAuth for authentication, with role-based checks stored in the JWT.
 Middleware for role-based route protection.
 React Query on the client side for data fetching and caching, hooking into the /app/api/* routes.
-Audio workflows (for transcription, translation, voice-over) revolve around the dialogues collection—each dialogue row has fields for “transcribed text,” “translated text,” “voiceOverUrl,” “directorNotes,” etc.
-Multiple specialized UI components in the components/ folder handle each role’s tasks in a step-by-step workflow.
+Audio workflows (for transcription, translation, voice-over) revolve around the dialogues collection—each dialogue row has fields for "transcribed text," "translated text," "voiceOverUrl," "directorNotes," etc.
+Multiple specialized UI components in the components/ folder handle each role's tasks in a step-by-step workflow.
 This architecture cleanly separates roles, data (projects, dialogues, etc.), and functionality (API routes for each operation), providing a robust structure for multi-step media workflows.
 
 
@@ -628,8 +628,8 @@ POST /api/auth/login
   password: string
 }
 
-GET /api/users/me
-// Get current user profile
+GET /api/users/session
+// Get the current user's session data
 
 PATCH /api/users/:id
 // Update user role or status
@@ -751,25 +751,33 @@ Ends the current user session.
 
 ### User Management Endpoints
 
-#### `GET /api/users/me`
-Retrieves the current user's profile.
-- **Headers Required**: `Authorization: Bearer <token>`
-- **Response**:
-  ```typescript
-  {
-    id: string
-    email: string
-    name: string
-    role: string
-    createdAt: string
-    updatedAt: string
-    projects: string[]  // Array of project IDs
+#### `GET /api/users/session`
+Get the current user's session data.
+
+**Response**
+```json
+{
+  "id": "string",
+  "username": "string",
+  "role": "string",
+  "email": "string",
+  "sessionId": "string",
+  "debug": {
+    "timestamp": "string",
+    "environment": "string"
   }
-  ```
-- **Status Codes**:
-  - `200`: Success
-  - `401`: Unauthorized
-  - `404`: User not found
+}
+```
+
+**Error Response**
+```json
+{
+  "error": "string",
+  "debug": {
+    "timestamp": "string",
+    "environment": "string"
+  }
+}
 
 #### `PATCH /api/users/:id`
 Updates a user's information.

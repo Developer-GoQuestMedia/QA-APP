@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import TranscriberDialogueView from '@/components/TranscriberDialogueView'
+import TranscriberDialogueView from '@/components/Transcriber/TranscriberDialogueView'
 
 interface PageProps {
   params: {

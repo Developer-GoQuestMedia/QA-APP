@@ -55,6 +55,8 @@ export interface Scenario {
 }
 
 export interface Dialogue {
+  ai_converted_voiceover_url: string | undefined;
+  voiceId: string | null | undefined;
   recordedAudioUrl: null;
   dialogNumber: string;
   timeStart: string;
@@ -78,7 +80,7 @@ export interface Dialogue {
   projectId?: string;
   updatedAt?: string;
   updatedBy?: string;
-  _id?: string;
+  _id?: ObjectId | string;
   scenario?: Scenario;
   deleteVoiceOver?: boolean;
 }

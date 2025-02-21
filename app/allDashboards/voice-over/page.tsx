@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import VoiceOverView from '@/components/VoiceOverView'
+import VoiceOverView from '@/components/VoiceOver/VoiceOverView'
 import { useProjects } from '@/hooks/useProjects'
 import { type Project } from '@/types/project'
 import LoadingState from '@/components/LoadingState'

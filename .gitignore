@@ -58,3 +58,11 @@ logs/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Removed roles
+/app/allDashboards/director/
+/app/allDashboards/srDirector/
+/components/Director/
+/components/SrDirector/
+/components/providers/Director/
+/components/providers/SrDirector/

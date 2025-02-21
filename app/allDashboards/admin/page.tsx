@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
 import AdminView from '@/components/Admin/AdminView'
-import DashboardLayout from '@/components/DashboardLayout'
+// import DashboardLayout from '@/components/DashboardLayout'
 import { Project } from '@/types/project'
 import axios from 'axios'
 
@@ -100,8 +100,8 @@ export default function Page() {
   })
 
   return (
-    <DashboardLayout title="Admin Dashboard">
+    // <DashboardLayout title="Admin Dashboard q">
       <AdminView projects={projects} refetchProjects={fetchProjects} />
-    </DashboardLayout>
+    // </DashboardLayout>
   )
 }

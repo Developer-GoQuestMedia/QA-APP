@@ -6,11 +6,9 @@ import type { UserRole } from '@/types/user'
 // Define role-based route mappings with proper typing
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin: ['/allDashboards/admin', '/api/admin'],
-  director: ['/allDashboards/director'],
-  srDirector: ['/allDashboards/srDirector'],
-  voiceOver: ['/allDashboards/voice-over'],
   transcriber: ['/allDashboards/transcriber'],
-  translator: ['/allDashboards/translator']
+  translator: ['/allDashboards/translator'],
+  voiceOver: ['/allDashboards/voice-over']
 }
 
 // Helper function to convert role to URL path
@@ -47,7 +45,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_next') || // Next.js static files
     pathname.startsWith('/api/auth') || // Auth API routes
     pathname === '/login' || // Login page
-    pathname === '/unauthorized' // Unauthorized page
+    pathname === '/unauthorized' || // Unauthorized page
+    pathname === '/favicon.ico' // Favicon
   ) {
     if (pathname === '/login') {
       console.log('Unauthenticated user accessing login page:', {
@@ -70,7 +69,7 @@ export async function middleware(request: NextRequest) {
       role: token?.role,
       username: token?.username,
       timestamp: new Date().toISOString(),
-      tokenExpiry: token?.exp ? new Date(token.exp * 1000).toISOString() : null
+      tokenExpiry: token?.exp ? new Date(Number(token.exp) * 1000).toISOString() : null
     })
 
     // No token, redirect to login
@@ -83,27 +82,35 @@ export async function middleware(request: NextRequest) {
     }
 
     // Token exists but expired
-    if (token.exp && Date.now() >= token.exp * 1000) {
+    if (token.exp && Date.now() >= Number(token.exp) * 1000) {
       console.log('Token expired, redirecting to login:', {
         pathname,
-        expiry: new Date(token.exp * 1000).toISOString(),
+        expiry: new Date(Number(token.exp) * 1000).toISOString(),
         timestamp: new Date().toISOString()
       })
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
     // Check role-based access
-    const role = token.role as string
+    const role = token.role as UserRole
     if (pathname.startsWith('/allDashboards/')) {
       const dashboardRole = pathname.split('/')[2]
-      if (role !== dashboardRole && role !== 'admin') {
+      // Convert dashboard path to role format
+      const normalizedDashboardRole = dashboardRole === 'voice-over' ? 'voiceOver' : dashboardRole
+      
+      // Check if user has access to this dashboard
+      const hasAccess = role === 'admin' || role === normalizedDashboardRole
+      
+      if (!hasAccess) {
         console.log('Unauthorized dashboard access attempt:', {
           pathname,
           userRole: role,
-          requiredRole: dashboardRole,
+          requiredRole: normalizedDashboardRole,
           timestamp: new Date().toISOString()
         })
-        return NextResponse.redirect(new URL('/unauthorized', request.url))
+        // Redirect to their appropriate dashboard instead of unauthorized
+        const userDashboard = `/allDashboards/${roleToUrlPath(role)}`
+        return NextResponse.redirect(new URL(userDashboard, request.url))
       }
     }
 

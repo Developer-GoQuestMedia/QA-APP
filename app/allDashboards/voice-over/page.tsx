@@ -6,6 +6,7 @@ import { useProjects } from '@/hooks/useProjects'
 import { type Project } from '@/types/project'
 import LoadingState from '@/components/LoadingState'
 import ErrorState from '@/components/ErrorState'
+import { useMemo, useEffect } from 'react'
 
 export default function VoiceOverDashboard() {
   const { data: session, status } = useSession()
@@ -16,19 +17,32 @@ export default function VoiceOverDashboard() {
     refetch: refetchProjects 
   } = useProjects()
 
-  console.log('VoiceOver Dashboard Render:', {
-    sessionStatus: status,
-    userRole: session?.user?.role,
-    username: session?.user?.username,
-    projectsLoaded: !!projects,
-    projectCount: projects?.length
-  })
+  // Memoize the loading state check
+  const isLoading = useMemo(() => 
+    status === 'loading' || isLoadingProjects, 
+    [status, isLoadingProjects]
+  )
 
-  if (status === 'loading' || isLoadingProjects) {
-    console.log('Dashboard loading state:', {
-      sessionLoading: status === 'loading',
-      projectsLoading: isLoadingProjects
+  // Memoize the error state
+  const error = useMemo(() => {
+    if (!projectsError) return null
+    return projectsError instanceof Error ? projectsError.message : 'Failed to load projects'
+  }, [projectsError])
+
+  // Only log on state changes
+  useEffect(() => {
+    console.log('VoiceOver Dashboard State:', {
+      sessionStatus: status,
+      userRole: session?.user?.role,
+      username: session?.user?.username,
+      projectsLoaded: !!projects,
+      projectCount: projects?.length,
+      isLoading,
+      hasError: !!error
     })
+  }, [status, session, projects, isLoading, error])
+
+  if (isLoading) {
     return (
       <LoadingState 
         message={status === 'loading' ? 'Loading session...' : 'Loading projects...'} 
@@ -36,27 +50,25 @@ export default function VoiceOverDashboard() {
     )
   }
 
-  if (projectsError) {
+  if (error) {
     return (
       <ErrorState
-        message={projectsError instanceof Error ? projectsError.message : 'Failed to load projects'}
+        message={error}
         onRetry={() => refetchProjects()}
       />
     )
   }
 
-  console.log('Dashboard ready to render:', {
-    authenticated: !!session,
-    role: session?.user?.role
-  })
+  if (!session || !projects) {
+    return <ErrorState message="Session or projects not available" />
+  }
 
   // Ensure projects is an array and has all required properties
   const validProjects: Project[] = (projects || []).map((project: Project) => ({
     ...project,
-    dialogue_collection: project.dialogue_collection || null,
-    updatedAt: project.updatedAt || new Date().toISOString(),
+    updatedAt: project.updatedAt || new Date(),
     status: project.status || 'pending',
-    assignedUsers: project.assignedUsers || [],
+    assignedTo: project.assignedTo || [],
     episodes: project.episodes || []
   }))
 

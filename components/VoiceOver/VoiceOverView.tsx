@@ -2,10 +2,11 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Project, Episode } from '@/types/project'
 import { Search, ChevronRight, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import type { ObjectId } from 'bson'
 
 // Define AssignedUser type
 interface AssignedUser {
@@ -18,20 +19,42 @@ interface VoiceOverViewProps {
 }
 
 // Utility function to validate MongoDB ObjectId format
-function isValidObjectId(id: string): boolean {
-  const objectIdPattern = /^[0-9a-fA-F]{24}$/;
-  return objectIdPattern.test(id);
+function isValidObjectId(id: string | ObjectId): boolean {
+  if (typeof id === 'string') {
+    return /^[0-9a-fA-F]{24}$/.test(id)
+  }
+  return typeof id === 'object' && id !== null && '_bsontype' in id && id._bsontype === 'ObjectId'
+}
+
+function getStringId(id: string | ObjectId): string {
+  if (typeof id === 'string') {
+    return id
+  }
+  return id.toString()
 }
 
 export default function VoiceOverView({ projects }: VoiceOverViewProps) {
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const router = useRouter()
-
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isClient, setIsClient] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [isEpisodesModalOpen, setIsEpisodesModalOpen] = useState(false)
   const [loadingEpisodeId, setLoadingEpisodeId] = useState<string | null>(null)
+
+  // Handle client-side initialization
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // Don't render anything until we're sure we're on the client
+  if (!isClient || sessionStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    )
+  }
 
   console.log('VoiceOverView Component:', {
     sessionExists: !!session,
@@ -61,21 +84,21 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
   })
 
   // Handle user logout
-  const handleLogout = async () => {
-    try {
-      console.log('Initiating logout')
-      setIsLoggingOut(true)
-      if (typeof window !== 'undefined') {
-        window.localStorage.clear()
-      }
-      await signOut({ redirect: true, callbackUrl: '/login' })
-    } catch (error) {
-      console.error('Error during signOut:', error)
-      router.replace('/login')
-    } finally {
-      setIsLoggingOut(false)
-    }
-  }
+  // const handleLogout = async () => {
+  //   try {
+  //     console.log('Initiating logout')
+  //     setIsLoggingOut(true)
+  //     if (typeof window !== 'undefined') {
+  //       window.localStorage.clear()
+  //     }
+  //     await signOut({ redirect: true, callbackUrl: '/login' })
+  //   } catch (error) {
+  //     console.error('Error during signOut:', error)
+  //     router.replace('/login')
+  //   } finally {
+  //     setIsLoggingOut(false)
+  //   }
+  // }
 
   // Show episodes modal for a selected project
   const handleProjectClick = (project: Project) => {
@@ -149,8 +172,8 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
 
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Voice-Over Dashboard</h1>
-          <button
+          <h1 className="text-2xl font-bold text-center text-white">Voice-Over Dashboard</h1>
+          {/* <button
             onClick={handleLogout}
             disabled={isLoggingOut}
             className={`px-4 py-2 rounded transition-colors ${
@@ -158,7 +181,7 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
             } text-white`}
           >
             {isLoggingOut ? 'Logging out...' : 'Logout'}
-          </button>
+          </button> */}
         </div>
 
         {/* Search Bar */}
@@ -184,7 +207,7 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project) => (
               <div
-                key={isValidObjectId(project._id) ? project._id : project.title}
+                key={getStringId(project._id)}
                 className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors cursor-pointer"
                 onClick={() => handleProjectClick(project)}
               >
@@ -250,8 +273,8 @@ export default function VoiceOverView({ projects }: VoiceOverViewProps) {
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {selectedProject.episodes && selectedProject.episodes.length > 0 ? (
                 selectedProject.episodes.map((episode: Episode) => {
-                  const projectIdStr = isValidObjectId(selectedProject._id) ? selectedProject._id : selectedProject.title
-                  const episodeIdStr = isValidObjectId(episode._id) ? episode._id : episode.name
+                  const projectIdStr = getStringId(selectedProject._id)
+                  const episodeIdStr = getStringId(episode._id)
                   const episodeNameStr = episode.name
 
                   return (

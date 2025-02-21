@@ -24,6 +24,11 @@ function getRedisConfig() {
       tls: { rejectUnauthorized: false },
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      commandTimeout: 5000,
+      maxLoadingRetryTime: 3000,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      lazyConnect: true,
       retryStrategy: (times: number) => {
         if (times > 3) {
           console.error('Redis connection failed after 3 retries');
@@ -40,6 +45,11 @@ function getRedisConfig() {
       port: 6379,
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      commandTimeout: 5000,
+      maxLoadingRetryTime: 3000,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      lazyConnect: true,
       retryStrategy: (times: number) => {
         if (times > 3) {
           console.error('Redis connection failed after 3 retries');
@@ -63,8 +73,11 @@ export const getRedisConnection = () => {
       const config = getRedisConfig();
       connection = new IORedis(config);
 
+      // Only set up event listeners if we don't have a connection
       connection.on('error', (error: Error) => {
         console.error('Redis connection error:', error);
+        // Reset connection on error so we can retry
+        connection = null;
       });
 
       connection.on('connect', () => {
@@ -73,16 +86,28 @@ export const getRedisConnection = () => {
 
       connection.on('ready', () => {
         console.log('Redis client ready');
+        // For local Redis only, try to set eviction policy
+        if (process.env.NODE_ENV !== 'production' && connection) {
+          connection.config('SET', 'maxmemory', '2gb').catch(() => {
+            console.warn('Failed to set Redis maxmemory configuration');
+          });
+          
+          connection.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
+            console.warn('Failed to set Redis eviction policy');
+          });
+        }
       });
 
-      // Test the connection
+      // Test the connection only once
       connection.ping().then(() => {
         console.log('Redis connection test successful');
       }).catch((error) => {
         console.error('Redis connection test failed:', error);
+        connection = null;
       });
     } catch (error) {
       console.error('Failed to create Redis connection:', error);
+      connection = null;
       throw error;
     }
   }

@@ -29,8 +29,24 @@ export function getRedisClient() {
         }
         const delay = Math.min(times * 200, 1000);
         return delay;
-      }
+      },
+      commandTimeout: 5000,
+      maxLoadingRetryTime: 3000,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      lazyConnect: true
     });
+
+    // For local Redis only, try to set eviction policy
+    if (redisClient instanceof IORedis) {
+      redisClient.config('SET', 'maxmemory', '2gb').catch(() => {
+        console.warn('Failed to set Redis maxmemory configuration');
+      });
+      
+      redisClient.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
+        console.warn('Failed to set Redis eviction policy');
+      });
+    }
 
     console.log('Initialized local Redis client for development');
   }

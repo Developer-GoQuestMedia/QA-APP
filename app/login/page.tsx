@@ -26,6 +26,15 @@ const dashboardRoutes = {
 
 type UserRole = keyof typeof dashboardRoutes
 
+// Helper function to get redirect path based on role
+const getRoleBasedRedirectPath = (role: string): string => {
+  if (role in dashboardRoutes) {
+    return dashboardRoutes[role as UserRole];
+  }
+  console.error('Invalid role for redirect:', role);
+  return '/unauthorized';
+};
+
 // Helper function to handle route navigation safely
 const navigateToRoute = (router: ReturnType<typeof useRouter>, path: string) => {
   // Using replace to avoid adding to history stack
@@ -43,22 +52,23 @@ export default function Login() {
   useEffect(() => {
     // If we're already authenticated, redirect to the appropriate dashboard
     if (status === 'authenticated' && session?.user?.role) {
-      const userRole = session.user.role as UserRole
-      if (userRole in dashboardRoutes) {
-        const route = dashboardRoutes[userRole] as DashboardRoute
-        navigateToRoute(router, route)
-      }
+      const redirectPath = getRoleBasedRedirectPath(session.user.role);
+      navigateToRoute(router, redirectPath);
     }
   }, [status, session, router])
 
-  const handleLogin = async (formData: FormData) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    
     console.log('Login attempt initiated:', { timestamp: new Date().toISOString() });
     
     try {
       console.log('Calling NextAuth signIn with credentials');
       const result = await signIn('credentials', {
-        username: formData.get('username'),
-        password: formData.get('password'),
+        username,
+        password,
         redirect: false,
       });
       
@@ -93,9 +103,8 @@ export default function Login() {
                 timestamp: new Date().toISOString()
               });
               
-              // Redirect based on role
               const redirectPath = getRoleBasedRedirectPath(userData.role);
-              router.push(redirectPath);
+              navigateToRoute(router, redirectPath);
               return;
             } else {
               console.log(`Retry attempt ${retryCount + 1} for fetching user data:`, {
@@ -138,6 +147,7 @@ export default function Login() {
       });
       setError('An unexpected error occurred. Please try again.');
     } finally {
+      setIsLoading(false);
       console.log('Login attempt completed:', { timestamp: new Date().toISOString() });
     }
   };
@@ -150,7 +160,7 @@ export default function Login() {
       
       <div className="bg-card p-8 rounded-lg shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-6 text-foreground">Login</h1>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
               Username

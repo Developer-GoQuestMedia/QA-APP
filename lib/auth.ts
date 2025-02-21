@@ -231,7 +231,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: getCookieDomain()
+        domain: undefined // Let the browser handle the domain
       }
     },
     callbackUrl: {
@@ -241,7 +241,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: getCookieDomain()
+        domain: undefined
       }
     },
     csrfToken: {
@@ -251,7 +251,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: getCookieDomain()
+        domain: undefined
       }
     }
   },
@@ -263,8 +263,7 @@ export const authOptions: NextAuthOptions = {
     error: '/login'
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
-  trustHost: true
+  debug: process.env.NODE_ENV === 'development'
 }
 
 export const roles = [

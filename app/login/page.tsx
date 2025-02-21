@@ -51,109 +51,96 @@ export default function Login() {
     }
   }, [status, session, router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log('Login attempt initiated:', { 
-      username,
-      timestamp: new Date().toISOString(),
-      userAgent: window.navigator.userAgent
-    })
-    setIsLoading(true)
-    setError('')
-
+  const handleLogin = async (formData: FormData) => {
+    console.log('Login attempt initiated:', { timestamp: new Date().toISOString() });
+    
     try {
-      console.log('Calling NextAuth signIn with credentials')
+      console.log('Calling NextAuth signIn with credentials');
       const result = await signIn('credentials', {
-        username,
-        password,
-        redirect: false
-      })
-
-      console.log('SignIn result:', {
-        timestamp: new Date().toISOString(),
-        success: !result?.error,
-        hasError: !!result?.error,
-        error: result?.error,
-      })
-
-      if (result?.error) {
-        console.error('Login error from NextAuth:', {
-          error: result.error,
-          timestamp: new Date().toISOString()
-        })
-        setError('Invalid username or password')
-        setIsLoading(false)
-        return
-      }
-
-      console.log('Login successful, fetching user data')
+        username: formData.get('username'),
+        password: formData.get('password'),
+        redirect: false,
+      });
       
-      // Add retry logic for fetching user data
-      let retryCount = 0;
-      const maxRetries = 3;
-      const retryDelay = 1000; // 1 second
-      let lastError = null;
+      console.log('SignIn result:', {
+        ok: result?.ok,
+        error: result?.error,
+        timestamp: new Date().toISOString()
+      });
 
-      while (retryCount < maxRetries) {
-        try {
-          // Get user data including session ID
-          const response = await axios.get('/api/users/session', {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
+      if (result?.ok) {
+        console.log('Login successful, fetching user data');
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 1000; // 1 second
+
+        while (retryCount < maxRetries) {
+          try {
+            const response = await fetch('/api/users/session', {
+              method: 'GET',
+              headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+              },
+              credentials: 'include'
+            });
+
+            if (response.ok) {
+              const userData = await response.json();
+              console.log('User data fetched successfully:', {
+                role: userData.role,
+                username: userData.username,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Redirect based on role
+              const redirectPath = getRoleBasedRedirectPath(userData.role);
+              router.push(redirectPath);
+              return;
+            } else {
+              console.log(`Retry attempt ${retryCount + 1} for fetching user data:`, {
+                status: response.status,
+                statusText: response.statusText,
+                timestamp: new Date().toISOString()
+              });
+              retryCount++;
+              if (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+              }
             }
-          })
-
-          const userRole = response.data.role as UserRole
-          const sessionId = response.data.sessionId
-
-          console.log('User data fetched:', {
-            role: userRole,
-            sessionId,
-            timestamp: new Date().toISOString(),
-            retryAttempt: retryCount
-          })
-
-          if (userRole in dashboardRoutes) {
-            const route = dashboardRoutes[userRole] as DashboardRoute
-            // Store session ID in localStorage for session tracking
-            localStorage.setItem('sessionId', sessionId)
-            navigateToRoute(router, route)
-            return
-          } else {
-            throw new Error('Invalid role configuration')
+          } catch (error) {
+            console.error('Error fetching user data:', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              attempt: retryCount + 1,
+              timestamp: new Date().toISOString()
+            });
+            retryCount++;
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
           }
-        } catch (err) {
-          lastError = err
-          retryCount++;
-          console.log(`Retry attempt ${retryCount} for fetching user data:`, {
-            error: err instanceof Error ? err.message : 'Unknown error',
-            timestamp: new Date().toISOString()
-          })
-          
-          if (retryCount === maxRetries) {
-            throw lastError
-          }
-          await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount)); // Exponential backoff
         }
+        
+        console.error('Failed to fetch user data after retries');
+        setError('Failed to complete login process. Please try again.');
+      } else {
+        console.error('Login failed:', {
+          error: result?.error,
+          timestamp: new Date().toISOString()
+        });
+        setError(result?.error || 'Invalid credentials');
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    } catch (error) {
       console.error('Unexpected login error:', {
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-        type: err instanceof Error ? err.constructor.name : typeof err
-      })
-      setError('An error occurred during login. Please try again.')
+        error: error instanceof Error ? error.message : 'Unknown error',
+        type: error instanceof Error ? error.constructor.name : typeof error,
+        timestamp: new Date().toISOString()
+      });
+      setError('An unexpected error occurred. Please try again.');
     } finally {
-      console.log('Login attempt completed:', {
-        timestamp: new Date().toISOString(),
-        success: !error,
-        username
-      })
-      setIsLoading(false)
+      console.log('Login attempt completed:', { timestamp: new Date().toISOString() });
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -163,7 +150,7 @@ export default function Login() {
       
       <div className="bg-card p-8 rounded-lg shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-6 text-foreground">Login</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
               Username

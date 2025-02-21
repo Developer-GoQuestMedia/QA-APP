@@ -22,11 +22,12 @@ const getBaseUrl = () => {
 // Get the cookie domain
 const getCookieDomain = () => {
   if (process.env.NODE_ENV === 'production') {
-    const baseUrl = getBaseUrl();
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
     try {
       const hostname = new URL(baseUrl).hostname;
-      // If it's a custom domain, return it, otherwise return undefined to let the browser handle it
-      return hostname.includes('localhost') ? undefined : hostname;
+      return hostname;
     } catch (e) {
       console.warn('Failed to parse base URL for cookie domain:', e);
       return undefined;
@@ -230,7 +231,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined
+        domain: getCookieDomain()
       }
     },
     callbackUrl: {
@@ -240,7 +241,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined
+        domain: getCookieDomain()
       }
     },
     csrfToken: {
@@ -250,7 +251,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined
+        domain: getCookieDomain()
       }
     }
   },

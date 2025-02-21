@@ -25,8 +25,18 @@ export async function GET() {
         host,
         origin,
         referer: headersList.get('referer'),
-        cookie: headersList.get('cookie')?.substring(0, 100) + '...' // Log partial cookie for debugging
-      }
+        cookie: headersList.get('cookie')?.substring(0, 100) + '...',
+        'user-agent': headersList.get('user-agent')
+      },
+      sessionData: session ? {
+        expires: session.expires,
+        hasUser: !!session.user,
+        userDetails: session.user ? {
+          id: session.user.id,
+          role: session.user.role,
+          username: session.user.username
+        } : null
+      } : null
     })
     
     if (!session) {
@@ -38,7 +48,11 @@ export async function GET() {
           nextAuthUrl: process.env.NEXTAUTH_URL,
           vercelUrl: process.env.VERCEL_URL,
           host,
-          origin
+          origin,
+          headers: {
+            cookie: headersList.get('cookie')?.substring(0, 100) + '...',
+            'user-agent': headersList.get('user-agent')
+          }
         }
       }, { 
         status: 401,

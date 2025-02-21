@@ -37,7 +37,7 @@ function getRedisConfig() {
       };
     } catch (error) {
       console.error('Failed to parse Redis URL:', error);
-      throw error;
+      return null;
     }
   } else if (process.env.NODE_ENV !== 'production') {
     // Local development configuration
@@ -61,7 +61,8 @@ function getRedisConfig() {
       }
     };
   } else {
-    throw new Error('Redis configuration missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables');
+    console.warn('Redis configuration missing. Queue functionality will be unavailable.');
+    return null;
   }
 }
 
@@ -74,6 +75,11 @@ export const getRedisConnection = () => {
   if (!connection) {
     try {
       const config = getRedisConfig();
+      if (!config) {
+        console.warn('Redis configuration not available');
+        return null;
+      }
+
       connection = new IORedis(config);
 
       // Only set up event listeners if we don't have a connection
@@ -111,7 +117,6 @@ export const getRedisConnection = () => {
     } catch (error) {
       console.error('Failed to create Redis connection:', error);
       connection = null;
-      throw error;
     }
   }
   return connection;
@@ -123,6 +128,11 @@ export const getRedisConnection = () => {
 export const createAudioCleanerQueue = () => {
   try {
     const queueConnection = getRedisConnection();
+    if (!queueConnection) {
+      console.warn('Redis connection not available. Queue functionality will be limited.');
+      return null;
+    }
+
     return new Queue('audio-cleaner-queue', { 
       connection: queueConnection,
       defaultJobOptions: {
@@ -142,7 +152,7 @@ export const createAudioCleanerQueue = () => {
     });
   } catch (error) {
     console.error('Failed to create audio cleaner queue:', error);
-    throw error;
+    return null;
   }
 };
 

@@ -20,7 +20,7 @@ export function getRedisClient() {
       console.log('Initialized Upstash Redis client');
     } catch (error) {
       console.error('Failed to initialize Upstash Redis client:', error);
-      throw error;
+      redisClient = null;
     }
   } else if (process.env.NODE_ENV !== 'production') {
     // Development: Use local Redis
@@ -58,10 +58,11 @@ export function getRedisClient() {
       console.log('Initialized local Redis client for development');
     } catch (error) {
       console.error('Failed to initialize local Redis client:', error);
-      throw error;
+      redisClient = null;
     }
   } else {
-    throw new Error('Redis configuration missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables');
+    console.warn('Redis configuration missing. Some features may be unavailable.');
+    redisClient = null;
   }
 
   return redisClient;
@@ -94,6 +95,11 @@ export async function executeRedisOperation<T>(
   fallbackValue: T
 ): Promise<T> {
   try {
+    const client = getRedisClient();
+    if (!client) {
+      console.warn('Redis client not available, using fallback value');
+      return fallbackValue;
+    }
     return await operation();
   } catch (error) {
     console.error('Redis operation failed:', error);

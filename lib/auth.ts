@@ -8,6 +8,33 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('Please define the NEXTAUTH_SECRET environment variable')
 }
 
+// Get the base URL for the application
+const getBaseUrl = () => {
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'http://localhost:3000';
+};
+
+// Get the cookie domain
+const getCookieDomain = () => {
+  if (process.env.NODE_ENV === 'production') {
+    const baseUrl = getBaseUrl();
+    try {
+      const hostname = new URL(baseUrl).hostname;
+      // If it's a custom domain, return it, otherwise return undefined to let the browser handle it
+      return hostname.includes('localhost') ? undefined : hostname;
+    } catch (e) {
+      console.warn('Failed to parse base URL for cookie domain:', e);
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
 // Define available roles
 export const availableRoles = [
   'admin',
@@ -203,7 +230,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : undefined : undefined
+        domain: getCookieDomain()
       }
     },
     callbackUrl: {
@@ -213,7 +240,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : undefined : undefined
+        domain: getCookieDomain()
       }
     },
     csrfToken: {
@@ -223,7 +250,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : undefined : undefined
+        domain: getCookieDomain()
       }
     }
   },
@@ -235,7 +262,8 @@ export const authOptions: NextAuthOptions = {
     error: '/login'
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development'
+  debug: process.env.NODE_ENV === 'development',
+  trustHost: true
 }
 
 export const roles = [

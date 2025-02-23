@@ -587,35 +587,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   /**
    * Handle project creation with file upload and processing
    */
-  const handleCreateProject = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProject.title || !newProject.videoFiles.length) {
-      setError('Please fill in all required fields and upload at least one video file');
-      return;
-    }
-
+  const handleCreateProject = useCallback(async () => {
+    setIsCreating(true);
     try {
-      // Create FormData and append project details
-      const formData = new FormData();
-      formData.append('title', newProject.title);
-      formData.append('description', newProject.description);
-      formData.append('sourceLanguage', newProject.sourceLanguage);
-      formData.append('targetLanguage', newProject.targetLanguage);
-      formData.append('status', newProject.status);
+      // Validate project data
+      if (!newProject.title || newProject.videoFiles.length === 0) {
+        toast.error('Please provide a project title and upload at least one video file');
+        return;
+      }
 
-      // Append video files
-      newProject.videoFiles.forEach(file => {
-        formData.append('videos', file);
+      // Create database and collections
+      const dbResponse = await axios.post('/api/admin/database/create', {
+        projectTitle: newProject.title,
+        videoFiles: newProject.videoFiles.map(file => ({ 
+          name: file.name,
+        }))
       });
 
-      await axios.post('/api/admin/projects', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      if (!dbResponse.data.success) {
+        throw new Error(dbResponse.data.error || 'Failed to create project database');
+      }
 
-      setSuccess('Project created successfully');
-      setIsCreating(false);
+      toast.success('Project created successfully!');
+      // Reset form and refresh projects
       setNewProject({
         title: '',
         description: '',
@@ -624,19 +618,20 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         status: 'pending' as ProjectStatus,
         videoFiles: []
       });
-
       await refetchProjects();
+
     } catch (error) {
-      console.error('Error creating project:', error);
-      setError('Failed to create project');
-      notify('Failed to create project', 'error');
+      console.error('Project creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create project');
+    } finally {
+      setIsCreating(false);
     }
-  }, [newProject, refetchProjects, notify]);
+  }, [newProject, refetchProjects]);
 
   // -------------------------------
   //  CREATE USER HANDLER (UPDATED)
   // -------------------------------
-  const handleCreateUser = async (e: React.FormEvent): Promise<void> => {
+  const handleCreateUser = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     try {
       const response = await axios.post('/api/admin/users', newUser);
@@ -658,7 +653,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         handleError(error);
       }
     }
-  };
+  }, [newUser, queryClient, notify]);
 
   // ------------------------------
   //  UPDATE PROJECT STATUS

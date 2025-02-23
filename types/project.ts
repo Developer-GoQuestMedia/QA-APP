@@ -174,6 +174,7 @@ export interface Project {
   assignedTo: AssignedUser[]
   parentFolder: string
   databaseName: string
+  collectionName: string
   episodes: Episode[]
   uploadStatus: {
     totalFiles: number

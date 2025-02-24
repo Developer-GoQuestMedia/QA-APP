@@ -19,7 +19,7 @@ let clientPromise: Promise<MongoClient>
 
 // Add global type for MongoDB
 declare global {
-  var mongo: {
+  const mongo: {
     conn: MongoClient | null;
     promise: Promise<MongoClient> | null;
   } | null

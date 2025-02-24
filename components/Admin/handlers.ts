@@ -1,7 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import axios from 'axios';
-import { Project, Episode } from '@/types/project';
-import { User } from '@/types/user';
 import { AdminViewState, UploadProgressData } from './adminViewState';
 import logger from '@/lib/logger';
 

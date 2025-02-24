@@ -252,7 +252,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const socketRef = useRef<ReturnType<typeof getSocketClient> | null>(null);
   const projectsRef = useRef<Project[]>(projects);
   const hasInitializedRef = useRef<boolean>(false);
-  
+
   // Refs for debouncing and API calls
   const timeoutRefs = useRef<TimeoutRefs>({});
 
@@ -309,7 +309,132 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Upload progress state with proper typing
   const [uploadStatus, setUploadStatus] = useState<UploadPhase>('pending');
 
-  // Upload progress update helper - Primary implementation
+  // Helper functions moved inside component
+  const handleCreateProject = async () => {
+    try {
+      const response = await axios.post('/api/admin/projects', newProject);
+      if (response.data.success) {
+        notify('Project created successfully');
+        await refetchProjects();
+        setState(prev => ({ ...prev, isCreating: false }));
+      }
+    } catch (error) {
+      notify('Failed to create project', 'error');
+      console.error('Error creating project:', error);
+    }
+  };
+
+  const handleUpdateProject = async (projectId: string) => {
+    try {
+      if (!state.selectedProject) return;
+      const response = await axios.patch(`/api/admin/projects/${projectId}`, state.selectedProject);
+      if (response.data.success) {
+        notify('Project updated successfully');
+        await refetchProjects();
+        setState(prev => ({ ...prev, isEditing: false }));
+      }
+    } catch (error) {
+      notify('Failed to update project', 'error');
+      console.error('Error updating project:', error);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      const response = await axios.delete(`/api/admin/projects/${projectId}`);
+      if (response.data.success) {
+        notify('Project deleted successfully');
+        await refetchProjects();
+        setState(prev => ({ ...prev, showDeleteConfirm: false }));
+      }
+    } catch (error) {
+      notify('Failed to delete project', 'error');
+      console.error('Error deleting project:', error);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('/api/admin/users', newUser);
+      if (response.data.success) {
+        notify('User created successfully');
+        queryClient.invalidateQueries(['users']);
+        setState(prev => ({ ...prev, isCreatingUser: false }));
+      }
+    } catch (error) {
+      notify('Failed to create user', 'error');
+      console.error('Error creating user:', error);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const response = await axios.delete(`/api/admin/users/${userId}`);
+      if (response.data.success) {
+        notify('User deleted successfully');
+        queryClient.invalidateQueries(['users']);
+        setState(prev => ({ ...prev, showUserDeleteConfirm: false }));
+      }
+    } catch (error) {
+      notify('Failed to delete user', 'error');
+      console.error('Error deleting user:', error);
+    }
+  };
+
+  const handleAddEpisodes = async (files: FileList) => {
+    try {
+      if (!state.selectedProjectForEpisodes?._id) return;
+
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('episodes', file);
+      });
+
+      const response = await axios.post(
+        `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (response.data.success) {
+        notify('Episodes added successfully');
+        await refetchProjects();
+      }
+    } catch (error) {
+      notify('Failed to add episodes', 'error');
+      console.error('Error adding episodes:', error);
+    }
+  };
+
+  const handleAssignUsers = async () => {
+    try {
+      if (!state.selectedProject?._id || state.selectedUsernames.length === 0) return;
+
+      const response = await axios.post(`/api/admin/projects/${state.selectedProject._id}/assign-users`, {
+        usernames: state.selectedUsernames
+      });
+
+      if (response.data.success) {
+        notify('Users assigned successfully');
+        await refetchProjects();
+        setState({
+          ...state,
+          isAssigning: false,
+          selectedUsernames: []
+        });
+      }
+    } catch (error) {
+      notify('Failed to assign users', 'error');
+      console.error('Error assigning users:', error);
+    }
+  };
+
+  // Upload progress update helper
   const updateUploadProgress = useCallback((data: UploadProgressUpdate) => {
     const key = data.fileName || data.phase;
     const progressData: UploadProgressData = {
@@ -318,7 +443,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       total: data.total,
       message: data.message
     };
-    
+
     setState(prev => ({
       ...prev,
       uploadProgress: {
@@ -326,57 +451,90 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         [key]: progressData
       }
     }));
-  }, []);
+  }, [setState]);
 
-  // State update helper with proper typing
-  const updateState = useCallback((updates: Partial<AdminViewState> | ((prev: AdminViewState) => Partial<AdminViewState>)) => {
-    setState(prev => ({
-      ...prev,
-      ...(typeof updates === 'function' ? updates(prev) : updates)
-    }));
-  }, []);
+  // Project action handler
+  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId?: string) => {
+    try {
+      if (action !== 'create' && !projectId) return;
+      if (action === 'update' && !state.selectedProject) return;
+
+      setState(prev => ({ ...prev, isProjectsLoading: true, error: '' }));
+
+      switch (action) {
+        case 'create':
+          await handleCreateProject();
+          break;
+        case 'update':
+          if (!projectId) throw new Error('Project ID is required for update');
+          setState(prev => ({ ...prev, isEditing: true }));
+          await handleUpdateProject(projectId);
+          break;
+        case 'delete':
+          if (!projectId) throw new Error('Project ID is required for delete');
+          setState(prev => ({ ...prev, showDeleteConfirm: true }));
+          await handleDeleteProject(projectId);
+          break;
+      }
+
+      await refetchProjects();
+      setState(prev => ({ ...prev, success: `Project ${action}d successfully` }));
+    } catch (err) {
+      console.error(`Error ${action}ing project:`, err);
+      toast.error(`Failed to ${action} project`);
+      setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'An error occurred' }));
+    }
+  }, [state.selectedProject, handleCreateProject, handleUpdateProject, handleDeleteProject, refetchProjects, setState]);
+
+
+
+
+
 
   // UI event handlers
   const handleTabChange = useCallback((tab: Tab) => {
-    updateState({ activeTab: tab });
-  }, [updateState]);
+    setState(prev => ({ ...prev, activeTab: tab }));
+  }, []);
 
   const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
-    updateState({ viewMode: mode });
-  }, [updateState]);
+    setState(prev => ({ ...prev, viewMode: mode }));
+  }, []);
 
   const handleSortChange = useCallback((sort: 'title' | 'date' | 'status') => {
-    updateState({ sortBy: sort });
-  }, [updateState]);
+    setState(prev => ({ ...prev, sortBy: sort }));
+  }, []);
 
   // Project selection handlers
   const handleProjectSelect = useCallback((project: Project | null) => {
-    updateState({
+    setState(prev => ({
+      ...prev,
       selectedProject: project,
       selectedProjectForTeam: project,
       isEditing: false,
       isAssigning: false,
       showDeleteConfirm: false
-    });
-  }, [updateState]);
+    }));
+  }, []);
 
   // User selection handlers
   const handleUserSelect = useCallback((user: User | null) => {
-    updateState({ 
+    setState(prev => ({
+      ...prev,
       selectedUser: user,
       isCreatingUser: false,
       showUserDeleteConfirm: false
-    });
-  }, [updateState]);
+    }));
+  }, []);
 
   // Modal handlers
   const handleModalClose = useCallback(() => {
-    updateState({
+    setState(prev => ({
+      ...prev,
       isEpisodesModalOpen: false,
       selectedEpisode: null,
       isEpisodeDetailsOpen: false
-    });
-  }, [updateState]);
+    }));
+  }, []);
 
   // Search and filter handlers with proper typing
   const handleSearch = useCallback((term: string) => {
@@ -384,18 +542,18 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       clearTimeout(timeoutRefs.current.search);
     }
     timeoutRefs.current.search = setTimeout(() => {
-      updateState({ searchTerm: term });
+      setState(prev => ({ ...prev, searchTerm: term }));
     }, 300);
-  }, [updateState]);
+  }, []);
 
   const handleFilter = useCallback((status: ProjectStatus | 'all') => {
     if (timeoutRefs.current.filter) {
       clearTimeout(timeoutRefs.current.filter);
     }
     timeoutRefs.current.filter = setTimeout(() => {
-      updateState({ filterStatus: status });
+      setState(prev => ({ ...prev, filterStatus: status }));
     }, 300);
-  }, [updateState]);
+  }, []);
 
   // Move all hooks to the top level
   const memoizedData = useMemo<MemoizedData>(() => {
@@ -409,19 +567,19 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       filteredUsers: [],
       modalFilteredUsers: [],
       projectHandlers: {
-        handleCreateProject: async () => {},
-        handleUpdateProject: async (projectId: string) => {},
-        handleDeleteProject: async (projectId: string) => {},
-        handleAssignUsers: async () => {},
+        handleCreateProject: async () => { },
+        handleUpdateProject: async (projectId: string) => { },
+        handleDeleteProject: async (projectId: string) => { },
+        handleAssignUsers: async () => { },
       },
       userHandlers: {
-        handleCreateUser: async () => {},
-        handleUpdateUser: async (userId: string) => {},
-        handleDeleteUser: async (userId: string) => {},
+        handleCreateUser: async () => { },
+        handleUpdateUser: async (userId: string) => { },
+        handleDeleteUser: async (userId: string) => { },
       },
       userSelectionHandlers: {
-        handleUserSelection: (username: string) => {},
-        handleRemoveUser: async (projectId: string, username: string) => {},
+        handleUserSelection: (username: string) => { },
+        handleRemoveUser: async (projectId: string, username: string) => { },
       },
     };
   }, [projects, state.filterStatus, state.searchTerm]);
@@ -435,7 +593,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const memoizedUsers = useMemo<User[]>(() => {
     if (!state.modalFilteredUsers) return [];
-    return state.modalFilteredUsers.filter(user => 
+    return state.modalFilteredUsers.filter(user =>
       user.username.toLowerCase().includes(state.assignUserSearchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(state.assignUserSearchTerm.toLowerCase())
     );
@@ -454,19 +612,19 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleCallback = useCallback((projectId: string, action: 'edit' | 'delete' | 'assign'): void => {
     switch (action) {
       case 'edit':
-        updateState({ isEditing: true });
+        setState(prev => ({ ...prev, isEditing: true }));
         handleProjectSelect(projects.find(p => p._id === projectId) || null);
         break;
       case 'delete':
-        updateState({ showDeleteConfirm: true });
+        setState(prev => ({ ...prev, showDeleteConfirm: true }));
         handleProjectSelect(projects.find(p => p._id === projectId) || null);
         break;
       case 'assign':
-        updateState({ isAssigning: true });
+        setState(prev => ({ ...prev, isAssigning: true }));
         handleProjectSelect(projects.find(p => p._id === projectId) || null);
         break;
     }
-  }, [projects, updateState, handleProjectSelect]);
+  }, [projects, setState, handleProjectSelect]);
 
   // Socket connection effect with proper typing
   useEffect(() => {
@@ -476,10 +634,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       try {
         const socket = await getSocketClient();
         if (!socket) throw new Error('Failed to initialize socket');
-        
+
         socketRef.current = socket;
-        await authenticateSocket(socket, session.data.user as { id: string, email: string });
-        
+        await authenticateSocket('admin'); // Pass user role as ID for now
+
         // Join rooms for all projects
         projects.forEach((project: Project) => {
           joinProjectRoom(project._id.toString());
@@ -521,7 +679,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Project fetching effect - Only fetch if no projects and not already fetching
   useEffect(() => {
     const shouldFetchProjects = !projectsRef.current?.length && !hasInitializedRef.current;
-    
+
     if (shouldFetchProjects) {
       console.log('AdminView - No projects found, fetching...');
       void fetchProjectsWithLoading();
@@ -544,78 +702,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       message?: string;
     };
   }
-
-
-  // Handler functions
-  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId?: string) => {
-    try {
-      if (action !== 'create' && !projectId) return;
-      if (action === 'update' && !isProjectSelected(state.selectedProject)) return;
-
-      updateState({ isProjectsLoading: true, error: '' });
-      
-      switch (action) {
-        case 'create':
-          await handleCreateProject();
-          break;
-        case 'update':
-          if (!projectId) throw new Error('Project ID is required for update');
-          updateState({ isEditing: true });
-          await handleUpdateProject(projectId);
-          break;
-        case 'delete':
-          if (!projectId) throw new Error('Project ID is required for delete');
-          updateState({ showDeleteConfirm: true });
-          await handleDeleteProject(projectId);
-          break;
-      }
-      
-      await refetchProjects();
-      updateState({ success: `Project ${action}d successfully` });
-    } catch (err) {
-      console.error(`Error ${action}ing project:`, err);
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
-    }
-  }, [state.selectedProject, handleCreateProject, handleUpdateProject, handleDeleteProject, refetchProjects, updateState]);
-
-  const handleEpisodeAction = useCallback(async (action: 'add' | 'update' | 'delete' | 'view' | 'edit', episodeData?: Partial<Episode>) => {
-    try {
-      if (!state.selectedProjectForEpisodes?._id) {
-        throw new Error('No project selected');
-      }
-
-      updateState({ isProjectsLoading: true, error: '' });
-      
-      switch (action) {
-        case 'add':
-          if (!episodeData) throw new Error('Episode data is required for add');
-          await handleAddEpisodes(episodeData as any);
-          break;
-        case 'update':
-          if (!episodeData?._id) throw new Error('Episode ID is required for update');
-          // Implementation for update
-          break;
-        case 'delete':
-          if (!episodeData?._id) throw new Error('Episode ID is required for delete');
-          // Implementation for delete
-          break;
-        case 'view':
-        case 'edit':
-          if (!isProjectSelected(state.selectedProjectForEpisodes) || !isEpisodeSelected(state.selectedEpisode)) return;
-          // Implementation for view/edit
-          break;
-      }
-
-      await refetchProjects();
-      updateState({ success: `Episode ${action}d successfully` });
-    } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
-    } finally {
-      updateState({ isProjectsLoading: false });
-    }
-  }, [state.selectedProjectForEpisodes, state.selectedEpisode, handleAddEpisodes, refetchProjects, updateState]);
-
-  
 
   // Add missing handler functions
   const handleUpdateStatus = useCallback(async (projectId: string, newStatus: ProjectStatus) => {
@@ -649,19 +735,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   }, [queryClient, notify]);
 
-  const handleUserSelection = useCallback((username: string) => {
-    setState(prev => ({
-      ...prev,
-      selectedUsernames: prev.selectedUsernames.includes(username)
-        ? prev.selectedUsernames.filter(u => u !== username)
-        : [...prev.selectedUsernames, username]
-    }));
-  }, []);
-
-  const setAssignUserSearchTerm = useCallback((term: string) => {
-    setState(prev => ({ ...prev, assignUserSearchTerm: term }));
-  }, []);
-
   // Fix state management issues
   const updateProjectState = (updates: Partial<Project>) => {
     if (!state.selectedProject?._id) return;
@@ -671,8 +744,25 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       selectedProject: {
         ...prev.selectedProject!,
         ...updates,
-        _id: prev.selectedProject!._id // Ensure _id is always present
-      } as Project
+        _id: prev.selectedProject!._id, // Ensure _id is always present
+        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+        description: prev.selectedProject?.description || '',
+        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+        targetLanguage: prev.selectedProject?.targetLanguage || '',
+        assignedTo: prev.selectedProject?.assignedTo || [],
+        episodes: prev.selectedProject?.episodes || [],
+        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parentFolder: prev.selectedProject?.parentFolder || '',
+        databaseName: prev.selectedProject?.databaseName || '',
+        collectionName: prev.selectedProject?.collectionName || '',
+        uploadStatus: prev.selectedProject?.uploadStatus || {
+          totalFiles: 0,
+          completedFiles: 0,
+          currentFile: 0,
+          status: 'pending'
+        }
+      }
     }));
   };
 
@@ -685,7 +775,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         ...prev.selectedUser!,
         ...updates,
         _id: prev.selectedUser!._id
-      } as User
+      }
     }));
   };
 
@@ -698,24 +788,45 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         ...prev.selectedEpisode!,
         ...updates,
         _id: prev.selectedEpisode!._id
-      } as Episode
+      }
     }));
   };
 
   const setIsCreating = (value: boolean) => setState(prev => ({ ...prev, isCreating: value }));
   const setIsCreatingUser = (value: boolean) => setState(prev => ({ ...prev, isCreatingUser: value }));
-  const setAssignUserSearchTerm = (term: string) => setState(prev => ({ ...prev, assignUserSearchTerm: term }));
+
+  // Search term handler
+  const setAssignUserSearchTerm = useCallback((term: string) => {
+    setState(prev => ({ ...prev, assignUserSearchTerm: term }));
+  }, []);
 
   // Fix project update handlers with proper typing
   const handleProjectUpdate = (field: keyof Project, value: string) => {
     if (!state.selectedProject) return;
-    
+
     setState(prev => ({
       ...prev,
       selectedProject: {
         ...prev.selectedProject!,
         [field]: value,
-        _id: prev.selectedProject!._id // Ensure _id is preserved
+        _id: prev.selectedProject!._id, // Ensure _id is preserved
+        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+        description: prev.selectedProject?.description || '',
+        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+        targetLanguage: prev.selectedProject?.targetLanguage || '',
+        assignedTo: prev.selectedProject?.assignedTo || [],
+        episodes: prev.selectedProject?.episodes || [],
+        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parentFolder: prev.selectedProject?.parentFolder || '',
+        databaseName: prev.selectedProject?.databaseName || '',
+        collectionName: prev.selectedProject?.collectionName || '',
+        uploadStatus: prev.selectedProject?.uploadStatus || {
+          totalFiles: 0,
+          completedFiles: 0,
+          currentFile: 0,
+          status: 'pending'
+        }
       }
     }));
   };
@@ -723,7 +834,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Fix episode null checks
   const handleEpisodeSelection = (episode: Episode | null) => {
     if (!state.selectedProjectForEpisodes?.episodes) return;
-    
+
     setState(prev => ({
       ...prev,
       selectedEpisode: episode
@@ -733,11 +844,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Fix user action handlers with proper null checks
   const handleUserAction = useCallback(async (action: 'create' | 'update' | 'delete', userId?: string) => {
     try {
-      updateState({ error: '' });
-      
+      setState(prev => ({ ...prev, error: '' }));
+
       switch (action) {
         case 'create':
-          updateState({ isCreatingUser: true });
+          setState(prev => ({ ...prev, isCreatingUser: true }));
           // Implementation for create
           break;
         case 'update':
@@ -746,34 +857,24 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           break;
         case 'delete':
           if (!userId) throw new Error('User ID is required for delete');
-          updateState({ showUserDeleteConfirm: true });
+          setState(prev => ({ ...prev, showUserDeleteConfirm: true }));
           // Implementation for delete
           break;
       }
-      
-      updateState({ success: `User ${action}d successfully` });
+
+      setState(prev => ({ ...prev, success: `User ${action}d successfully` }));
     } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
+      setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'An error occurred' }));
     } finally {
-      updateState({ 
+      setState(prev => ({
+        ...prev,
         isCreatingUser: false,
         showUserDeleteConfirm: false
-      });
+      }));
     }
-  }, [updateState]);
+  }, [setState]);
 
-  // Fix upload progress state handling
-  const updateUploadProgress = (progress: UploadProgressData) => {
-    setState(prev => ({
-      ...prev,
-      uploadProgress: {
-        phase: progress.phase,
-        loaded: progress.loaded,
-        total: progress.total,
-        message: progress.message
-      }
-    }));
-  };
+
 
   // Fix project selection with proper type checking
   const handleProjectSelection = (project: Project) => {
@@ -786,16 +887,32 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }));
   };
 
-  // Fix user selection with proper type checking
-  const handleUserSelection = (user: User) => {
-    setState(prev => ({
-      ...prev,
-      selectedUser: {
-        ...user,
-        _id: user._id.toString() // Ensure _id is string
+
+  // User selection handler with support for both username and user object
+  const handleUserSelection = useCallback((userOrUsername: string | User) => {
+    setState(prev => {
+      if (typeof userOrUsername === 'string') {
+        // Handle username selection for multi-select
+        const username = userOrUsername;
+        return {
+          ...prev,
+          selectedUsernames: prev.selectedUsernames.includes(username)
+            ? prev.selectedUsernames.filter(u => u !== username)
+            : [...prev.selectedUsernames, username]
+        };
+      } else {
+        // Handle single user selection with proper type checking
+        const user = userOrUsername;
+        return {
+          ...prev,
+          selectedUser: {
+            ...user,
+            _id: user._id.toString() // Ensure _id is string
+          }
+        };
       }
-    }));
-  };
+    });
+  }, []);
 
   // Fix episode state updates
   const handleEpisodeUpdate = (episodeId: string, updates: Partial<Episode>) => {
@@ -869,20 +986,21 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Team assignment handlers
   const handleTeamAssignment = useCallback(async (projectId: string, usernames: string[]) => {
     try {
-      updateState({ isAssigning: true, error: '' });
-      
+      setState(prev => ({ ...prev, isAssigning: true, error: '' }));
+
       // Implementation for team assignment
-      
-      updateState({ success: 'Team assigned successfully' });
+
+      setState(prev => ({ ...prev, success: 'Team assigned successfully' }));
     } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
+      setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'An error occurred' }));
     } finally {
-      updateState({ 
+      setState(prev => ({
+        ...prev,
         isAssigning: false,
         selectedUsernames: []
-      });
+      }));
     }
-  }, [updateState]);
+  }, [setState]);
 
   // Upload handlers
   const handleUpload = useCallback(async (files: File[]) => {
@@ -896,7 +1014,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
           message: 'Starting upload...'
         };
       });
-      
+
       setState(prev => ({
         ...prev,
         uploadProgress: newProgress
@@ -906,81 +1024,51 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         const file = files[i];
         const formData = new FormData();
         formData.append('file', file);
-        
+
         await axios.post('/api/upload', formData, {
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              setState(prev => ({
-                ...prev,
-                uploadProgress: {
-                  ...prev.uploadProgress,
-                  [file.name]: {
-                    phase: 'uploading',
-                    loaded: progressEvent.loaded,
-                    total: progressEvent.total,
-                    message: `Uploading ${file.name} (${formatBytes(progressEvent.loaded)} / ${formatBytes(progressEvent.total)})`
-                  }
-                }
-              }));
+              updateUploadProgress({
+                phase: 'uploading',
+                loaded: progressEvent.loaded,
+                total: progressEvent.total,
+                message: `Uploading ${file.name} (${formatBytes(progressEvent.loaded)} / ${formatBytes(progressEvent.total)})`
+              });
             }
           }
         });
 
-        setState(prev => ({
-          ...prev,
-          uploadProgress: {
-            ...prev.uploadProgress,
-            [file.name]: {
-              phase: 'creating-collection',
-              loaded: file.size,
-              total: file.size,
-              message: `Creating collection for ${file.name}`
-            }
-          }
-        }));
+        updateUploadProgress({
+          phase: 'creating-collection',
+          loaded: file.size,
+          total: file.size,
+          message: `Creating collection for ${file.name}`
+        });
 
-        setState(prev => ({
-          ...prev,
-          uploadProgress: {
-            ...prev.uploadProgress,
-            [file.name]: {
-              phase: 'processing',
-              loaded: file.size,
-              total: file.size,
-              message: `Processing ${file.name}`
-            }
-          }
-        }));
+        updateUploadProgress({
+          phase: 'processing',
+          loaded: file.size,
+          total: file.size,
+          message: `Processing ${file.name}`
+        });
 
-        setState(prev => ({
-          ...prev,
-          uploadProgress: {
-            ...prev.uploadProgress,
-            [file.name]: {
-              phase: 'success',
-              loaded: file.size,
-              total: file.size,
-              message: `Successfully uploaded ${file.name}`
-            }
-          }
-        }));
+        updateUploadProgress({
+          phase: 'success',
+          loaded: file.size,
+          total: file.size,
+          message: `Successfully uploaded ${file.name}`
+        });
       }
 
       notify('All files uploaded successfully', 'success');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Upload failed';
-      setState(prev => ({
-        ...prev,
-        uploadProgress: {
-          ...prev.uploadProgress,
-          error: {
-            phase: 'error',
-            loaded: 0,
-            total: 100,
-            message: errorMessage
-          }
-        }
-      }));
+      updateUploadProgress({
+        phase: 'error',
+        loaded: 0,
+        total: 100,
+        message: errorMessage
+      });
       notify('Failed to upload files', 'error');
     }
   }, [setState, notify]);
@@ -994,8 +1082,25 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       selectedProject: {
         ...prev.selectedProject!,
         ...updates,
-        _id: prev.selectedProject!._id // Ensure _id is always present
-      } as Project
+        _id: prev.selectedProject!._id, // Ensure _id is always present
+        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+        description: prev.selectedProject?.description || '',
+        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+        targetLanguage: prev.selectedProject?.targetLanguage || '',
+        assignedTo: prev.selectedProject?.assignedTo || [],
+        episodes: prev.selectedProject?.episodes || [],
+        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parentFolder: prev.selectedProject?.parentFolder || '',
+        databaseName: prev.selectedProject?.databaseName || '',
+        collectionName: prev.selectedProject?.collectionName || '',
+        uploadStatus: prev.selectedProject?.uploadStatus || {
+          totalFiles: 0,
+          completedFiles: 0,
+          currentFile: 0,
+          status: 'pending'
+        }
+      }
     }));
   };
 
@@ -1011,25 +1116,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     return episode !== null;
   };
 
-  // Fix project action handlers
-  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId: string) => {
-    try {
-      if (action !== 'create' && !projectId) return;
-      if (action === 'update' && !isProjectSelected(state.selectedProject)) return;
 
-      // Rest of the implementation
-    } catch (error) {
-      console.error(`Error ${action}ing project:`, error);
-      toast.error(`Failed to ${action} project`);
-    }
-  }, [state.selectedProject]);
 
-  // Fix episode handling
-  const handleEpisodeAction = useCallback(async (action: 'view' | 'edit' | 'delete', episodeId: string) => {
-    if (!isProjectSelected(state.selectedProjectForEpisodes) || !isEpisodeSelected(state.selectedEpisode)) return;
-  
-    // Rest of the implementation
-  }, [state.selectedProjectForEpisodes, state.selectedEpisode]);
+
 
   // Fix view mode toggle
   const toggleViewMode = useCallback(() => {
@@ -1038,6 +1127,50 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       viewMode: prev.viewMode === 'grid' ? 'list' : 'grid'
     }));
   }, []);
+
+  // Episode action handler
+  const handleEpisodeAction = useCallback(async (action: 'add' | 'update' | 'delete' | 'view' | 'edit', episodeData?: Partial<Episode>) => {
+    try {
+      if (!isProjectSelected(state.selectedProjectForEpisodes)) {
+        throw new Error('No project selected');
+      }
+
+      if ((action === 'view' || action === 'edit' || action === 'delete') && !isEpisodeSelected(state.selectedEpisode)) {
+        throw new Error('No episode selected');
+      }
+
+      setState(prev => ({ ...prev, isProjectsLoading: true, error: '' }));
+
+      switch (action) {
+        case 'add':
+          if (!episodeData) throw new Error('Episode data is required for add');
+          await handleAddEpisodes(episodeData as any);
+          break;
+        case 'update':
+          if (!episodeData?._id) throw new Error('Episode ID is required for update');
+          // Implementation for update
+          break;
+        case 'delete':
+          if (!episodeData?._id) throw new Error('Episode ID is required for delete');
+          // Implementation for delete
+          break;
+        case 'view':
+        case 'edit':
+          if (!state.selectedProjectForEpisodes || !state.selectedEpisode) return;
+          // Implementation for view/edit
+          break;
+      }
+
+      await refetchProjects();
+      setState(prev => ({ ...prev, success: `Episode ${action}d successfully` }));
+    } catch (err) {
+      console.error(`Error ${action}ing episode:`, err);
+      notify(`Failed to ${action} episode`, 'error');
+      setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'An error occurred' }));
+    } finally {
+      setState(prev => ({ ...prev, isProjectsLoading: false }));
+    }
+  }, [state.selectedProjectForEpisodes, state.selectedEpisode, handleAddEpisodes, refetchProjects, isProjectSelected, isEpisodeSelected, notify]);
 
   // Fix null checks for selected items
   const handleSelectedProject = useCallback(() => {
@@ -1111,13 +1244,13 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               {state.activeTab === 'projects' && (
                 <>
                   <button
-                    onClick={() => handleViewModeChange((prev) => (prev === 'grid' ? 'list' : 'grid'))}
+                    onClick={() => setState(prev => ({ ...prev, viewMode: prev.viewMode === 'grid' ? 'list' : 'grid' }))}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                   >
                     {state.viewMode === 'grid' ? 'List View' : 'Grid View'}
                   </button>
                   <button
-                    onClick={() => updateState({ isCreating: true })}
+                    onClick={() => setState(prev => ({ ...prev, isCreating: true }))}
                     className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -1127,7 +1260,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               )}
               {state.activeTab === 'users' && (
                 <button
-                  onClick={() => updateState({ isCreatingUser: true })}
+                  onClick={() => setState(prev => ({ ...prev, isCreatingUser: true }))}
                   className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
@@ -1272,7 +1405,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   </button>
                                   <button
                                     onClick={() => {
-                                      updateState({ isEditing: true });
+                                      setState(prev => ({ ...prev, isEditing: true }));
                                       handleProjectSelect(project);
                                     }}
                                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1282,7 +1415,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   </button>
                                   <button
                                     onClick={() => {
-                                      updateState({ isAssigning: true });
+                                      setState(prev => ({ ...prev, isAssigning: true }));
                                       handleProjectSelect(project);
                                     }}
                                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1292,8 +1425,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                   </button>
                                   <button
                                     onClick={() => {
-                                      updateState({ showDeleteConfirm: true });
-                                      handleProjectSelect(project);
+                                      if (!state.selectedProject) {
+                                        notify('No project selected');
+                                        return;
+                                      }
+                                      handleDeleteProject(state.selectedProject._id.toString());
                                     }}
                                     className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                                   >
@@ -1379,15 +1515,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                         >
                                           <div className="flex items-center space-x-2">
                                             <span
-                                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${
-                                                assignedUser.role === 'transcriber'
-                                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                                                  : assignedUser.role === 'translator'
-                                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                                                    : assignedUser.role === 'voiceOver'
-                                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                                                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                              }`}
+                                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${assignedUser.role === 'transcriber'
+                                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                                                : assignedUser.role === 'translator'
+                                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                                                  : assignedUser.role === 'voiceOver'
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                }`}
                                             >
                                               {assignedUser.role}
                                             </span>
@@ -1396,7 +1531,13 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                             </span>
                                           </div>
                                           <button
-                                            onClick={() => handleRemoveUser(project._id.toString(), assignedUser.username)}
+                                            onClick={() => {
+                                              if (!state.selectedProject) {
+                                                notify('No project selected');
+                                                return;
+                                              }
+                                              handleRemoveUser(state.selectedProject._id.toString(), assignedUser.username);
+                                            }}
                                             className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                                             title="Remove user"
                                           >
@@ -1414,7 +1555,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        updateState({ isAssigning: true });
+                                        setState(prev => ({ ...prev, isAssigning: true }));
                                         handleProjectSelect(project);
                                       }}
                                       className="flex items-center justify-center w-full px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
@@ -1433,10 +1574,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         <div className="mt-6">
                           <button
                             onClick={() => {
-                              updateState({ 
+                              setState(prev => ({
+                                ...prev,
                                 selectedProjectForEpisodes: project,
                                 isEpisodesModalOpen: true
-                              });
+                              }));
                             }}
                             className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                           >
@@ -1493,11 +1635,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'transcriber'
                           ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
                           : user.role === 'translator'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                          : user.role === 'voiceOver'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                            : user.role === 'voiceOver'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}
                       >
                         {user.role}
                       </span>
@@ -1523,10 +1665,15 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => {
-                          updateState({ 
-                            selectedUser: user,
+                          if (!state.selectedUser) {
+                            notify('No user selected');
+                            return;
+                          }
+                          setState(prev => ({
+                            ...prev,
+                            selectedUser: state.selectedUser,
                             showUserDeleteConfirm: true
-                          });
+                          }));
                         }}
                         className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                       >
@@ -1615,8 +1762,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   </label>
                   <div className="space-y-4">
                     <div className="flex items-center justify-center w-full">
-                      <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400">
-                        <div className="flex flex-col items-center justify-center text-center">
+                      <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
+                        <div className="flex flex-col items-center text-center">
                           <svg
                             className="w-8 h-8 text-gray-400 mb-2"
                             fill="none"
@@ -1648,19 +1795,16 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             }));
 
                             // Initialize progress and status
-                            const newProgress = { ...uploadProgress };
-                            const newStatus = { ...uploadStatus };
+                            const newProgress: UploadState = {};
                             files.forEach((file) => {
                               newProgress[file.name] = {
                                 loaded: 0,
                                 total: file.size,
-                                phase: 'pending',
-                                message: 'Waiting to start',
+                                phase: uploadStatus,
+                                message: `Preparing to upload ${file.name}`
                               };
-                              newStatus[file.name] = 'pending';
                             });
                             setUploadProgress(newProgress);
-                            setUploadStatus(newStatus);
                           }}
                         />
                       </label>
@@ -1710,11 +1854,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                       videoFiles: prev.videoFiles.filter((_, i) => i !== index),
                                     }));
                                     const newProgress = { ...uploadProgress };
-                                    const newStatus = { ...uploadStatus };
                                     delete newProgress[file.name];
-                                    delete newStatus[file.name];
                                     setUploadProgress(newProgress);
-                                    setUploadStatus(newStatus);
                                   }}
                                   className="text-red-500 hover:text-red-700 flex-shrink-0"
                                   disabled={
@@ -1769,7 +1910,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                 <button
                   type="button"
-                  onClick={() => updateState({ isCreating: false })}
+                  onClick={() => setState(prev => ({ ...prev, isCreating: false }))}
                   className="w-full sm:w-auto px-4 py-2 text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
@@ -1856,7 +1997,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <div className="flex justify-end gap-2 mt-4">
                 <button
                   type="button"
-                  onClick={() => updateState({ isCreatingUser: false })}
+                  onClick={() => setState(prev => ({ ...prev, isCreatingUser: false }))}
                   className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
@@ -1886,20 +2027,27 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
-                  updateState({ 
+                  setState(prev => ({
+                    ...prev,
                     showUserDeleteConfirm: false,
                     selectedUser: null
-                  });
+                  }));
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteUser(state.selectedUser._id)}
+                onClick={() => {
+                  if (!state.selectedUser) {
+                    notify('No user selected');
+                    return;
+                  }
+                  handleDeleteUser(state.selectedUser._id);
+                }}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               >
-                Delete
+                Delete User
               </button>
             </div>
           </div>
@@ -1913,7 +2061,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
               Assign Users to {state.selectedProject.title}
             </h2>
-            
+
             {/* Currently Assigned Users Section */}
             <div className="mb-6">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1924,21 +2072,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   state.selectedProject.assignedTo?.map((assignedUser: AssignedUser) => (
                     <div
                       key={assignedUser.username}
-                      className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                        assignedUser.role === 'transcriber'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                          : assignedUser.role === 'translator'
+                      className={`flex items-center gap-2 px-3 py-1 rounded-full ${assignedUser.role === 'transcriber'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                        : assignedUser.role === 'translator'
                           ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
                           : assignedUser.role === 'voiceOver'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      }`}
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}
                     >
                       <span className="text-sm">
                         {assignedUser.username} ({assignedUser.role})
                       </span>
                       <button
-                        onClick={() => handleRemoveUser(state.selectedProject._id.toString(), assignedUser.username)}
+                        onClick={() => {
+                          if (!state.selectedProject) {
+                            notify('No project selected');
+                            return;
+                          }
+                          handleRemoveUser(state.selectedProject._id.toString(), assignedUser.username);
+                        }}
                         className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         ×
@@ -1963,14 +2116,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   {state.selectedUsernames.length} selected
                 </span>
               </div>
-              
+
               {/* Replace the search input in assign users modal */}
               <div className="relative mb-4">
                 <input
                   type="text"
                   placeholder="Search users..."
                   value={state.assignUserSearchTerm}
-                  onChange={(e) => updateState({ assignUserSearchTerm: e.target.value })}
+                  onChange={(e) => setAssignUserSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                 />
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1983,11 +2136,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     return (
                       <div
                         key={user._id.toString()}
-                        className={`flex items-center px-4 py-2 cursor-pointer transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-50 dark:bg-blue-900/20' 
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
+                        className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${isSelected
+                          ? 'bg-blue-50 dark:bg-blue-900/20'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                          }`}
                         onClick={() => handleUserSelection(user.username)}
                       >
                         <div className="flex items-center flex-1">
@@ -2009,15 +2161,14 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 </div>
                               </div>
                               <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  user.role === 'transcriber'
-                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                                    : user.role === 'translator'
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'transcriber'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                                  : user.role === 'translator'
                                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
                                     : user.role === 'voiceOver'
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                }`}
+                                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                  }`}
                               >
                                 {user.role}
                               </span>
@@ -2039,11 +2190,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
-                  updateState({ 
+                  setState(prev => ({
+                    ...prev,
                     isAssigning: false,
                     selectedProject: null,
                     selectedUsernames: []
-                  });
+                  }));
                   setAssignUserSearchTerm('');
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
@@ -2072,6 +2224,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (!state.selectedProject) {
+                  notify('No project selected');
+                  return;
+                }
                 try {
                   await axios.patch(`/api/admin/projects/${state.selectedProject._id}`, {
                     title: state.selectedProject.title,
@@ -2082,12 +2238,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     status: state.selectedProject.status,
                   });
                   await refetchProjects();
-                  updateState({ isEditing: false, selectedProject: null });
+                  setState(prev => ({ ...prev, isEditing: false, selectedProject: null }));
                   notify('Project updated successfully');
-                  setTimeout(() => updateState({ success: '' }), 3000);
+                  setTimeout(() => setState(prev => ({ ...prev, success: '' })), 3000);
                 } catch (err) {
-                  updateState({ error: 'Failed to update project' });
-                  setTimeout(() => updateState({ error: '' }), 3000);
+                  setState(prev => ({ ...prev, error: 'Failed to update project' }));
+                  setTimeout(() => setState(prev => ({ ...prev, error: '' })), 3000);
                 }
               }}
               className="space-y-4"
@@ -2100,9 +2256,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   type="text"
                   value={state.selectedProject.title}
                   onChange={(e) =>
-                    updateState((prev) => ({
+                    setState(prev => ({
                       ...prev,
-                      selectedProject: { ...prev.selectedProject, title: e.target.value }
+                      selectedProject: {
+                        ...prev.selectedProject!,
+                        title: e.target.value,
+                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+                        description: prev.selectedProject?.description || '',
+                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+                        targetLanguage: prev.selectedProject?.targetLanguage || '',
+                        assignedTo: prev.selectedProject?.assignedTo || [],
+                        episodes: prev.selectedProject?.episodes || [],
+                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        parentFolder: prev.selectedProject?.parentFolder || '',
+                        databaseName: prev.selectedProject?.databaseName || '',
+                        collectionName: prev.selectedProject?.collectionName || '',
+                        uploadStatus: prev.selectedProject?.uploadStatus || {
+                          totalFiles: 0,
+                          completedFiles: 0,
+                          currentFile: 0,
+                          status: 'pending'
+                        }
+                      }
                     }))
                   }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
@@ -2116,9 +2292,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 <textarea
                   value={state.selectedProject.description}
                   onChange={(e) =>
-                    updateState((prev) => ({
+                    setState(prev => ({
                       ...prev,
-                      selectedProject: { ...prev.selectedProject, description: e.target.value }
+                      selectedProject: {
+                        ...prev.selectedProject!,
+                        description: e.target.value,
+                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+                        title: prev.selectedProject?.title || '',
+                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+                        targetLanguage: prev.selectedProject?.targetLanguage || '',
+                        assignedTo: prev.selectedProject?.assignedTo || [],
+                        episodes: prev.selectedProject?.episodes || [],
+                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        parentFolder: prev.selectedProject?.parentFolder || '',
+                        databaseName: prev.selectedProject?.databaseName || '',
+                        collectionName: prev.selectedProject?.collectionName || '',
+                        uploadStatus: prev.selectedProject?.uploadStatus || {
+                          totalFiles: 0,
+                          completedFiles: 0,
+                          currentFile: 0,
+                          status: 'pending'
+                        }
+                      }
                     }))
                   }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
@@ -2135,9 +2331,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     type="text"
                     value={state.selectedProject.sourceLanguage}
                     onChange={(e) =>
-                      updateState((prev) => ({
+                      setState(prev => ({
                         ...prev,
-                        selectedProject: { ...prev.selectedProject, sourceLanguage: e.target.value }
+                        selectedProject: {
+                          ...prev.selectedProject!,
+                          sourceLanguage: e.target.value,
+                          status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+                          title: prev.selectedProject?.title || '',
+                          description: prev.selectedProject?.description || '',
+                          targetLanguage: prev.selectedProject?.targetLanguage || '',
+                          assignedTo: prev.selectedProject?.assignedTo || [],
+                          episodes: prev.selectedProject?.episodes || [],
+                          createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                          parentFolder: prev.selectedProject?.parentFolder || '',
+                          databaseName: prev.selectedProject?.databaseName || '',
+                          collectionName: prev.selectedProject?.collectionName || '',
+                          uploadStatus: prev.selectedProject?.uploadStatus || {
+                            totalFiles: 0,
+                            completedFiles: 0,
+                            currentFile: 0,
+                            status: 'pending'
+                          }
+                        }
                       }))
                     }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
@@ -2152,9 +2368,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                     type="text"
                     value={state.selectedProject.targetLanguage}
                     onChange={(e) =>
-                      updateState((prev) => ({
+                      setState(prev => ({
                         ...prev,
-                        selectedProject: { ...prev.selectedProject, targetLanguage: e.target.value }
+                        selectedProject: {
+                          ...prev.selectedProject!,
+                          targetLanguage: e.target.value,
+                          status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+                          title: prev.selectedProject?.title || '',
+                          description: prev.selectedProject?.description || '',
+                          sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+                          assignedTo: prev.selectedProject?.assignedTo || [],
+                          episodes: prev.selectedProject?.episodes || [],
+                          createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                          parentFolder: prev.selectedProject?.parentFolder || '',
+                          databaseName: prev.selectedProject?.databaseName || '',
+                          collectionName: prev.selectedProject?.collectionName || '',
+                          uploadStatus: prev.selectedProject?.uploadStatus || {
+                            totalFiles: 0,
+                            completedFiles: 0,
+                            currentFile: 0,
+                            status: 'pending'
+                          }
+                        }
                       }))
                     }
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
@@ -2170,9 +2406,30 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   type="text"
                   value={state.selectedProject.episodes[0].collectionName}
                   onChange={(e) =>
-                    updateState((prev) => ({
+                    setState(prev => ({
                       ...prev,
-                      selectedProject: { ...prev.selectedProject, dialogue_collection: e.target.value }
+                      selectedProject: {
+                        ...prev.selectedProject!,
+                        dialogue_collection: e.target.value,
+                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
+                        title: prev.selectedProject?.title || '',
+                        description: prev.selectedProject?.description || '',
+                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
+                        targetLanguage: prev.selectedProject?.targetLanguage || '',
+                        assignedTo: prev.selectedProject?.assignedTo || [],
+                        episodes: prev.selectedProject?.episodes || [],
+                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        parentFolder: prev.selectedProject?.parentFolder || '',
+                        databaseName: prev.selectedProject?.databaseName || '',
+                        collectionName: prev.selectedProject?.collectionName || '',
+                        uploadStatus: prev.selectedProject?.uploadStatus || {
+                          totalFiles: 0,
+                          completedFiles: 0,
+                          currentFile: 0,
+                          status: 'pending'
+                        }
+                      }
                     }))
                   }
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
@@ -2183,7 +2440,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 <button
                   type="button"
                   onClick={() => {
-                    updateState({ isEditing: false, selectedProject: null });
+                    setState(prev => ({
+                      ...prev,
+                      isEditing: false,
+                      selectedProject: null
+                    }));
                   }}
                   className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
@@ -2214,14 +2475,20 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
-                  updateState({ showDeleteConfirm: false, selectedProject: null });
+                  setState(prev => ({ ...prev, showDeleteConfirm: false, selectedProject: null }));
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteProject(state.selectedProject._id.toString())}
+                onClick={() => {
+                  if (!state.selectedProject) {
+                    notify('No project selected');
+                    return;
+                  }
+                  handleDeleteProject(state.selectedProject._id.toString());
+                }}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
               >
                 Delete
@@ -2243,10 +2510,11 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
             <button
               onClick={() => {
-                updateState({ 
+                setState(prev => ({
+                  ...prev,
                   isEpisodesModalOpen: false,
                   selectedEpisode: null
-                });
+                }));
               }}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
@@ -2258,7 +2526,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
                 <div className="flex items-center">
                   <Plus className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Add New Episodes</span>
+                  <span className="text-sm">Add New Episodes</span>
                 </div>
                 <input
                   type="file"
@@ -2286,9 +2554,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${episode.status === 'uploaded'
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
                           : episode.status === 'processing'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
-                        }`}
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
+                          }`}
                       >
                         {episode.status}
                       </span>
@@ -2304,7 +2572,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             const projectId = state.selectedProjectForEpisodes._id.toString();
                             const episodeId = episode._id.toString();
                             const episodeName = encodeURIComponent(episode.name);
-                            
+
                             router.push(
                               `/admin/project/${projectId}/episodes/${episodeName}?projectId=${projectId}&episodeId=${episodeId}&projectTitle=${encodeURIComponent(state.selectedProjectForEpisodes.title)}&episodeName=${episodeName}`
                             );
@@ -2327,10 +2595,12 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                       </button>
                       <button
                         onClick={() => {
-                          updateState({ 
+                          if (!state.selectedProjectForEpisodes || !episode) return;
+                          setState(prev => ({
+                            ...prev,
                             selectedEpisode: episode,
                             showDeleteConfirm: true
-                          });
+                          }));
                         }}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                       >
@@ -2363,7 +2633,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
-                  updateState({ showDeleteConfirm: false, selectedEpisode: null });
+                  setState(prev => ({ ...prev, showDeleteConfirm: false, selectedEpisode: null }));
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
@@ -2372,18 +2642,22 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               <button
                 onClick={async () => {
                   try {
+                    if (!state.selectedProjectForEpisodes || !state.selectedEpisode) {
+                      notify('No project or episode selected');
+                      return;
+                    }
                     const response = await fetch(
                       `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes?episodeId=${state.selectedEpisode._id}`,
                       {
                         method: 'DELETE',
                       }
                     );
-                    
+
                     const data = await response.json();
                     if (data.success) {
                       notify('Episode deleted successfully');
                       await refetchProjects();
-                      updateState({ showDeleteConfirm: false, selectedEpisode: null });
+                      setState(prev => ({ ...prev, showDeleteConfirm: false, selectedEpisode: null }));
                     } else {
                       notify('Failed to delete episode: ' + data.error, 'error');
                     }
@@ -2417,129 +2691,3 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     </div>
   );
 }
-
-// Add missing function declarations at the top
-const handleCreateProject = async () => {
-  try {
-    // Implementation for creating project
-    const response = await axios.post('/api/admin/projects', newProject);
-    if (response.data.success) {
-      notify('Project created successfully');
-      await refetchProjects();
-      updateState({ isCreating: false });
-    }
-  } catch (error) {
-    notify('Failed to create project', 'error');
-    console.error('Error creating project:', error);
-  }
-};
-
-const handleUpdateProject = async (projectId: string) => {
-  try {
-    if (!state.selectedProject) return;
-    const response = await axios.patch(`/api/admin/projects/${projectId}`, state.selectedProject);
-    if (response.data.success) {
-      notify('Project updated successfully');
-      await refetchProjects();
-      updateState({ isEditing: false });
-    }
-  } catch (error) {
-    notify('Failed to update project', 'error');
-    console.error('Error updating project:', error);
-  }
-};
-
-const handleDeleteProject = async (projectId: string) => {
-  try {
-    const response = await axios.delete(`/api/admin/projects/${projectId}`);
-    if (response.data.success) {
-      notify('Project deleted successfully');
-      await refetchProjects();
-      updateState({ showDeleteConfirm: false });
-    }
-  } catch (error) {
-    notify('Failed to delete project', 'error');
-    console.error('Error deleting project:', error);
-  }
-};
-
-const handleCreateUser = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    const response = await axios.post('/api/admin/users', newUser);
-    if (response.data.success) {
-      notify('User created successfully');
-      queryClient.invalidateQueries(['users']);
-      updateState({ isCreatingUser: false });
-    }
-  } catch (error) {
-    notify('Failed to create user', 'error');
-    console.error('Error creating user:', error);
-  }
-};
-
-const handleDeleteUser = async (userId: string) => {
-  try {
-    const response = await axios.delete(`/api/admin/users/${userId}`);
-    if (response.data.success) {
-      notify('User deleted successfully');
-      queryClient.invalidateQueries(['users']);
-      updateState({ showUserDeleteConfirm: false });
-    }
-  } catch (error) {
-    notify('Failed to delete user', 'error');
-    console.error('Error deleting user:', error);
-  }
-};
-
-const handleAddEpisodes = async (files: FileList) => {
-  try {
-    if (!state.selectedProjectForEpisodes?._id) return;
-    
-    const formData = new FormData();
-    Array.from(files).forEach(file => {
-      formData.append('episodes', file);
-    });
-
-    const response = await axios.post(
-      `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      }
-    );
-
-    if (response.data.success) {
-      notify('Episodes added successfully');
-      await refetchProjects();
-    }
-  } catch (error) {
-    notify('Failed to add episodes', 'error');
-    console.error('Error adding episodes:', error);
-  }
-};
-
-const handleAssignUsers = async () => {
-  try {
-    if (!state.selectedProject?._id || state.selectedUsernames.length === 0) return;
-    
-    const response = await axios.post(`/api/admin/projects/${state.selectedProject._id}/assign-users`, {
-      usernames: state.selectedUsernames
-    });
-
-    if (response.data.success) {
-      notify('Users assigned successfully');
-      await refetchProjects();
-      updateState({ 
-        isAssigning: false,
-        selectedUsernames: []
-      });
-    }
-  } catch (error) {
-    notify('Failed to assign users', 'error');
-    console.error('Error assigning users:', error);
-  }
-};
-

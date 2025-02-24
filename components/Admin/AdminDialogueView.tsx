@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { motion, useMotionValue, useAnimation, type PanInfo } from 'framer-motion'
+import React, { useState, useRef } from 'react'
+import { motion } from 'framer-motion'
+import { Loader2 as Loader } from 'lucide-react'
 import axios from 'axios'
 import { Dialogue, DialogueText } from '@/types/dialogue'
 import { Project, Episode } from '@/types/project'
 import { useCacheCleaner } from '@/hooks/useCacheCleaner'
-import { Plus, Search, UserPlus, ChevronRight, Loader2 } from 'lucide-react'
-
+import { Plus, Search, UserPlus, ChevronRight } from 'lucide-react'
 
 // Extend the base dialogue type with additional fields needed for the admin view
 interface AdminDialogue extends Omit<Dialogue, 'recordedAudioUrl' | 'ai_converted_voiceover_url'> {
@@ -60,7 +59,7 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
   useCacheCleaner();
 
   // Memoize the adapted and sorted dialogues
-  const { sortedDialogues, dialoguesList } = useMemo(() => {
+  const { sortedDialogues, dialoguesList } = React.useMemo(() => {
     const adaptedDialogues = initialDialogues.map(adaptDialogue);
     const sorted = [...adaptedDialogues].sort((a, b) => 
       (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
@@ -73,28 +72,14 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
   }, [initialDialogues]);
 
   // State declarations
-  const [currentDialogueIndex, setCurrentDialogueIndex] = useState(0);
-  const [currentDialogue, setCurrentDialogue] = useState<AdminDialogue | null>(() => sortedDialogues[0] || null);
-  const [dialogues, setDialogues] = useState<AdminDialogue[]>(dialoguesList);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [directorNotes, setDirectorNotes] = useState('');
-  const [revisionRequested, setRevisionRequested] = useState(false);
-  const [needsReRecord, setNeedsReRecord] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [isVideoLoading, setIsVideoLoading] = useState(false);
-  const [isSyncedPlaying, setIsSyncedPlaying] = useState(false);
-  const [audioDuration, setAudioDuration] = useState(0);
-  const [videoDuration, setVideoDuration] = useState(0);
-
-  // ... Rest of the component implementation combining DirectorDialogueView and SrDirectorDialogueView features ...
-  // (The implementation would be quite long, so I'll continue in the next message)
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
@@ -120,11 +105,11 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
       </motion.div>
 
       {/* Confirmation Modal */}
-      {showConfirmation && (
+      {/* {showConfirmation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           {/* ... Confirmation modal implementation ... */}
-        </div>
-      )}
+        {/* </div>
+      )} */}
 
       {/* Feedback Messages */}
       {isSaving && (

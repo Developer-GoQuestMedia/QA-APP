@@ -3,7 +3,7 @@ import { User } from './user'
 
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
 
-interface AssignedUser {
+export interface AssignedUser {
   username: string
   role: string
 }
@@ -19,7 +19,7 @@ export interface Episode {
   extracted_speechPath?: string;
   extracted_speechKey?: string;
   status: 'uploaded' | 'processing' | 'error' | 'completed';
-  uploadedAt?: Date;
+  uploadedAt?: string | Date;
   sceneNumber?: string;
   sceneDiscription?: string;
   timeStart?: string;
@@ -75,9 +75,9 @@ export interface Episode {
     revisionRequested?: boolean;
     voiceOverNotes?: string | null;
     voiceId?: string | null;
-    updatedAt?: Date;
+    updatedAt?: string | Date;
     updatedBy?: string;
-    lastModified?: Date;
+    lastModified?: string | Date;
   }>;
   steps: {
     audioExtraction: {
@@ -86,7 +86,7 @@ export interface Episode {
       extracted_speechKey?: string;
       extracted_musicPath?: string;
       extracted_musicKey?: string;
-      updatedAt?: Date;
+      updatedAt?: string | Date;
       error?: string;
     };
     transcription: {
@@ -101,7 +101,7 @@ export interface Episode {
           videoClipUrl?: string;
         }>;
       };
-      updatedAt?: Date;
+      updatedAt?: string | Date;
       error?: string;
     };
     videoClips: {
@@ -114,7 +114,7 @@ export interface Episode {
         endTime: number;
         dialogueId?: string;
       }>;
-      updatedAt?: Date;
+      updatedAt?: string | Date;
       error?: string;
     };
     translation: {
@@ -131,7 +131,7 @@ export interface Episode {
           videoClipUrl?: string;
         }>;
       };
-      updatedAt?: Date;
+      updatedAt?: string | Date;
       error?: string;
     };
     voiceAssignment: {
@@ -154,12 +154,12 @@ export interface Episode {
         status: 'pending' | 'processing' | 'completed' | 'error';
         error?: string;
       }>;
-      updatedAt?: Date;
+      updatedAt?: string | Date;
       error?: string;
     };
   };
-  updatedAt?: string;
-  lastModified?: Date;
+  updatedAt?: string | Date;
+  lastModified?: string | Date;
 }
 
 export interface Project {
@@ -169,8 +169,8 @@ export interface Project {
   sourceLanguage: string
   targetLanguage: string
   status: string
-  createdAt: Date
-  updatedAt: Date
+  createdAt: string | Date
+  updatedAt: string | Date
   assignedTo: AssignedUser[]
   parentFolder: string
   databaseName: string

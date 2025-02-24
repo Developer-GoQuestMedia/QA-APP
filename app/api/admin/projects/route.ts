@@ -101,6 +101,19 @@ interface Project {
   };
 }
 
+interface ProjectData {
+  title: string;
+  description: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  videos: File[];
+}
+
+interface ErrorResponse {
+  error: string;
+  details: string;
+}
+
 // =========== Helpers ===========
 
 // Node.js memory usage logging
@@ -220,7 +233,7 @@ async function* streamFile(file: Blob, chunkSize = 5 * 1024 * 1024) {
 
 // =========== POST: Upload Route ===========
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
   let io: Server | { emit: (event: string, data: any) => void } | null = null;
   try {
@@ -252,14 +265,16 @@ export async function POST(request: NextRequest) {
 
     // 4. Parse FormData and validate files
     const formData = await request.formData();
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const sourceLanguage = formData.get('sourceLanguage') as string;
-    const targetLanguage = formData.get('targetLanguage') as string;
-    const videos = formData.getAll('videos');
+    const data: ProjectData = {
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      sourceLanguage: formData.get('sourceLanguage') as string,
+      targetLanguage: formData.get('targetLanguage') as string,
+      videos: Array.from(formData.getAll('videos')).filter((file): file is File => file instanceof File)
+    };
 
     // 5. Validate required fields
-    if (!title || !sourceLanguage || !targetLanguage || !videos.length) {
+    if (!data.title || !data.sourceLanguage || !data.targetLanguage || !data.videos.length) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -267,7 +282,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate project title
-    const existingProject = await db.collection<Project>('projects').findOne({ title });
+    const existingProject = await db.collection<Project>('projects').findOne({ title: data.title });
     if (existingProject) {
       return NextResponse.json(
         { error: 'Project with this title already exists' },
@@ -284,10 +299,10 @@ export async function POST(request: NextRequest) {
       const projectId = new ObjectId();
       const newProject: Omit<Project, '_id'> & { _id: ObjectId } = {
         _id: projectId,
-        title,
-        description,
-        sourceLanguage,
-        targetLanguage,
+        title: data.title,
+        description: data.description,
+        sourceLanguage: data.sourceLanguage,
+        targetLanguage: data.targetLanguage,
         status: 'pending',
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -297,7 +312,7 @@ export async function POST(request: NextRequest) {
         episodes: [],
         index: nextIndex,
         uploadStatus: {
-          totalFiles: videos.length,
+          totalFiles: data.videos.length,
           completedFiles: 0,
           currentFile: 0,
           status: 'pending'
@@ -309,8 +324,8 @@ export async function POST(request: NextRequest) {
 
       // Process video files
       const uploadedFiles: Episode[] = [];
-      for (const videoFile of videos) {
-        if (!(videoFile instanceof Blob)) {
+      for (const videoFile of data.videos) {
+        if (!(videoFile instanceof File)) {
           continue;
         }
 
@@ -452,7 +467,7 @@ export async function POST(request: NextRequest) {
         } as any,
         $set: {
           uploadStatus: {
-            totalFiles: videos.length,
+            totalFiles: data.videos.length,
             completedFiles: uploadedFiles.length,
             currentFile: uploadedFiles.length,
             status: 'completed'
@@ -500,7 +515,7 @@ export async function POST(request: NextRequest) {
 
 // =========== DELETE: Project Deletion ===========
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const startTime = new Date().toISOString();
   const logContext = {
     timestamp: startTime,
@@ -731,7 +746,7 @@ export async function DELETE(request: NextRequest) {
 
 // =========== GET: Fetch all projects ===========
 
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
   const startTime = new Date().toISOString();
   const logContext = {
     handler: 'GET /api/admin/projects',

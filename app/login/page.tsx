@@ -1,70 +1,60 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { signIn, signOut, useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
+import { signIn, useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import ThemeToggle from '../components/ThemeToggle'
 
-// Update the route type to use Next.js route type
-type AppRoute = 
-  | '/allDashboards/admin'
-  | '/allDashboards/director'
-  | '/allDashboards/srDirector'
-  | '/allDashboards/transcriber'
-  | '/allDashboards/translator'
-  | '/allDashboards/voice-over'
-  | '/unauthorized'
-
+// Define the dashboard routes first as a const
 const dashboardRoutes = {
   admin: '/allDashboards/admin',
-  director: '/allDashboards/director',
-  srDirector: '/allDashboards/srDirector',
   transcriber: '/allDashboards/transcriber',
   translator: '/allDashboards/translator',
   voiceOver: '/allDashboards/voice-over'
-} as const
+} as const;
 
-type UserRole = keyof typeof dashboardRoutes
+// Derive the route type from the dashboardRoutes object
+type AppRoute = typeof dashboardRoutes[keyof typeof dashboardRoutes];
+
+type UserRole = keyof typeof dashboardRoutes;
 
 // Helper function to handle route navigation safely
-const navigateToRoute = (router: ReturnType<typeof useRouter>, path: AppRoute | '/unauthorized') => {
-  router.push(path)
-}
+const navigateToRoute = (route: AppRoute) => {
+  const router = useRouter();
+  router.push(route);
+};
 
 // Helper function to get redirect path based on role
 const getRoleBasedRedirectPath = (role: string): AppRoute => {
   if (role in dashboardRoutes) {
-    return dashboardRoutes[role as UserRole] as AppRoute;
+    return dashboardRoutes[role as UserRole];
   }
   console.error('Invalid role for redirect:', role);
-  return '/unauthorized';
+  return dashboardRoutes.admin;
 };
 
-export default function Login() {
+export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
-  const { data: session, status, update } = useSession()
+  const { data: session } = useSession()
 
   // Debug logging for session state changes
   useEffect(() => {
     console.log('[Session Debug]', {
       timestamp: new Date().toISOString(),
-      status,
       hasSession: !!session,
       userRole: session?.user?.role,
       currentPath: window.location.pathname
     })
-  }, [session, status])
+  }, [session])
 
   // Handle client-side initialization
   useEffect(() => {
     const startTime = performance.now()
-    setIsClient(true)
     console.log('[Client Init]', {
       timestamp: new Date().toISOString(),
       timeToInit: `${(performance.now() - startTime).toFixed(2)}ms`,
@@ -126,35 +116,14 @@ export default function Login() {
         return
       }
 
-      // Force session update after successful login
-      const updateStartTime = performance.now()
-      console.log('[Session Update Start]', {
-        timestamp: new Date().toISOString(),
-        currentPath: window.location.pathname
-      })
-      
-      await update()
-
-      // Get the updated session
-      const updatedSession = await fetch('/api/auth/session')
-      const sessionData = await updatedSession.json()
-      
-      console.log('[Session Update Complete]', {
-        timestamp: new Date().toISOString(),
-        timeToUpdate: `${(performance.now() - updateStartTime).toFixed(2)}ms`,
-        totalLoginTime: `${(performance.now() - loginStartTime).toFixed(2)}ms`,
-        currentPath: window.location.pathname,
-        sessionData
-      })
-
       // Immediately navigate if we have a role
-      if (sessionData?.user?.role) {
-        await handleNavigation(sessionData.user.role)
+      if (session?.user?.role) {
+        await handleNavigation(session.user.role)
       } else {
         console.error('[Session Error]', {
           timestamp: new Date().toISOString(),
           error: 'No role found in session after update',
-          sessionData
+          session
         })
       }
 
@@ -169,28 +138,6 @@ export default function Login() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  // Show loading state during initial client-side render
-  if (!isClient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="p-8 rounded-lg shadow-lg w-full max-w-md">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-300 rounded w-3/4 mx-auto"></div>
-            <div className="space-y-2">
-              <div className="h-4 bg-gray-300 rounded"></div>
-              <div className="h-10 bg-gray-300 rounded"></div>
-            </div>
-            <div className="space-y-2">
-              <div className="h-4 bg-gray-300 rounded"></div>
-              <div className="h-10 bg-gray-300 rounded"></div>
-            </div>
-            <div className="h-10 bg-gray-300 rounded"></div>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -249,4 +196,3 @@ export default function Login() {
     </div>
   )
 }
-

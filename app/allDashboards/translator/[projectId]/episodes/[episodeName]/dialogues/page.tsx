@@ -14,6 +14,41 @@ interface PageProps {
   }
 }
 
+interface DialogueData {
+  id: string;
+  text: string;
+  timestamp: number;
+  // Add other relevant fields
+};
+
+interface Episode {
+  _id: string;
+  name: string;
+  collectionName: string;
+}
+
+interface Project {
+  _id: string;
+  title: string;
+  databaseName: string;
+  episodes: Episode[];
+}
+
+interface DialoguesResponse {
+  status: number;
+  statusText: string;
+  data: DialogueData[];
+}
+
+interface ProjectResponse {
+  data: {
+    project: Project;
+    episode: Episode;
+  };
+  status: number;
+  statusText: string;
+}
+
 export default function TranslatorDialoguePage({ params }: PageProps) {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -46,11 +81,16 @@ export default function TranslatorDialoguePage({ params }: PageProps) {
         });
 
         // First get the project to get database and collection names
-        const projectResponse = await axios.get(`/api/projects/${params.projectId}`);
-        const project = projectResponse.data.project;
+        const projectResponse: ProjectResponse = await axios.get(`/api/projects/${params.projectId}`);
+        
+        if (projectResponse.status !== 200) {
+          throw new Error(`Failed to fetch project: ${projectResponse.statusText}`);
+        }
+
+        const project: Project = projectResponse.data.project;
         
         // Find the episode to get its collection name
-        const episode = project.episodes.find((ep: any) => ep.name === params.episodeName);
+        const episode: Episode | undefined = project.episodes.find((ep: Episode) => ep.name === params.episodeName);
         
         if (!episode) {
           throw new Error('Episode not found');
@@ -65,7 +105,7 @@ export default function TranslatorDialoguePage({ params }: PageProps) {
         });
 
         // Now fetch dialogues with the correct database and collection names
-        const response = await axios.get('/api/dialogues', {
+        const response: DialoguesResponse = await axios.get('/api/dialogues', {
           params: {
             projectId: params.projectId,
             episodeName: params.episodeName,
@@ -74,17 +114,21 @@ export default function TranslatorDialoguePage({ params }: PageProps) {
           }
         });
 
+        if (response.status !== 200) {
+          throw new Error(`Failed to fetch dialogues: ${response.statusText}`);
+        }
+
         console.log('Dialogues API Response:', {
           status: response.status,
           statusText: response.statusText,
           data: response.data,
-          dialoguesCount: response.data?.data?.length || 0,
-          firstDialogue: response.data?.data?.[0],
-          lastDialogue: response.data?.data?.[response.data?.data?.length - 1]
+          dialoguesCount: response.data?.length || 0,
+          firstDialogue: response.data?.[0],
+          lastDialogue: response.data?.[response.data?.length - 1]
         });
 
         return {
-          data: response.data.data,
+          data: response.data,
           project: project,
           episode: episode
         };
@@ -108,12 +152,17 @@ export default function TranslatorDialoguePage({ params }: PageProps) {
     queryFn: async () => {
       try {
         console.log('Fetching project:', params.projectId);
-        const response = await axios.get(`/api/projects/${params.projectId}`);
+        const response: ProjectResponse = await axios.get(`/api/projects/${params.projectId}`);
+        
+        if (response.status !== 200) {
+          throw new Error(`Failed to fetch project: ${response.statusText}`);
+        }
+
         console.log('Project API Response:', {
           status: response.status,
           statusText: response.statusText,
-          project: response.data?.project,
-          episodes: response.data?.project?.episodes?.length || 0
+          project: response.data.project,
+          episodes: response.data.project.episodes.length
         });
         return response.data;
       } catch (error) {

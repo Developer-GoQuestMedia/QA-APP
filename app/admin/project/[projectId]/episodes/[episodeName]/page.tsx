@@ -149,7 +149,15 @@ export default function EpisodeDetailsPage() {
           ← Back to Project
         </button>
 
-        {episode && project && <AdminEpisodeView project={project} episodeData={episode} />}
+        {project && episode && (
+          <AdminEpisodeView 
+            project={project} 
+            episodeData={episode}
+            onEpisodeClick={async (projectId, episodeName, episodeId, project, episode) => {
+              // Handle episode click if needed
+            }}
+          />
+        )}
       </div>
     </div>
   );

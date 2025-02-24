@@ -738,4 +738,61 @@ const transformToEpisode = (baseEpisode: BaseEpisode | undefined): Episode | und
   } as Episode;
 };
 
-// ... rest of the code remains the same ...
+// Add the AdminEpisodeView component
+export default function AdminEpisodeView({ project, episodeData, onEpisodeClick }: AdminEpisodeViewProps) {
+  const [episode, setEpisode] = useState<Episode | undefined>(transformToEpisode(episodeData));
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEpisode(transformToEpisode(episodeData));
+  }, [episodeData]);
+
+  if (!episode || !project) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">No Episode Data Available</h2>
+          <p className="text-gray-600">Please select a valid episode to view its details.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h1 className="text-2xl font-bold mb-4">Episode Details</h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Episode Info */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Episode Information</h2>
+            <div>
+              <p className="text-gray-600">Project: {project.title}</p>
+              <p className="text-gray-600">Episode: {episode.name}</p>
+              <p className="text-gray-600">Status: {episode.status}</p>
+            </div>
+          </div>
+
+          {/* Processing Steps */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Processing Steps</h2>
+            <div className="space-y-2">
+              {Object.entries(episode.steps).map(([key, step]) => (
+                <div key={key} className="flex items-center space-x-2">
+                  {step.status === 'completed' && <CheckCircle2 className="text-green-500" />}
+                  {step.status === 'processing' && <Loader2 className="animate-spin text-blue-500" />}
+                  {step.status === 'error' && <XCircle className="text-red-500" />}
+                  {step.status === 'pending' && <AlertCircle className="text-yellow-500" />}
+                  <span className="capitalize">{key}</span>
+                  <span className="text-gray-500">- {step.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

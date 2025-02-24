@@ -155,6 +155,22 @@ export const authOptions: NextAuthOptions = {
         session.user.sessionId = token.sessionId
       }
       return session
+    },
+    async redirect({ url, baseUrl }) {
+      // Handle redirect after sign in
+      if (url.startsWith('/api/auth/session')) {
+        const session = await fetch(`${baseUrl}/api/auth/session`).then(res => res.json())
+        if (session?.user?.role) {
+          const dashboardRoutes = {
+            admin: '/allDashboards/admin',
+            transcriber: '/allDashboards/transcriber',
+            translator: '/allDashboards/translator',
+            voiceOver: '/allDashboards/voice-over'
+          }
+          return `${baseUrl}${dashboardRoutes[session.user.role] || dashboardRoutes.admin}`
+        }
+      }
+      return url.startsWith(baseUrl) ? url : baseUrl
     }
   },
   events: {

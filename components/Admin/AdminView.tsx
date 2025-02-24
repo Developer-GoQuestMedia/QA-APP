@@ -33,20 +33,33 @@ import {
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { io } from 'socket.io-client';
-import { ObjectId } from 'mongodb';
 
 // Add socket imports
 import { getSocketClient, authenticateSocket, joinProjectRoom, leaveProjectRoom } from '@/lib/socket';
 
 // Extend the base Project type with additional fields
-type Project = Omit<BaseProject, 'description' | 'sourceLanguage' | 'targetLanguage'> & {
-  description?: string;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  dialogue_collection?: string;
-  parentFolder?: string;
-  index?: string;
-};
+interface Project extends BaseProject {
+  _id: string;
+  title: string;
+  description: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  status: string;
+  createdAt: string | Date;  // Allow both string and Date
+  updatedAt: string | Date;  // Allow both string and Date
+  assignedTo: AssignedUser[];
+  parentFolder: string;
+  databaseName: string;
+  collectionName: string;
+  episodes: Episode[];
+  index: string;
+  uploadStatus: {
+    totalFiles: number;
+    completedFiles: number;
+    currentFile: number;
+    status: string;
+  };
+}
 
 // ===============================
 // Type Definitions
@@ -245,6 +258,16 @@ const handleError = (error: Error): void => {
 // ===============================
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
+  // Type guards for null checks - moved to top
+  const isProjectSelected = (project: Project | null): project is Project => {
+    return project !== null;
+  };
+
+  const isEpisodeSelected = (episode: Episode | null): episode is Episode => {
+    return episode !== null;
+  };
+
+  // Session and router hooks
   const session = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -326,7 +349,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   const handleUpdateProject = async (projectId: string) => {
     try {
-      if (!state.selectedProject) return;
       const response = await axios.patch(`/api/admin/projects/${projectId}`, state.selectedProject);
       if (response.data.success) {
         notify('Project updated successfully');
@@ -377,22 +399,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         setState(prev => ({ ...prev, showUserDeleteConfirm: false }));
       }
     } catch (error) {
-      notify('Failed to delete user', 'error');
       console.error('Error deleting user:', error);
+      notify('Failed to delete user', 'error');
     }
   };
 
-  const handleAddEpisodes = async (files: FileList) => {
-    try {
-      if (!state.selectedProjectForEpisodes?._id) return;
+  const handleAddEpisodes = useCallback(async (files: FileList) => {
+    const selectedProject = state.selectedProjectForEpisodes;
+    if (!selectedProject) {
+      notify('No project selected');
+      return;
+    }
 
+    try {
       const formData = new FormData();
       Array.from(files).forEach(file => {
         formData.append('episodes', file);
       });
 
       const response = await axios.post(
-        `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes`,
+        `/api/admin/projects/${selectedProject._id}/episodes`,
         formData,
         {
           headers: {
@@ -409,30 +435,34 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       notify('Failed to add episodes', 'error');
       console.error('Error adding episodes:', error);
     }
-  };
+  }, [state.selectedProjectForEpisodes, notify, refetchProjects]);
 
-  const handleAssignUsers = async () => {
+  const handleAssignUsers = useCallback(async () => {
+    const selectedProject = state.selectedProject;
+    if (!selectedProject || state.selectedUsernames.length === 0) {
+      notify('No project selected or no users to assign');
+      return;
+    }
+
     try {
-      if (!state.selectedProject?._id || state.selectedUsernames.length === 0) return;
-
-      const response = await axios.post(`/api/admin/projects/${state.selectedProject._id}/assign-users`, {
+      const response = await axios.post(`/api/admin/projects/${selectedProject._id}/assign`, {
         usernames: state.selectedUsernames
       });
 
       if (response.data.success) {
         notify('Users assigned successfully');
         await refetchProjects();
-        setState({
-          ...state,
+        setState(prev => ({
+          ...prev,
           isAssigning: false,
           selectedUsernames: []
-        });
+        }));
       }
     } catch (error) {
       notify('Failed to assign users', 'error');
       console.error('Error assigning users:', error);
     }
-  };
+  }, [state.selectedProject, state.selectedUsernames, notify, refetchProjects]);
 
   // Upload progress update helper
   const updateUploadProgress = useCallback((data: UploadProgressUpdate) => {
@@ -486,10 +516,27 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   }, [state.selectedProject, handleCreateProject, handleUpdateProject, handleDeleteProject, refetchProjects, setState]);
 
+  // Episode navigation handler
+  const handleEpisodeNavigation = useCallback((episode: Episode) => {
+    const selectedProject = state.selectedProjectForEpisodes;
+    if (!selectedProject || !episode) {
+      notify('Project or episode not selected');
+      return;
+    }
 
+    try {
+      const projectId = selectedProject._id.toString();
+      const episodeId = episode._id.toString();
+      const episodeName = encodeURIComponent(episode.name);
 
-
-
+      router.push(
+        `/admin/project/${projectId}/episodes/${episodeName}?projectId=${projectId}&episodeId=${episodeId}&projectTitle=${encodeURIComponent(selectedProject.title)}&episodeName=${episodeName}`
+      );
+    } catch (error) {
+      console.error('Navigation error:', error);
+      notify('Error navigating to episode view', 'error');
+    }
+  }, [state.selectedProjectForEpisodes, router, notify]);
 
   // UI event handlers
   const handleTabChange = useCallback((tab: Tab) => {
@@ -601,11 +648,29 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   // Move useQuery outside conditionals
   const { data: queryData, isLoading, error: queryError } = useQuery({
-    queryKey: ['adminData'],
+    queryKey: ['adminData', state.activeTab],
     queryFn: async () => {
-      const response = await axios.get('/api/admin/data');
-      return response.data;
-    }
+      try {
+        let endpoint = '';
+        switch (state.activeTab) {
+          case 'projects':
+            endpoint = '/api/admin/projects';
+            break;
+          case 'users':
+            endpoint = '/api/admin/users';
+            break;
+          default:
+            endpoint = '/api/admin/projects';
+        }
+        const response = await axios.get(endpoint);
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching admin data:', error);
+        notify('Failed to fetch data', 'error');
+        return null;
+      }
+    },
+    enabled: !!session?.data?.user // Only run query when user is authenticated
   });
 
   // Move useCallback outside conditionals
@@ -739,24 +804,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const updateProjectState = (updates: Partial<Project>) => {
     if (!state.selectedProject?._id) return;
 
-    setState(prev => ({
-      ...prev,
+    const currentProject = state.selectedProject;
+    
+    setState(prevState => ({
+      ...prevState,
       selectedProject: {
-        ...prev.selectedProject!,
+        ...currentProject,
         ...updates,
-        _id: prev.selectedProject!._id, // Ensure _id is always present
-        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-        description: prev.selectedProject?.description || '',
-        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-        targetLanguage: prev.selectedProject?.targetLanguage || '',
-        assignedTo: prev.selectedProject?.assignedTo || [],
-        episodes: prev.selectedProject?.episodes || [],
-        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
+        _id: currentProject._id,
+        status: currentProject.status || 'pending',
+        description: currentProject.description || '',
+        sourceLanguage: currentProject.sourceLanguage || '',
+        targetLanguage: currentProject.targetLanguage || '',
+        assignedTo: currentProject.assignedTo || [],
+        episodes: currentProject.episodes || [],
+        createdAt: ensureDate(currentProject.createdAt),
         updatedAt: new Date().toISOString(),
-        parentFolder: prev.selectedProject?.parentFolder || '',
-        databaseName: prev.selectedProject?.databaseName || '',
-        collectionName: prev.selectedProject?.collectionName || '',
-        uploadStatus: prev.selectedProject?.uploadStatus || {
+        parentFolder: currentProject.parentFolder || '',
+        databaseName: currentProject.databaseName || '',
+        collectionName: currentProject.collectionName || '',
+        uploadStatus: currentProject.uploadStatus || {
           totalFiles: 0,
           completedFiles: 0,
           currentFile: 0,
@@ -803,32 +870,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Fix project update handlers with proper typing
   const handleProjectUpdate = (field: keyof Project, value: string) => {
     if (!state.selectedProject) return;
-
-    setState(prev => ({
-      ...prev,
-      selectedProject: {
-        ...prev.selectedProject!,
-        [field]: value,
-        _id: prev.selectedProject!._id, // Ensure _id is preserved
-        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-        description: prev.selectedProject?.description || '',
-        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-        targetLanguage: prev.selectedProject?.targetLanguage || '',
-        assignedTo: prev.selectedProject?.assignedTo || [],
-        episodes: prev.selectedProject?.episodes || [],
-        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        parentFolder: prev.selectedProject?.parentFolder || '',
-        databaseName: prev.selectedProject?.databaseName || '',
-        collectionName: prev.selectedProject?.collectionName || '',
-        uploadStatus: prev.selectedProject?.uploadStatus || {
-          totalFiles: 0,
-          completedFiles: 0,
-          currentFile: 0,
-          status: 'pending'
-        }
-      }
-    }));
+    updateProjectState({ 
+      [field]: value,
+      updatedAt: new Date().toISOString()
+    });
   };
 
   // Fix episode null checks
@@ -929,197 +974,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }));
   };
 
-  // Show loading state
-  if (state.isProjectsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="text-foreground">Loading projects...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state
-  if (state.loadError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg max-w-lg">
-          <p className="font-semibold mb-2">Error</p>
-          <p>{state.loadError}</p>
-          <button
-            onClick={() => void fetchProjectsWithLoading()}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Update project rooms when projects change
-  useEffect(() => {
-    if (socketRef.current && hasInitializedRef.current) {
-      const oldProjects = projectsRef.current || [];
-      const newProjects = memoizedProjects;
-
-      // Leave rooms for removed projects
-      oldProjects.forEach((oldProject: Project) => {
-        if (!newProjects.find((p: Project) => p._id === oldProject._id)) {
-          leaveProjectRoom(oldProject._id.toString());
-        }
-      });
-
-      // Join rooms for new projects
-      newProjects.forEach((newProject: Project) => {
-        if (!oldProjects.find((p: Project) => p._id === newProject._id)) {
-          joinProjectRoom(newProject._id.toString());
-        }
-      });
-
-      projectsRef.current = newProjects;
-    }
-  }, [memoizedProjects]);
-
-  // Team assignment handlers
-  const handleTeamAssignment = useCallback(async (projectId: string, usernames: string[]) => {
-    try {
-      setState(prev => ({ ...prev, isAssigning: true, error: '' }));
-
-      // Implementation for team assignment
-
-      setState(prev => ({ ...prev, success: 'Team assigned successfully' }));
-    } catch (err) {
-      setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'An error occurred' }));
-    } finally {
-      setState(prev => ({
-        ...prev,
-        isAssigning: false,
-        selectedUsernames: []
-      }));
-    }
-  }, [setState]);
-
-  // Upload handlers
-  const handleUpload = useCallback(async (files: File[]) => {
-    try {
-      const newProgress: UploadState = {};
-      files.forEach(file => {
-        newProgress[file.name] = {
-          phase: 'pending',
-          loaded: 0,
-          total: file.size,
-          message: 'Starting upload...'
-        };
-      });
-
-      setState(prev => ({
-        ...prev,
-        uploadProgress: newProgress
-      }));
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const formData = new FormData();
-        formData.append('file', file);
-
-        await axios.post('/api/upload', formData, {
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              updateUploadProgress({
-                phase: 'uploading',
-                loaded: progressEvent.loaded,
-                total: progressEvent.total,
-                message: `Uploading ${file.name} (${formatBytes(progressEvent.loaded)} / ${formatBytes(progressEvent.total)})`
-              });
-            }
-          }
-        });
-
-        updateUploadProgress({
-          phase: 'creating-collection',
-          loaded: file.size,
-          total: file.size,
-          message: `Creating collection for ${file.name}`
-        });
-
-        updateUploadProgress({
-          phase: 'processing',
-          loaded: file.size,
-          total: file.size,
-          message: `Processing ${file.name}`
-        });
-
-        updateUploadProgress({
-          phase: 'success',
-          loaded: file.size,
-          total: file.size,
-          message: `Successfully uploaded ${file.name}`
-        });
-      }
-
-      notify('All files uploaded successfully', 'success');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Upload failed';
-      updateUploadProgress({
-        phase: 'error',
-        loaded: 0,
-        total: 100,
-        message: errorMessage
-      });
-      notify('Failed to upload files', 'error');
-    }
-  }, [setState, notify]);
-
-  // Fix state update type issues for project updates
-  const updateSelectedProject = (updates: Partial<Project>) => {
-    if (!state.selectedProject?._id) return;
-
-    setState(prev => ({
-      ...prev,
-      selectedProject: {
-        ...prev.selectedProject!,
-        ...updates,
-        _id: prev.selectedProject!._id, // Ensure _id is always present
-        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-        description: prev.selectedProject?.description || '',
-        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-        targetLanguage: prev.selectedProject?.targetLanguage || '',
-        assignedTo: prev.selectedProject?.assignedTo || [],
-        episodes: prev.selectedProject?.episodes || [],
-        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        parentFolder: prev.selectedProject?.parentFolder || '',
-        databaseName: prev.selectedProject?.databaseName || '',
-        collectionName: prev.selectedProject?.collectionName || '',
-        uploadStatus: prev.selectedProject?.uploadStatus || {
-          totalFiles: 0,
-          completedFiles: 0,
-          currentFile: 0,
-          status: 'pending'
-        }
-      }
-    }));
-  };
-
-  // Fix upload progress state type
-  const [uploadProgress, setUploadProgress] = useState<UploadState>({});
-
-  // Add type guard for null checks
-  const isProjectSelected = (project: Project | null): project is Project => {
-    return project !== null;
-  };
-
-  const isEpisodeSelected = (episode: Episode | null): episode is Episode => {
-    return episode !== null;
-  };
-
-
-
-
-
   // Fix view mode toggle
   const toggleViewMode = useCallback(() => {
     setState(prev => ({
@@ -1183,7 +1037,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       sourceLanguage: state.selectedProject.sourceLanguage || '',
       targetLanguage: state.selectedProject.targetLanguage || '',
       status: state.selectedProject.status || 'pending',
-      dialogue_collection: state.selectedProject.dialogue_collection || ''
+      dialogue_collection: state.selectedProject.episodes[0].collectionName || ''
     };
   }, [state.selectedProject]);
 
@@ -1671,8 +1525,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                           }
                           setState(prev => ({
                             ...prev,
+                            showUserDeleteConfirm: true,
                             selectedUser: state.selectedUser,
-                            showUserDeleteConfirm: true
                           }));
                         }}
                         className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
@@ -1695,7 +1549,39 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
               Create New Project
             </h2>
-            <form onSubmit={handleCreateProject} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              // Convert ProjectState to Project type
+              const projectData: Project = {
+                _id: crypto.randomUUID(), // Use Web Crypto API
+                title: newProject.title,
+                description: newProject.description,
+                sourceLanguage: newProject.sourceLanguage,
+                targetLanguage: newProject.targetLanguage,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                assignedTo: [],
+                parentFolder: '',
+                databaseName: '',
+                collectionName: '',
+                episodes: [],
+                index: '0', // Convert to string
+                uploadStatus: {
+                  totalFiles: 0,
+                  completedFiles: 0,
+                  currentFile: 0,
+                  status: 'pending'
+                }
+              };
+              
+              setState(prev => ({
+                ...prev,
+                selectedProject: projectData,
+                isCreating: true
+              }));
+              handleCreateProject();
+            }} className="space-y-4">
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
@@ -1778,7 +1664,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                             />
                           </svg>
                           <p className="text-sm">Click or drag to upload videos</p>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
                             Multiple files allowed • No size limit
                           </p>
                         </div>
@@ -1804,7 +1690,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                 message: `Preparing to upload ${file.name}`
                               };
                             });
-                            setUploadProgress(newProgress);
+                            setState(prev => ({ ...prev, uploadProgress: newProgress }));
                           }}
                         />
                       </label>
@@ -1821,28 +1707,28 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                               <div className="flex items-center justify-between text-sm">
                                 <span className="text-gray-600 dark:text-gray-300 truncate pr-2">
                                   {file.name}
-                                  {uploadProgress[file.name] && (
+                                  {state.uploadProgress[file.name] && (
                                     <span
                                       data-file-name={file.name}
-                                      className={`ml-2 text-xs ${uploadProgress[file.name].phase === 'success'
+                                      className={`ml-2 text-xs ${state.uploadProgress[file.name].phase === 'success'
                                         ? 'text-green-500'
-                                        : uploadProgress[file.name].phase === 'error'
+                                        : state.uploadProgress[file.name].phase === 'error'
                                           ? 'text-red-500'
-                                          : uploadProgress[file.name].phase === 'creating-collection'
+                                          : state.uploadProgress[file.name].phase === 'creating-collection'
                                             ? 'text-yellow-500'
-                                            : uploadProgress[file.name].phase === 'processing'
+                                            : state.uploadProgress[file.name].phase === 'processing'
                                               ? 'text-purple-500'
-                                              : uploadProgress[file.name].phase === 'uploading'
+                                              : state.uploadProgress[file.name].phase === 'uploading'
                                                 ? 'text-blue-500'
                                                 : 'text-gray-500'
                                         }`}
                                     >
-                                      {uploadProgress[file.name].phase === 'uploading' &&
-                                        ` (${formatBytes(uploadProgress[file.name].loaded)} / ${formatBytes(
-                                          uploadProgress[file.name].total
+                                      {state.uploadProgress[file.name].phase === 'uploading' &&
+                                        ` (${formatBytes(state.uploadProgress[file.name].loaded)} / ${formatBytes(
+                                          state.uploadProgress[file.name].total
                                         )})`}
-                                      {uploadProgress[file.name].phase !== 'uploading' &&
-                                        ` • ${uploadProgress[file.name].message}`}
+                                      {state.uploadProgress[file.name].phase !== 'uploading' &&
+                                        ` • ${state.uploadProgress[file.name].message}`}
                                     </span>
                                   )}
                                 </span>
@@ -1853,46 +1739,46 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                                       ...prev,
                                       videoFiles: prev.videoFiles.filter((_, i) => i !== index),
                                     }));
-                                    const newProgress = { ...uploadProgress };
+                                    const newProgress = { ...state.uploadProgress };
                                     delete newProgress[file.name];
-                                    setUploadProgress(newProgress);
+                                    setState(prev => ({ ...prev, uploadProgress: newProgress }));
                                   }}
                                   className="text-red-500 hover:text-red-700 flex-shrink-0"
                                   disabled={
-                                    uploadProgress[file.name]?.phase === 'uploading' ||
-                                    uploadProgress[file.name]?.phase === 'creating-collection' ||
-                                    uploadProgress[file.name]?.phase === 'processing'
+                                    state.uploadProgress[file.name]?.phase === 'uploading' ||
+                                    state.uploadProgress[file.name]?.phase === 'creating-collection' ||
+                                    state.uploadProgress[file.name]?.phase === 'processing'
                                   }
                                 >
                                   Remove
                                 </button>
                               </div>
-                              {uploadProgress[file.name] &&
-                                uploadProgress[file.name].phase !== 'error' && (
+                              {state.uploadProgress[file.name] &&
+                                state.uploadProgress[file.name].phase !== 'error' && (
                                   <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                                     <div
-                                      className={`h-2 rounded-full transition-all duration-300 ${uploadProgress[file.name].phase === 'success'
+                                      className={`h-2 rounded-full transition-all duration-300 ${state.uploadProgress[file.name].phase === 'success'
                                         ? 'bg-green-600'
-                                        : uploadProgress[file.name].phase === 'creating-collection'
+                                        : state.uploadProgress[file.name].phase === 'creating-collection'
                                           ? 'bg-yellow-600'
-                                          : uploadProgress[file.name].phase === 'processing'
+                                          : state.uploadProgress[file.name].phase === 'processing'
                                             ? 'bg-purple-600'
-                                            : uploadProgress[file.name].phase === 'uploading'
+                                            : state.uploadProgress[file.name].phase === 'uploading'
                                               ? 'bg-blue-600'
                                               : 'bg-gray-600'
                                         }`}
                                       style={{
                                         width:
-                                          uploadProgress[file.name].phase === 'uploading'
-                                            ? `${(uploadProgress[file.name].loaded /
-                                              uploadProgress[file.name].total) *
+                                          state.uploadProgress[file.name].phase === 'uploading'
+                                            ? `${(state.uploadProgress[file.name].loaded /
+                                              state.uploadProgress[file.name].total) *
                                             100
                                             }%`
-                                            : uploadProgress[file.name].phase === 'creating-collection'
+                                            : state.uploadProgress[file.name].phase === 'creating-collection'
                                               ? '60%'
-                                              : uploadProgress[file.name].phase === 'processing'
+                                              : state.uploadProgress[file.name].phase === 'processing'
                                                 ? '80%'
-                                                : uploadProgress[file.name].phase === 'success'
+                                                : state.uploadProgress[file.name].phase === 'success'
                                                   ? '100%'
                                                   : '0%',
                                       }}
@@ -2255,32 +2141,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 <input
                   type="text"
                   value={state.selectedProject.title}
-                  onChange={(e) =>
-                    setState(prev => ({
-                      ...prev,
-                      selectedProject: {
-                        ...prev.selectedProject!,
-                        title: e.target.value,
-                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-                        description: prev.selectedProject?.description || '',
-                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-                        targetLanguage: prev.selectedProject?.targetLanguage || '',
-                        assignedTo: prev.selectedProject?.assignedTo || [],
-                        episodes: prev.selectedProject?.episodes || [],
-                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        parentFolder: prev.selectedProject?.parentFolder || '',
-                        databaseName: prev.selectedProject?.databaseName || '',
-                        collectionName: prev.selectedProject?.collectionName || '',
-                        uploadStatus: prev.selectedProject?.uploadStatus || {
-                          totalFiles: 0,
-                          completedFiles: 0,
-                          currentFile: 0,
-                          status: 'pending'
-                        }
-                      }
-                    }))
-                  }
+                  onChange={(e) => updateProjectState({
+                    title: e.target.value,
+                    updatedAt: new Date().toISOString()
+                  })}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
@@ -2291,32 +2155,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 </label>
                 <textarea
                   value={state.selectedProject.description}
-                  onChange={(e) =>
-                    setState(prev => ({
-                      ...prev,
-                      selectedProject: {
-                        ...prev.selectedProject!,
-                        description: e.target.value,
-                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-                        title: prev.selectedProject?.title || '',
-                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-                        targetLanguage: prev.selectedProject?.targetLanguage || '',
-                        assignedTo: prev.selectedProject?.assignedTo || [],
-                        episodes: prev.selectedProject?.episodes || [],
-                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        parentFolder: prev.selectedProject?.parentFolder || '',
-                        databaseName: prev.selectedProject?.databaseName || '',
-                        collectionName: prev.selectedProject?.collectionName || '',
-                        uploadStatus: prev.selectedProject?.uploadStatus || {
-                          totalFiles: 0,
-                          completedFiles: 0,
-                          currentFile: 0,
-                          status: 'pending'
-                        }
-                      }
-                    }))
-                  }
+                  onChange={(e) => updateProjectState({
+                    description: e.target.value,
+                    updatedAt: new Date().toISOString()
+                  })}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   rows={3}
                   required
@@ -2330,32 +2172,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   <input
                     type="text"
                     value={state.selectedProject.sourceLanguage}
-                    onChange={(e) =>
-                      setState(prev => ({
-                        ...prev,
-                        selectedProject: {
-                          ...prev.selectedProject!,
-                          sourceLanguage: e.target.value,
-                          status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-                          title: prev.selectedProject?.title || '',
-                          description: prev.selectedProject?.description || '',
-                          targetLanguage: prev.selectedProject?.targetLanguage || '',
-                          assignedTo: prev.selectedProject?.assignedTo || [],
-                          episodes: prev.selectedProject?.episodes || [],
-                          createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                          parentFolder: prev.selectedProject?.parentFolder || '',
-                          databaseName: prev.selectedProject?.databaseName || '',
-                          collectionName: prev.selectedProject?.collectionName || '',
-                          uploadStatus: prev.selectedProject?.uploadStatus || {
-                            totalFiles: 0,
-                            completedFiles: 0,
-                            currentFile: 0,
-                            status: 'pending'
-                          }
-                        }
-                      }))
-                    }
+                    onChange={(e) => updateProjectState({
+                      sourceLanguage: e.target.value,
+                      updatedAt: new Date().toISOString()
+                    })}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
@@ -2367,32 +2187,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                   <input
                     type="text"
                     value={state.selectedProject.targetLanguage}
-                    onChange={(e) =>
-                      setState(prev => ({
-                        ...prev,
-                        selectedProject: {
-                          ...prev.selectedProject!,
-                          targetLanguage: e.target.value,
-                          status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-                          title: prev.selectedProject?.title || '',
-                          description: prev.selectedProject?.description || '',
-                          sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-                          assignedTo: prev.selectedProject?.assignedTo || [],
-                          episodes: prev.selectedProject?.episodes || [],
-                          createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                          parentFolder: prev.selectedProject?.parentFolder || '',
-                          databaseName: prev.selectedProject?.databaseName || '',
-                          collectionName: prev.selectedProject?.collectionName || '',
-                          uploadStatus: prev.selectedProject?.uploadStatus || {
-                            totalFiles: 0,
-                            completedFiles: 0,
-                            currentFile: 0,
-                            status: 'pending'
-                          }
-                        }
-                      }))
-                    }
+                    onChange={(e) => updateProjectState({
+                      targetLanguage: e.target.value,
+                      updatedAt: new Date().toISOString()
+                    })}
                     className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     required
                   />
@@ -2405,33 +2203,10 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
                 <input
                   type="text"
                   value={state.selectedProject.episodes[0].collectionName}
-                  onChange={(e) =>
-                    setState(prev => ({
-                      ...prev,
-                      selectedProject: {
-                        ...prev.selectedProject!,
-                        dialogue_collection: e.target.value,
-                        status: prev.selectedProject?.status || 'pending',  // Ensure status is always defined
-                        title: prev.selectedProject?.title || '',
-                        description: prev.selectedProject?.description || '',
-                        sourceLanguage: prev.selectedProject?.sourceLanguage || '',
-                        targetLanguage: prev.selectedProject?.targetLanguage || '',
-                        assignedTo: prev.selectedProject?.assignedTo || [],
-                        episodes: prev.selectedProject?.episodes || [],
-                        createdAt: prev.selectedProject?.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        parentFolder: prev.selectedProject?.parentFolder || '',
-                        databaseName: prev.selectedProject?.databaseName || '',
-                        collectionName: prev.selectedProject?.collectionName || '',
-                        uploadStatus: prev.selectedProject?.uploadStatus || {
-                          totalFiles: 0,
-                          completedFiles: 0,
-                          currentFile: 0,
-                          status: 'pending'
-                        }
-                      }
-                    }))
-                  }
+                  onChange={(e) => updateProjectState({
+                    collectionName: e.target.value,
+                    updatedAt: new Date().toISOString()
+                  })}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   required
                 />
@@ -2691,3 +2466,9 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     </div>
   );
 }
+
+// Helper function to ensure dates are properly converted
+const ensureDate = (date: string | Date | undefined): string | Date => {
+  if (!date) return new Date().toISOString();
+  return typeof date === 'string' ? date : date.toISOString();
+};

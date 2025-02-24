@@ -19,12 +19,6 @@ type AppRoute = typeof dashboardRoutes[keyof typeof dashboardRoutes];
 
 type UserRole = keyof typeof dashboardRoutes;
 
-// Helper function to handle route navigation safely
-const navigateToRoute = (route: AppRoute) => {
-  const router = useRouter();
-  router.push(route);
-};
-
 // Helper function to get redirect path based on role
 const getRoleBasedRedirectPath = (role: string): AppRoute => {
   if (role in dashboardRoutes) {
@@ -62,7 +56,7 @@ export default function LoginPage() {
     })
   }, [])
 
-  // Separate navigation function that uses the router
+  // Memoized navigation function
   const handleNavigation = useCallback(async (role: string) => {
     try {
       const redirectPath = getRoleBasedRedirectPath(role)
@@ -70,10 +64,9 @@ export default function LoginPage() {
         timestamp: new Date().toISOString(),
         redirectPath,
         currentPath: window.location.pathname,
-        method: 'direct'
+        method: 'router'
       })
       
-      // Use router.push instead of window.location for client-side navigation
       await router.push(redirectPath)
     } catch (err) {
       console.error('[Navigation Error]', {
@@ -81,7 +74,7 @@ export default function LoginPage() {
         error: err,
         currentPath: window.location.pathname
       })
-      throw err // Propagate the error to be handled by the caller
+      throw err
     }
   }, [router])
 
@@ -104,8 +97,10 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         username,
         password,
-        redirect: false
+        redirect: false,
+        callbackUrl: '/api/auth/session' // Add callback URL
       })
+
       console.log('[SignIn Complete]', {
         timestamp: new Date().toISOString(),
         hasError: !!result?.error,
@@ -118,32 +113,44 @@ export default function LoginPage() {
         return
       }
 
-      // Wait for session to be updated
+      // Immediately try to get the session after successful sign in
+      const sessionResponse = await fetch('/api/auth/session')
+      const sessionData = await sessionResponse.json()
+
+      if (sessionData?.user?.role) {
+        console.log('[Session Available]', {
+          timestamp: new Date().toISOString(),
+          role: sessionData.user.role
+        })
+        
+        const redirectPath = getRoleBasedRedirectPath(sessionData.user.role)
+        
+        // Use window.location for a hard redirect
+        window.location.href = redirectPath
+        return
+      }
+
+      // If no immediate session, try with retries
       let retryCount = 0
       const maxRetries = 3
-      const retryDelay = 1000 // 1 second
+      const retryDelay = 1000
 
       while (retryCount < maxRetries) {
-        // Force a session update
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        
         const updatedSession = await fetch('/api/auth/session')
-        const sessionData = await updatedSession.json()
+        const retrySessionData = await updatedSession.json()
 
-        if (sessionData?.user?.role) {
+        if (retrySessionData?.user?.role) {
           console.log('[Session Updated]', {
             timestamp: new Date().toISOString(),
-            role: sessionData.user.role,
+            role: retrySessionData.user.role,
             attempt: retryCount + 1
           })
-          try {
-            await handleNavigation(sessionData.user.role)
-            return
-          } catch (navError) {
-            console.error('[Navigation Failed]', {
-              timestamp: new Date().toISOString(),
-              error: navError
-            })
-            // Continue with retries if navigation fails
-          }
+
+          const redirectPath = getRoleBasedRedirectPath(retrySessionData.user.role)
+          window.location.href = redirectPath
+          return
         }
 
         console.log('[Session Retry]', {
@@ -152,12 +159,9 @@ export default function LoginPage() {
           maxRetries
         })
 
-        // Wait before next retry
-        await new Promise(resolve => setTimeout(resolve, retryDelay))
         retryCount++
       }
 
-      // If we get here, we couldn't get the session after all retries
       console.error('[Session Error]', {
         timestamp: new Date().toISOString(),
         error: 'Failed to get session after maximum retries',

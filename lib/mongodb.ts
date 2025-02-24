@@ -19,7 +19,7 @@ let clientPromise: Promise<MongoClient>
 
 // Add global type for MongoDB
 declare global {
-  const mongo: {
+  var mongo: {
     conn: MongoClient | null;
     promise: Promise<MongoClient> | null;
   } | null
@@ -69,4 +69,3 @@ export async function getMongoDb() {
   });
   return clientResolved.db(dbName);
 }
-

@@ -11,6 +11,7 @@ import {
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { connectToDatabase } from '@/lib/mongodb';
@@ -18,6 +19,8 @@ import { ObjectId, Filter, WithId } from 'mongodb';
 import { getSocketInstance } from '@/lib/socket';
 import { Server } from 'socket.io';
 import type { Document, UpdateFilter } from 'mongodb';
+import { Worker } from 'worker_threads';
+import path from 'path';
 
 // Route Segment Config
 export const dynamic = 'force-dynamic';
@@ -26,15 +29,19 @@ export const runtime = 'nodejs';
 
 // Initialize S3 client for R2
 const s3Client = new S3Client({
-  region: 'auto',
-  endpoint: process.env.R2_BUCKET_ENDPOINT,
+  region: process.env.R2_REGION || 'auto',
+  endpoint: process.env.R2_ENDPOINT,
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
 });
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
+
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+const MAX_CONCURRENT_UPLOADS = 3;
+const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
 
 // Helper function to delete a folder and all objects inside it
 async function deleteR2Folder(folderPath: string) {
@@ -114,6 +121,29 @@ interface ErrorResponse {
   details: string;
 }
 
+interface UploadProgress {
+  fileIndex: number;
+  chunkIndex: number;
+  bytesUploaded: number;
+  totalBytes: number;
+}
+
+interface UploadResult {
+  fileName: string;
+  fileKey: string;
+  collectionName: string;
+}
+
+interface EpisodeDocument {
+  _id: ObjectId;
+  name: string;
+  collectionName: string;
+  videoPath: string;
+  videoKey: string;
+  status: string;
+  uploadedAt: Date;
+}
+
 // =========== Helpers ===========
 
 // Node.js memory usage logging
@@ -128,7 +158,6 @@ function logMemoryUsage() {
 }
 
 // File size constants
-const MAX_FILE_SIZE = 800 * 1024 * 1024; // 800MB
 const MAX_TOTAL_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
 
 // Check if a file exists in R2
@@ -234,15 +263,8 @@ async function* streamFile(file: Blob, chunkSize = 5 * 1024 * 1024) {
 // =========== POST: Upload Route ===========
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const io = getSocketInstance();
   const startTime = Date.now();
-  let io: Server | { emit: (event: string, data: any) => void } | null = null;
-  try {
-    io = getSocketInstance();
-  } catch (error) {
-    console.warn('Socket.IO not initialized, continuing without real-time updates');
-  }
-
-  logMemoryUsage(); // Initial memory usage
 
   try {
     // 1. Authorization
@@ -251,19 +273,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Connect to database
-    const { db, client } = await connectToDatabase();
-
-    // 3. Get the next available index number
-    const lastProject = await db.collection<Project>('projects')
-      .find({}, { projection: { index: 1 } })
-      .sort({ index: -1 })
-      .limit(1)
-      .toArray();
-
-    const nextIndex = (lastProject[0]?.index || 0) + 1;
-
-    // 4. Parse FormData and validate files
+    // 2. Parse and validate form data
     const formData = await request.formData();
     const data: ProjectData = {
       title: formData.get('title') as string,
@@ -273,243 +283,175 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       videos: Array.from(formData.getAll('videos')).filter((file): file is File => file instanceof File)
     };
 
-    // 5. Validate required fields
-    if (!data.title || !data.sourceLanguage || !data.targetLanguage || !data.videos.length) {
+    if (!data.title || !data.sourceLanguage || !data.targetLanguage) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Check for duplicate project title
-    const existingProject = await db.collection<Project>('projects').findOne({ title: data.title });
-    if (existingProject) {
-      return NextResponse.json(
-        { error: 'Project with this title already exists' },
-        { status: 400 }
-      );
-    }
+    // 3. Connect to database
+    const { db, client } = await connectToDatabase();
 
-    // 6. Start MongoDB session for transaction
-    const mongoSession = await client.startSession();
-    mongoSession.startTransaction();
+    // 4. Create project document
+    const sanitizedTitle = data.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const projectDoc = await db.collection('projects').insertOne({
+      title: data.title,
+      description: data.description || '',
+      sourceLanguage: data.sourceLanguage,
+      targetLanguage: data.targetLanguage,
+      status: 'initializing',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      assignedTo: [],
+      parentFolder: sanitizedTitle,
+      databaseName: `${sanitizedTitle}_db`,
+      episodes: [],
+      uploadStatus: {
+        totalFiles: data.videos.length,
+        completedFiles: 0,
+        currentFile: 0,
+        status: 'uploading'
+      }
+    });
 
-    try {
-      // Create project document
-      const projectId = new ObjectId();
-      const newProject: Omit<Project, '_id'> & { _id: ObjectId } = {
-        _id: projectId,
-        title: data.title,
-        description: data.description,
-        sourceLanguage: data.sourceLanguage,
-        targetLanguage: data.targetLanguage,
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        assignedTo: [],
-        parentFolder: `project_${projectId}`,
-        databaseName: `project_${projectId}_db`,
-        episodes: [],
-        index: nextIndex,
-        uploadStatus: {
-          totalFiles: data.videos.length,
-          completedFiles: 0,
-          currentFile: 0,
-          status: 'pending'
-        }
-      };
-
-      // Insert project
-      await db.collection<Project>('projects').insertOne(newProject);
-
-      // Process video files
-      const uploadedFiles: Episode[] = [];
-      for (const videoFile of data.videos) {
-        if (!(videoFile instanceof File)) {
-          continue;
-        }
-
-        // Check file size
-        if (videoFile.size > MAX_FILE_SIZE) {
-          await mongoSession.abortTransaction();
-          return NextResponse.json(
-            { error: 'File size exceeds maximum limit of 1GB' },
-            { status: 400 }
-          );
-        }
-
-        const episodeNumber: number = uploadedFiles.length + 1;
-        const fileName: string = `P${nextIndex}_E${episodeNumber}_${(videoFile as any).name || `episode_${Date.now()}.mp4`}`;
-        const fileKey = `projects/${projectId}/${fileName}`;
-        const contentType = videoFile.type || 'video/mp4';
-
-        // Check if file exists
-        const fileExists = await checkFileExistsInR2(fileKey);
-        if (fileExists) {
-          uploadedFiles.push({
-            _id: new ObjectId(),
-            name: fileName,
-            collectionName: `project_${projectId}_dialogues`,
-            videoPath: await getSignedUrl(s3Client, new GetObjectCommand({ Bucket: BUCKET_NAME, Key: fileKey }), { expiresIn: 3600 }),
-            videoKey: fileKey,
-            status: 'uploaded',
-            uploadedAt: new Date()
-          });
-          continue;
-        }
-
+    // 5. Create project database and collections
+    const projectDb = client.db(`${sanitizedTitle}_db`);
+    
+    // 6. Process videos in parallel with controlled concurrency
+    const uploadResults: UploadResult[] = [];
+    for (let i = 0; i < data.videos.length; i += MAX_CONCURRENT_UPLOADS) {
+      const chunk = data.videos.slice(i, i + MAX_CONCURRENT_UPLOADS);
+      const chunkPromises = chunk.map(async (video, index) => {
+        const fileIndex = i + index;
+        const fileName = video.name;
+        const collectionName = path.basename(fileName, path.extname(fileName));
+        
+        // Create collection for this video
+        await projectDb.createCollection(collectionName);
+        
+        // Prepare upload path
+        const fileKey = `${sanitizedTitle}/${collectionName}/${fileName}`;
+        
         try {
-          // Create multipart upload
-          const multipartUpload = await s3Client.send(
-            new CreateMultipartUploadCommand({
-              Bucket: BUCKET_NAME,
-              Key: fileKey,
-              ContentType: contentType,
-            })
-          );
+          // Start multipart upload
+          const multipartUpload = await s3Client.send(new CreateMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: fileKey,
+            ContentType: video.type
+          }));
+          
           const uploadId = multipartUpload.UploadId!;
-          const parts: { ETag: string; PartNumber: number }[] = [];
-          let partNumber = 1;
+          const fileSize = video.size;
+          const numParts = Math.ceil(fileSize / CHUNK_SIZE);
+          const parts = [];
 
           // Upload chunks
-          const chunkSize = 5 * 1024 * 1024;
-          const totalChunks = Math.ceil(videoFile.size / chunkSize);
-          let uploadedBytes = 0;
+          for (let partNumber = 1; partNumber <= numParts; partNumber++) {
+            const start = (partNumber - 1) * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, fileSize);
+            const chunk = video.slice(start, end);
+            
+            const chunkBuffer = Buffer.from(await chunk.arrayBuffer());
 
-          for await (const chunk of streamFile(videoFile, chunkSize)) {
-            const uploadPartResponse = await s3Client.send(
-              new UploadPartCommand({
-                Bucket: BUCKET_NAME,
-                Key: fileKey,
-                UploadId: uploadId,
-                PartNumber: partNumber,
-                Body: chunk,
-              })
-            );
-
-            if (!uploadPartResponse.ETag) {
-              throw new Error('Failed to get ETag for uploaded part');
-            }
-
-            parts.push({
-              ETag: uploadPartResponse.ETag,
-              PartNumber: partNumber,
-            });
-
-            uploadedBytes += chunk.length;
-            const progressPercent = Math.round((uploadedBytes / videoFile.size) * 100);
-
-            // Emit progress
-            if (io) {
-              io.emit('uploadProgress', {
-                projectId: projectId.toString(),
-                fileName,
-                collectionName: `project_${projectId}_dialogues`,
-                partNumber,
-                totalChunks,
-                progressPercent,
-                uploadedBytes,
-                totalBytes: videoFile.size,
-              });
-            }
-
-            partNumber++;
-          }
-
-          // Complete upload
-          await s3Client.send(
-            new CompleteMultipartUploadCommand({
-              Bucket: BUCKET_NAME,
+            const uploadPartCommand = new UploadPartCommand({
+              Bucket: process.env.R2_BUCKET_NAME,
               Key: fileKey,
               UploadId: uploadId,
-              MultipartUpload: { Parts: parts },
-            })
+              PartNumber: partNumber,
+              Body: chunkBuffer
+            });
+
+            const { ETag } = await s3Client.send(uploadPartCommand);
+            parts.push({ PartNumber: partNumber, ETag });
+
+            // Update progress
+            const progress: UploadProgress = {
+              fileIndex,
+              chunkIndex: partNumber,
+              bytesUploaded: end,
+              totalBytes: fileSize
+            };
+            
+            io?.emit('uploadProgress', {
+              projectId: projectDoc.insertedId.toString(),
+              ...progress
+            });
+          }
+
+          // Complete multipart upload
+          await s3Client.send(new CompleteMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: fileKey,
+            UploadId: uploadId,
+            MultipartUpload: { Parts: parts }
+          }));
+
+          // Add episode to project
+          await db.collection('projects').updateOne(
+            { _id: projectDoc.insertedId },
+            {
+              $push: {
+                episodes: {
+                  $each: [{
+                    _id: new ObjectId(),
+                    name: fileName,
+                    collectionName,
+                    videoPath: fileKey,
+                    videoKey: fileKey,
+                    status: 'uploaded',
+                    uploadedAt: new Date()
+                  }] as EpisodeDocument[]
+                }
+              } as any,
+              $inc: { 'uploadStatus.completedFiles': 1 },
+              $set: {
+                'uploadStatus.currentFile': fileIndex + 1,
+                updatedAt: new Date()
+              }
+            }
           );
 
-          // Get signed URL
-          const signedUrl = await getSignedUrl(s3Client, new GetObjectCommand({ Bucket: BUCKET_NAME, Key: fileKey }), {
-            expiresIn: 3600,
-          });
-
-          uploadedFiles.push({
-            _id: new ObjectId(),
-            name: fileName,
-            collectionName: `project_${projectId}_dialogues`,
-            videoPath: signedUrl,
-            videoKey: fileKey,
-            status: 'uploaded',
-            uploadedAt: new Date()
+          uploadResults.push({
+            fileName,
+            fileKey,
+            collectionName
           });
         } catch (error) {
-          console.error(`Error uploading file ${fileName}:`, error);
-          // Update project status to reflect error
-          await db.collection<Project>('projects').updateOne(
-            { _id: projectId },
-            {
-              $set: {
-                updatedAt: new Date(),
-                'uploadStatus.status': 'error',
-                status: 'error',
-              },
-            },
-            { session: mongoSession }
-          );
+          console.error(`Error uploading ${fileName}:`, error);
           throw error;
         }
-      }
-
-      // Update project with episodes
-      const updateOperation: UpdateFilter<Project> = {
-        $push: {
-          episodes: {
-            $each: uploadedFiles
-          }
-        } as any,
-        $set: {
-          uploadStatus: {
-            totalFiles: data.videos.length,
-            completedFiles: uploadedFiles.length,
-            currentFile: uploadedFiles.length,
-            status: 'completed'
-          }
-        }
-      };
-
-      await db.collection<Project>('projects').updateOne(
-        { _id: projectId },
-        updateOperation,
-        { session: mongoSession }
-      );
-
-      await mongoSession.commitTransaction();
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          ...newProject,
-          episodes: uploadedFiles
-        }
       });
-    } catch (error) {
-      await mongoSession.abortTransaction();
-      throw error;
-    } finally {
-      await mongoSession.endSession();
+
+      await Promise.all(chunkPromises);
     }
+
+    // 7. Update project status to complete
+    await db.collection('projects').updateOne(
+      { _id: projectDoc.insertedId },
+      {
+        $set: {
+          status: 'pending',
+          'uploadStatus.status': 'completed',
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        projectId: projectDoc.insertedId.toString(),
+        uploadResults
+      }
+    });
+
   } catch (error: any) {
-    console.error('Error creating project:', error);
+    console.error('Error in project creation:', error);
     return NextResponse.json(
       { error: 'Failed to create project', details: error.message },
       { status: 500 }
     );
-  } finally {
-    // Attempt GC if available
-    if (global.gc) {
-      try {
-        global.gc();
-      } catch {}
-    }
-    logMemoryUsage(); // Final memory usage
   }
 }
 

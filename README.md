@@ -1,3 +1,222 @@
+# QA Application
+
+A Next.js 14 application for managing Q&A processes with voice processing capabilities.
+
+## 🚀 Features
+
+- User authentication and role-based access control
+- Project and episode management
+- Voice processing and audio manipulation
+- Real-time updates via WebSocket
+- File upload and processing
+- Admin dashboard
+- Comprehensive logging and monitoring
+
+## 🛠 Tech Stack
+
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Database**: MongoDB
+- **Authentication**: NextAuth.js
+- **State Management**: React Query
+- **UI Components**: Tailwind CSS
+- **Voice Processing**: ElevenLabs API
+- **File Storage**: Cloudflare R2
+- **WebSocket**: Socket.io
+- **Logging**: Winston
+- **Testing**: Jest & React Testing Library
+
+## 📦 Prerequisites
+
+- Node.js 18.x or later
+- MongoDB 5.x or later
+- Redis 6.x or later
+- Git
+
+## 🔧 Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/qa-app.git
+   cd qa-app
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your configuration.
+
+4. Set up the database:
+   ```bash
+   npm run db:setup
+   ```
+
+5. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+## 🏗 Project Structure
+
+```
+qa-app/
+├── app/                    # Next.js 14 app directory
+│   ├── api/               # API routes
+│   ├── (auth)/           # Authentication pages
+│   ├── projects/         # Project-related pages
+│   └── admin/            # Admin dashboard
+├── components/            # React components
+│   ├── ui/               # UI components
+│   └── forms/            # Form components
+├── lib/                   # Utility functions
+│   ├── auth.ts           # Authentication utilities
+│   ├── db.ts             # Database utilities
+│   └── logger.ts         # Logging utilities
+├── types/                # TypeScript types
+├── hooks/                # Custom React hooks
+├── public/               # Static files
+└── tests/                # Test files
+```
+
+## 🔐 Environment Variables
+
+Required environment variables:
+
+```env
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Database
+MONGODB_URI=mongodb://localhost:27017/qa-app
+REDIS_URL=redis://localhost:6379
+
+# Authentication
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key
+
+# Storage
+R2_ACCESS_KEY_ID=your-r2-key
+R2_SECRET_ACCESS_KEY=your-r2-secret
+R2_BUCKET_NAME=your-bucket
+R2_PUBLIC_URL=your-r2-public-url
+
+# Voice Processing
+ELEVEN_LABS_API_KEY=your-elevenlabs-key
+```
+
+## 🧪 Testing
+
+Run tests:
+```bash
+npm test               # Run all tests
+npm run test:watch    # Run tests in watch mode
+npm run test:coverage # Run tests with coverage
+```
+
+## 📝 API Documentation
+
+### Authentication
+
+- `POST /api/auth/login`: User login
+- `POST /api/auth/register`: User registration
+- `GET /api/auth/session`: Get current session
+
+### Projects
+
+- `GET /api/projects`: List projects
+- `POST /api/projects`: Create project
+- `GET /api/projects/:id`: Get project details
+- `PUT /api/projects/:id`: Update project
+- `DELETE /api/projects/:id`: Delete project
+
+### Episodes
+
+- `GET /api/episodes`: List episodes
+- `POST /api/episodes`: Create episode
+- `GET /api/episodes/:id`: Get episode details
+- `PUT /api/episodes/:id`: Update episode
+- `DELETE /api/episodes/:id`: Delete episode
+
+### Voice Processing
+
+- `POST /api/voice-models/speech-to-speech`: Convert speech
+- `GET /api/voice-models/available`: List available voices
+
+## 🔍 Monitoring
+
+The application uses Winston for logging with different log levels:
+
+- `error`: System errors and exceptions
+- `warn`: Warning conditions
+- `info`: General information
+- `http`: HTTP request logs
+- `debug`: Debug information
+
+Logs are stored in:
+- `logs/error.log`: Error-level logs
+- `logs/combined.log`: All logs
+
+## 🔒 Security
+
+- All routes are protected with authentication
+- File uploads are validated and sanitized
+- Rate limiting is implemented on API routes
+- CORS is configured for specified origins
+- Environment variables are properly handled
+- Input validation using Zod
+- SQL injection protection
+- XSS protection
+
+## 🚀 Deployment
+
+1. Build the application:
+   ```bash
+   npm run build
+   ```
+
+2. Start the production server:
+   ```bash
+   npm start
+   ```
+
+For deployment on Vercel:
+```bash
+vercel deploy
+```
+
+## 📈 Performance Optimization
+
+- Database indexes for frequent queries
+- Connection pooling for database
+- Caching with Redis
+- Image optimization
+- Code splitting
+- API route optimization
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Next.js team for the amazing framework
+- ElevenLabs for voice processing capabilities
+- All contributors to the project
+
 Below is a deep and detailed architecture-level flow and data flow explanation of the QA App, based on the repository's folder structure and file contents. This walkthrough will give you a comprehensive understanding of:
 
 How the project is organized

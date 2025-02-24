@@ -13,8 +13,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Project, ProjectStatus, Episode, AssignedUser } from '@/types/project';
-import { UserRole, User } from '@/types/user';
+import type { Project as BaseProject, ProjectStatus, Episode, AssignedUser } from '@/types/project';
+import type { UserRole, User } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
@@ -38,6 +38,16 @@ import { ObjectId } from 'mongodb';
 // Add socket imports
 import { getSocketClient, authenticateSocket, joinProjectRoom, leaveProjectRoom } from '@/lib/socket';
 
+// Extend the base Project type with additional fields
+type Project = Omit<BaseProject, 'description' | 'sourceLanguage' | 'targetLanguage'> & {
+  description?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  dialogue_collection?: string;
+  parentFolder?: string;
+  index?: string;
+};
+
 // ===============================
 // Type Definitions
 // ===============================
@@ -47,10 +57,12 @@ interface AdminViewProps {
   refetchProjects: () => Promise<void>;
 }
 
+type UploadPhase = 'pending' | 'uploading' | 'creating-collection' | 'processing' | 'success' | 'error';
+
 interface UploadProgressData {
+  phase: UploadPhase;
   loaded: number;
   total: number;
-  phase: 'pending' | 'uploading' | 'creating-collection' | 'processing' | 'success' | 'error';
   message?: string;
 }
 
@@ -88,13 +100,11 @@ interface UserHandlers {
   handleDeleteUser: (userId: string) => Promise<void>;
 }
 
-// Add these type declarations at the top of the file
 interface UserSelectionHandlers {
   handleUserSelection: (username: string) => void;
   handleRemoveUser: (projectId: string, username: string) => Promise<void>;
 }
 
-// Add these type declarations at the top of the file
 interface ProjectState {
   title: string;
   description: string;
@@ -118,7 +128,7 @@ interface AdminViewState {
   selectedProject: Project | null;
   selectedUser: User | null;
   searchTerm: string;
-  activeTab: 'projects' | 'users';
+  activeTab: Tab;
   viewMode: 'grid' | 'list';
   sortBy: 'title' | 'date' | 'status';
   filterStatus: ProjectStatus | 'all';
@@ -139,14 +149,11 @@ interface AdminViewState {
   assignUserSearchTerm: string;
   filteredUsers: User[];
   modalFilteredUsers: User[];
+  uploadProgress: UploadState;
 }
 
-interface UploadProgress {
-  totalFiles: number;
-  completedFiles: number;
-  currentFile: number;
-  percentage: number;
-  [key: string]: number;
+interface UploadState {
+  [key: string]: UploadProgressData;
 }
 
 interface TimeoutRefs {
@@ -164,14 +171,12 @@ interface MemoizedData {
   userSelectionHandlers: UserSelectionHandlers;
 }
 
-// Upload progress type definitions
-interface UploadProgressState {
-  [key: string]: {
-    phase: 'pending' | 'uploading' | 'creating-collection' | 'processing' | 'success' | 'error';
-    loaded: number;
-    total: number;
-    message?: string;
-  };
+interface UploadProgressUpdate {
+  phase: UploadPhase;
+  loaded: number;
+  total: number;
+  message?: string;
+  fileName?: string;
 }
 
 // ===============================
@@ -278,7 +283,8 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     success: '',
     assignUserSearchTerm: '',
     filteredUsers: [],
-    modalFilteredUsers: []
+    modalFilteredUsers: [],
+    uploadProgress: {}
   };
 
   const [state, setState] = useState<AdminViewState>(initialState);
@@ -301,31 +307,26 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   });
 
   // Upload progress state with proper typing
-  const [uploadStatus, setUploadStatus] = useState<UploadProgressState[string]['phase']>('pending');
+  const [uploadStatus, setUploadStatus] = useState<UploadPhase>('pending');
 
-  // Upload progress update helper
-  const updateUploadProgress = useCallback((fileId: string, progress: Partial<UploadProgressState[string]>) => {
-    setUploadProgress(prev => ({
+  // Upload progress update helper - Primary implementation
+  const updateUploadProgress = useCallback((data: UploadProgressUpdate) => {
+    const key = data.fileName || data.phase;
+    const progressData: UploadProgressData = {
+      phase: data.phase,
+      loaded: data.loaded,
+      total: data.total,
+      message: data.message
+    };
+    
+    setState(prev => ({
       ...prev,
-      [fileId]: {
-        ...prev[fileId],
-        ...progress
+      uploadProgress: {
+        ...prev.uploadProgress,
+        [key]: progressData
       }
     }));
   }, []);
-
-  // // Fix fetchProjectsWithLoading declaration
-  // const fetchProjectsWithLoading = useCallback(async () => {
-  //   setState(prev => ({ ...prev, isProjectsLoading: true }));
-  //   try {
-  //     await refetchProjects();
-  //   } catch (error) {
-  //     console.error('Error fetching projects:', error);
-  //     toast.error('Failed to fetch projects');
-  //   } finally {
-  //     setState(prev => ({ ...prev, isProjectsLoading: false }));
-  //   }
-  // }, [refetchProjects]);
 
   // State update helper with proper typing
   const updateState = useCallback((updates: Partial<AdminViewState> | ((prev: AdminViewState) => Partial<AdminViewState>)) => {
@@ -549,47 +550,70 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId?: string) => {
     try {
       if (action !== 'create' && !projectId) return;
-      if (action === 'update' && !state.selectedProject) return;
+      if (action === 'update' && !isProjectSelected(state.selectedProject)) return;
+
+      updateState({ isProjectsLoading: true, error: '' });
       
       switch (action) {
         case 'create':
           await handleCreateProject();
           break;
         case 'update':
-          if (!state.selectedProject) return;
-          // Implementation
+          if (!projectId) throw new Error('Project ID is required for update');
+          updateState({ isEditing: true });
+          await handleUpdateProject(projectId);
           break;
         case 'delete':
-          if (!state.selectedProject) return;
+          if (!projectId) throw new Error('Project ID is required for delete');
+          updateState({ showDeleteConfirm: true });
           await handleDeleteProject(projectId);
           break;
       }
-    } catch (error) {
-      console.error(`Error ${action}ing project:`, error);
-      toast.error(`Failed to ${action} project`);
+      
+      await refetchProjects();
+      updateState({ success: `Project ${action}d successfully` });
+    } catch (err) {
+      console.error(`Error ${action}ing project:`, err);
+      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
     }
-  }, [state.selectedProject]);
+  }, [state.selectedProject, handleCreateProject, handleUpdateProject, handleDeleteProject, refetchProjects, updateState]);
 
-  const handleEpisodeAction = useCallback(async (action: 'view' | 'edit' | 'delete', episodeId?: string) => {
-    if (!state.selectedProjectForEpisodes || !state.selectedEpisode) return;
-    
+  const handleEpisodeAction = useCallback(async (action: 'add' | 'update' | 'delete' | 'view' | 'edit', episodeData?: Partial<Episode>) => {
     try {
+      if (!state.selectedProjectForEpisodes?._id) {
+        throw new Error('No project selected');
+      }
+
+      updateState({ isProjectsLoading: true, error: '' });
+      
       switch (action) {
-        case 'view':
-          // Implementation
+        case 'add':
+          if (!episodeData) throw new Error('Episode data is required for add');
+          await handleAddEpisodes(episodeData as any);
           break;
-        case 'edit':
-          // Implementation
+        case 'update':
+          if (!episodeData?._id) throw new Error('Episode ID is required for update');
+          // Implementation for update
           break;
         case 'delete':
-          // Implementation
+          if (!episodeData?._id) throw new Error('Episode ID is required for delete');
+          // Implementation for delete
+          break;
+        case 'view':
+        case 'edit':
+          if (!isProjectSelected(state.selectedProjectForEpisodes) || !isEpisodeSelected(state.selectedEpisode)) return;
+          // Implementation for view/edit
           break;
       }
-    } catch (error) {
-      console.error(`Error ${action}ing episode:`, error);
-      toast.error(`Failed to ${action} episode`);
+
+      await refetchProjects();
+      updateState({ success: `Episode ${action}d successfully` });
+    } catch (err) {
+      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
+    } finally {
+      updateState({ isProjectsLoading: false });
     }
-  }, [state.selectedProjectForEpisodes, state.selectedEpisode]);
+  }, [state.selectedProjectForEpisodes, state.selectedEpisode, handleAddEpisodes, refetchProjects, updateState]);
 
   
 
@@ -707,19 +731,39 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   };
 
   // Fix user action handlers with proper null checks
-  const handleUserAction = (action: string) => {
-    if (!state.selectedUser?._id) return;
-    
-    switch (action) {
-      case 'delete':
-        handleDeleteUser(state.selectedUser._id.toString());
-        break;
-      // Add other cases as needed
+  const handleUserAction = useCallback(async (action: 'create' | 'update' | 'delete', userId?: string) => {
+    try {
+      updateState({ error: '' });
+      
+      switch (action) {
+        case 'create':
+          updateState({ isCreatingUser: true });
+          // Implementation for create
+          break;
+        case 'update':
+          if (!userId) throw new Error('User ID is required for update');
+          // Implementation for update
+          break;
+        case 'delete':
+          if (!userId) throw new Error('User ID is required for delete');
+          updateState({ showUserDeleteConfirm: true });
+          // Implementation for delete
+          break;
+      }
+      
+      updateState({ success: `User ${action}d successfully` });
+    } catch (err) {
+      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
+    } finally {
+      updateState({ 
+        isCreatingUser: false,
+        showUserDeleteConfirm: false
+      });
     }
-  };
+  }, [updateState]);
 
   // Fix upload progress state handling
-  const updateUploadProgress = (progress: UploadProgress) => {
+  const updateUploadProgress = (progress: UploadProgressData) => {
     setState(prev => ({
       ...prev,
       uploadProgress: {
@@ -822,74 +866,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   }, [memoizedProjects]);
 
-  // Project action handlers
-  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId?: string) => {
-    try {
-      updateState({ isProjectsLoading: true, error: '' });
-      
-      switch (action) {
-        case 'create':
-          updateState({ isCreating: true });
-          // Implementation for create
-          break;
-        case 'update':
-          if (!projectId) throw new Error('Project ID is required for update');
-          updateState({ isEditing: true });
-          // Implementation for update
-          break;
-        case 'delete':
-          if (!projectId) throw new Error('Project ID is required for delete');
-          updateState({ showDeleteConfirm: true });
-          // Implementation for delete
-          break;
-      }
-      
-      await refetchProjects();
-      updateState({ success: `Project ${action}d successfully` });
-    } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
-    } finally {
-      updateState({ 
-        isProjectsLoading: false,
-        isCreating: false,
-        isEditing: false,
-        showDeleteConfirm: false
-      });
-    }
-  }, [refetchProjects, updateState]);
-
-  // User action handlers
-  const handleUserAction = useCallback(async (action: 'create' | 'update' | 'delete', userId?: string) => {
-    try {
-      updateState({ error: '' });
-      
-      switch (action) {
-        case 'create':
-          updateState({ isCreatingUser: true });
-          // Implementation for create
-          break;
-        case 'update':
-          if (!userId) throw new Error('User ID is required for update');
-          // Implementation for update
-          break;
-        case 'delete':
-          if (!userId) throw new Error('User ID is required for delete');
-          updateState({ showUserDeleteConfirm: true });
-          // Implementation for delete
-          break;
-      }
-      
-      updateState({ success: `User ${action}d successfully` });
-    } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
-    } finally {
-      updateState({ 
-        isCreatingUser: false,
-        showUserDeleteConfirm: false
-      });
-    }
-  }, [updateState]);
-
   // Team assignment handlers
   const handleTeamAssignment = useCallback(async (projectId: string, usernames: string[]) => {
     try {
@@ -908,106 +884,106 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   }, [updateState]);
 
-  // Episode handlers
-  const handleEpisodeAction = useCallback(async (action: 'add' | 'update' | 'delete', episodeData?: Partial<Episode>) => {
-    try {
-      if (!state.selectedProjectForEpisodes?._id) {
-        throw new Error('No project selected');
-      }
-
-      updateState({ isProjectsLoading: true, error: '' });
-      
-      switch (action) {
-        case 'add':
-          if (!episodeData) throw new Error('Episode data is required for add');
-          // Implementation for add
-          break;
-        case 'update':
-          if (!episodeData?._id) throw new Error('Episode ID is required for update');
-          // Implementation for update
-          break;
-        case 'delete':
-          if (!episodeData?._id) throw new Error('Episode ID is required for delete');
-          // Implementation for delete
-          break;
-      }
-
-      await refetchProjects();
-      updateState({ success: `Episode ${action}d successfully` });
-    } catch (err) {
-      updateState({ error: err instanceof Error ? err.message : 'An error occurred' });
-    } finally {
-      updateState({ isProjectsLoading: false });
-    }
-  }, [state.selectedProjectForEpisodes, refetchProjects, updateState]);
-
   // Upload handlers
   const handleUpload = useCallback(async (files: File[]) => {
     try {
-      setUploadProgress({
-        totalFiles: files.length,
-        completedFiles: 0,
-        currentFile: 0,
-        percentage: 0
+      const newProgress: UploadState = {};
+      files.forEach(file => {
+        newProgress[file.name] = {
+          phase: 'pending',
+          loaded: 0,
+          total: file.size,
+          message: 'Starting upload...'
+        };
       });
-      setUploadStatus('uploading');
+      
+      setState(prev => ({
+        ...prev,
+        uploadProgress: newProgress
+      }));
 
       for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         const formData = new FormData();
-        formData.append('file', files[i]);
+        formData.append('file', file);
         
         await axios.post('/api/upload', formData, {
           onUploadProgress: (progressEvent) => {
-            const percentage = progressEvent.total
-              ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
-              : 0;
-            
-            updateUploadProgress(files[i].name, {
-              loaded: progressEvent.loaded,
-              total: progressEvent.total,
-              phase: 'uploading',
-              message: `Uploading ${files[i].name} (${formatBytes(progressEvent.loaded)} / ${formatBytes(progressEvent.total)})`
-            });
+            if (progressEvent.total) {
+              setState(prev => ({
+                ...prev,
+                uploadProgress: {
+                  ...prev.uploadProgress,
+                  [file.name]: {
+                    phase: 'uploading',
+                    loaded: progressEvent.loaded,
+                    total: progressEvent.total,
+                    message: `Uploading ${file.name} (${formatBytes(progressEvent.loaded)} / ${formatBytes(progressEvent.total)})`
+                  }
+                }
+              }));
+            }
           }
         });
 
-        updateUploadProgress(files[i].name, {
-          phase: 'creating-collection',
-          message: `Creating collection for ${files[i].name}`
-        });
+        setState(prev => ({
+          ...prev,
+          uploadProgress: {
+            ...prev.uploadProgress,
+            [file.name]: {
+              phase: 'creating-collection',
+              loaded: file.size,
+              total: file.size,
+              message: `Creating collection for ${file.name}`
+            }
+          }
+        }));
 
-        updateUploadProgress(files[i].name, {
-          phase: 'processing',
-          message: `Processing ${files[i].name}`
-        });
+        setState(prev => ({
+          ...prev,
+          uploadProgress: {
+            ...prev.uploadProgress,
+            [file.name]: {
+              phase: 'processing',
+              loaded: file.size,
+              total: file.size,
+              message: `Processing ${file.name}`
+            }
+          }
+        }));
 
-        updateUploadProgress(files[i].name, {
-          phase: 'success',
-          message: `Successfully uploaded ${files[i].name}`
-        });
+        setState(prev => ({
+          ...prev,
+          uploadProgress: {
+            ...prev.uploadProgress,
+            [file.name]: {
+              phase: 'success',
+              loaded: file.size,
+              total: file.size,
+              message: `Successfully uploaded ${file.name}`
+            }
+          }
+        }));
       }
 
-      setUploadStatus('success');
+      notify('All files uploaded successfully', 'success');
     } catch (err) {
-      setUploadStatus('error');
-      updateState({ error: err instanceof Error ? err.message : 'Upload failed' });
+      const errorMessage = err instanceof Error ? err.message : 'Upload failed';
+      setState(prev => ({
+        ...prev,
+        uploadProgress: {
+          ...prev.uploadProgress,
+          error: {
+            phase: 'error',
+            loaded: 0,
+            total: 100,
+            message: errorMessage
+          }
+        }
+      }));
+      notify('Failed to upload files', 'error');
     }
-  }, [updateState]);
-
-  // // Function to fetch projects with loading state
-  // const fetchProjectsWithLoading = useCallback(async () => {
-  //   try {
-  //     updateState({ isProjectsLoading: true, loadError: null });
-  //     await refetchProjects();
-  //   } catch (err) {
-  //     updateState({ 
-  //       loadError: err instanceof Error ? err.message : 'An error occurred',
-  //       isProjectsLoading: false 
-  //     });
-  //   } finally {
-  //     updateState({ isProjectsLoading: false });
-  //   }
-  // }, [refetchProjects, updateState]);
+  }, [setState, notify]);
 
   // Fix state update type issues for project updates
   const updateSelectedProject = (updates: Partial<Project>) => {
@@ -1024,7 +1000,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   };
 
   // Fix upload progress state type
-  const [uploadProgress, setUploadProgress] = useState<UploadProgressState>({});
+  const [uploadProgress, setUploadProgress] = useState<UploadState>({});
 
   // Add type guard for null checks
   const isProjectSelected = (project: Project | null): project is Project => {
@@ -1036,7 +1012,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   };
 
   // Fix project action handlers
-  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId?: string) => {
+  const handleProjectAction = useCallback(async (action: 'create' | 'update' | 'delete', projectId: string) => {
     try {
       if (action !== 'create' && !projectId) return;
       if (action === 'update' && !isProjectSelected(state.selectedProject)) return;
@@ -1049,7 +1025,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   }, [state.selectedProject]);
 
   // Fix episode handling
-  const handleEpisodeAction = useCallback(async (action: 'view' | 'edit' | 'delete') => {
+  const handleEpisodeAction = useCallback(async (action: 'view' | 'edit' | 'delete', episodeId: string) => {
     if (!isProjectSelected(state.selectedProjectForEpisodes) || !isEpisodeSelected(state.selectedEpisode)) return;
   
     // Rest of the implementation
@@ -2442,41 +2418,128 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   );
 }
 
-interface Project {
-  _id: string | ObjectId;
-  title: string;
-  description?: string;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  status: ProjectStatus;
-  dialogue_collection?: string;
-  assignedTo: AssignedUser[];
-  episodes?: Episode[];
-  createdAt: string;
-  updatedAt: string;
-  index?: string;
-}
-
+// Add missing function declarations at the top
 const handleCreateProject = async () => {
-  // Implementation
+  try {
+    // Implementation for creating project
+    const response = await axios.post('/api/admin/projects', newProject);
+    if (response.data.success) {
+      notify('Project created successfully');
+      await refetchProjects();
+      updateState({ isCreating: false });
+    }
+  } catch (error) {
+    notify('Failed to create project', 'error');
+    console.error('Error creating project:', error);
+  }
+};
+
+const handleUpdateProject = async (projectId: string) => {
+  try {
+    if (!state.selectedProject) return;
+    const response = await axios.patch(`/api/admin/projects/${projectId}`, state.selectedProject);
+    if (response.data.success) {
+      notify('Project updated successfully');
+      await refetchProjects();
+      updateState({ isEditing: false });
+    }
+  } catch (error) {
+    notify('Failed to update project', 'error');
+    console.error('Error updating project:', error);
+  }
 };
 
 const handleDeleteProject = async (projectId: string) => {
-  // Implementation
+  try {
+    const response = await axios.delete(`/api/admin/projects/${projectId}`);
+    if (response.data.success) {
+      notify('Project deleted successfully');
+      await refetchProjects();
+      updateState({ showDeleteConfirm: false });
+    }
+  } catch (error) {
+    notify('Failed to delete project', 'error');
+    console.error('Error deleting project:', error);
+  }
 };
 
-const handleCreateUser = async () => {
-  // Implementation
+const handleCreateUser = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const response = await axios.post('/api/admin/users', newUser);
+    if (response.data.success) {
+      notify('User created successfully');
+      queryClient.invalidateQueries(['users']);
+      updateState({ isCreatingUser: false });
+    }
+  } catch (error) {
+    notify('Failed to create user', 'error');
+    console.error('Error creating user:', error);
+  }
 };
 
 const handleDeleteUser = async (userId: string) => {
-  // Implementation
+  try {
+    const response = await axios.delete(`/api/admin/users/${userId}`);
+    if (response.data.success) {
+      notify('User deleted successfully');
+      queryClient.invalidateQueries(['users']);
+      updateState({ showUserDeleteConfirm: false });
+    }
+  } catch (error) {
+    notify('Failed to delete user', 'error');
+    console.error('Error deleting user:', error);
+  }
+};
+
+const handleAddEpisodes = async (files: FileList) => {
+  try {
+    if (!state.selectedProjectForEpisodes?._id) return;
+    
+    const formData = new FormData();
+    Array.from(files).forEach(file => {
+      formData.append('episodes', file);
+    });
+
+    const response = await axios.post(
+      `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }
+    );
+
+    if (response.data.success) {
+      notify('Episodes added successfully');
+      await refetchProjects();
+    }
+  } catch (error) {
+    notify('Failed to add episodes', 'error');
+    console.error('Error adding episodes:', error);
+  }
 };
 
 const handleAssignUsers = async () => {
-  // Implementation
+  try {
+    if (!state.selectedProject?._id || state.selectedUsernames.length === 0) return;
+    
+    const response = await axios.post(`/api/admin/projects/${state.selectedProject._id}/assign-users`, {
+      usernames: state.selectedUsernames
+    });
+
+    if (response.data.success) {
+      notify('Users assigned successfully');
+      await refetchProjects();
+      updateState({ 
+        isAssigning: false,
+        selectedUsernames: []
+      });
+    }
+  } catch (error) {
+    notify('Failed to assign users', 'error');
+    console.error('Error assigning users:', error);
+  }
 };
 
-const handleAddEpisodes = async () => {
-  // Implementation
-};

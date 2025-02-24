@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
@@ -62,7 +62,8 @@ export default function LoginPage() {
     })
   }, [])
 
-  const handleNavigation = async (role: string) => {
+  // Separate navigation function that uses the router
+  const handleNavigation = useCallback(async (role: string) => {
     try {
       const redirectPath = getRoleBasedRedirectPath(role)
       console.log('[Navigation Attempt]', {
@@ -72,16 +73,17 @@ export default function LoginPage() {
         method: 'direct'
       })
       
-      // Force a hard navigation
-      window.location.href = redirectPath
+      // Use router.push instead of window.location for client-side navigation
+      await router.push(redirectPath)
     } catch (err) {
       console.error('[Navigation Error]', {
         timestamp: new Date().toISOString(),
         error: err,
         currentPath: window.location.pathname
       })
+      throw err // Propagate the error to be handled by the caller
     }
-  }
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -116,16 +118,52 @@ export default function LoginPage() {
         return
       }
 
-      // Immediately navigate if we have a role
-      if (session?.user?.role) {
-        await handleNavigation(session.user.role)
-      } else {
-        console.error('[Session Error]', {
+      // Wait for session to be updated
+      let retryCount = 0
+      const maxRetries = 3
+      const retryDelay = 1000 // 1 second
+
+      while (retryCount < maxRetries) {
+        // Force a session update
+        const updatedSession = await fetch('/api/auth/session')
+        const sessionData = await updatedSession.json()
+
+        if (sessionData?.user?.role) {
+          console.log('[Session Updated]', {
+            timestamp: new Date().toISOString(),
+            role: sessionData.user.role,
+            attempt: retryCount + 1
+          })
+          try {
+            await handleNavigation(sessionData.user.role)
+            return
+          } catch (navError) {
+            console.error('[Navigation Failed]', {
+              timestamp: new Date().toISOString(),
+              error: navError
+            })
+            // Continue with retries if navigation fails
+          }
+        }
+
+        console.log('[Session Retry]', {
           timestamp: new Date().toISOString(),
-          error: 'No role found in session after update',
-          session
+          attempt: retryCount + 1,
+          maxRetries
         })
+
+        // Wait before next retry
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        retryCount++
       }
+
+      // If we get here, we couldn't get the session after all retries
+      console.error('[Session Error]', {
+        timestamp: new Date().toISOString(),
+        error: 'Failed to get session after maximum retries',
+        retryAttempts: retryCount
+      })
+      setError('Failed to complete login. Please try again.')
 
     } catch (err) {
       console.error('[Login Error]', {

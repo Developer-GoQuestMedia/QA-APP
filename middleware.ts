@@ -13,16 +13,26 @@ import {
 } from './lib/errors'
 
 // Initialize Redis for rate limiting
-const redis = new Redis({
-  url: process.env.REDIS_URL || '',
-  token: process.env.REDIS_TOKEN || '',
-})
+const isDevelopment = process.env.NODE_ENV === 'development';
+let redis: Redis | null = null;
+let ratelimit: Ratelimit | null = null;
 
-// Create rate limiter
-const ratelimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(10, '10 s'), // 10 requests per 10 seconds
-})
+if (!isDevelopment) {
+  if (!process.env.REDIS_URL || !process.env.REDIS_TOKEN) {
+    throw new Error('Redis configuration is required in production');
+  }
+  
+  redis = new Redis({
+    url: process.env.REDIS_URL,
+    token: process.env.REDIS_TOKEN,
+  });
+
+  // Create rate limiter
+  ratelimit = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(10, '10 s'), // 10 requests per 10 seconds
+  });
+}
 
 // CORS configuration
 const corsHeaders = {
@@ -121,21 +131,20 @@ export async function middleware(request: NextRequest) {
     }
 
     // 3. Rate limiting for API routes
-    if (pathname.startsWith('/api')) {
+    if (pathname.startsWith('/api') && ratelimit && !isDevelopment) {
       const ip = request.ip ?? '127.0.0.1'
       const { success, limit, reset, remaining } = await ratelimit.limit(ip)
 
+      // Set rate limit headers
       response.headers.set('X-RateLimit-Limit', limit.toString())
       response.headers.set('X-RateLimit-Remaining', remaining.toString())
       response.headers.set('X-RateLimit-Reset', reset.toString())
 
       if (!success) {
-        throw new RateLimitError('Too many requests', {
-          ip,
-          limit,
-          reset,
-          remaining,
-        }, requestId)
+        return handleApiError(
+          new RateLimitError('Too many requests'),
+          { ip, limit, reset, remaining }
+        )
       }
     }
 

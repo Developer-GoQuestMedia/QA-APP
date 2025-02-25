@@ -14,15 +14,17 @@ const uri = process.env.MONGODB_URI
 const dbName = process.env.MONGODB_DB
 const options = {}
 
-let client: MongoClient
+let client: MongoClient | null = null;
 let clientPromise: Promise<MongoClient>
 
-// Add global type for MongoDB
+interface GlobalMongo {
+  conn: MongoClient | null;
+  promise: Promise<MongoClient> | null;
+}
+
 declare global {
-  var mongo: {
-    conn: MongoClient | null;
-    promise: Promise<MongoClient> | null;
-  } | null
+  // eslint-disable-next-line no-var
+  var mongo: GlobalMongo | null;
 }
 
 if (!global.mongo) {

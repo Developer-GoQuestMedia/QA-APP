@@ -2403,7 +2403,7 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
               Delete Episode
             </h2>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete episode "{state.selectedEpisode.name}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{state.selectedEpisode.name}&quot;? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button

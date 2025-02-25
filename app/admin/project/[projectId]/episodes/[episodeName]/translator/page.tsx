@@ -3,11 +3,11 @@
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import AdminTranscriberView from '@/components/Admin/AdminTranscriberView';
+import AdminTranslatorView from '@/components/Admin/AdminTranslatorView';
 import { Project, Episode } from '@/types/project';
 import { toast } from 'react-toastify';
 
-export default function TranscriberPage() {
+export default function TranslatorPage() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const episodeName = params?.episodeName as string;
@@ -136,7 +136,7 @@ export default function TranscriberPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       
         {project && episode && (
-          <AdminTranscriberView 
+          <AdminTranslatorView 
             project={project}
             episode={episode}
             dialogues={dialogues}

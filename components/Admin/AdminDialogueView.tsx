@@ -10,29 +10,20 @@ import { useCacheCleaner } from '@/hooks/useCacheCleaner'
 import { Plus, Search, UserPlus, ChevronRight } from 'lucide-react'
 
 // Extend the base dialogue type with additional fields needed for the admin view
-interface AdminDialogue extends Omit<Dialogue, 'recordedAudioUrl' | 'ai_converted_voiceover_url'> {
+interface AdminDialogue extends Dialogue {
   index: number;
   character: string;
   videoUrl: string;
-  revisionRequested?: boolean;
-  needsReRecord?: boolean;
-  recordedAudioUrl: string | null;
-  voiceId: string | null | undefined;
-  ai_converted_voiceover_url?: string;
+  revisionRequested: boolean;
+  needsReRecord: boolean;
 }
 
 interface AdminDialogueViewProps {
+  project: Project;
+  episode: Episode;
   dialogues: Dialogue[];
+  onSave: (dialogues: Dialogue[]) => Promise<void>;
   projectId: string;
-  project?: {
-    databaseName: string;
-    title: string;
-  };
-  episode?: {
-    collectionName: string;
-    name: string;
-  };
-  onBack?: () => void;
 }
 
 type QueryData = {
@@ -48,19 +39,19 @@ const adaptDialogue = (dialogue: Dialogue): AdminDialogue => ({
   character: dialogue.characterName,
   videoUrl: dialogue.videoClipUrl,
   revisionRequested: dialogue.status === 'revision-requested',
-  needsReRecord: dialogue.status === 'needs-rerecord',
-  recordedAudioUrl: dialogue.recordedAudioUrl,
-  voiceId: dialogue.voiceId,
-  ai_converted_voiceover_url: dialogue.ai_converted_voiceover_url
+  needsReRecord: dialogue.status === 'needs-rerecord'
 });
 
-export default function AdminDialogueView({ dialogues: initialDialogues, projectId, project, episode, onBack }: AdminDialogueViewProps) {
+export default function AdminDialogueView({
+  dialogues,
+  onSave,
+}: AdminDialogueViewProps) {
   // Initialize cache cleaner
   useCacheCleaner();
 
   // Memoize the adapted and sorted dialogues
   const { sortedDialogues, dialoguesList } = React.useMemo(() => {
-    const adaptedDialogues = initialDialogues.map(adaptDialogue);
+    const adaptedDialogues = dialogues.map(adaptDialogue);
     const sorted = [...adaptedDialogues].sort((a, b) => 
       (a.subtitleIndex ?? 0) - (b.subtitleIndex ?? 0)
     );
@@ -69,7 +60,7 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
       sortedDialogues: sorted,
       dialoguesList: sorted
     };
-  }, [initialDialogues]);
+  }, [dialogues]);
 
   // State declarations
   const [isSaving, setIsSaving] = useState(false);
@@ -84,7 +75,7 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
   return (
     <div className="w-full max-w-4xl mx-auto px-4 space-y-4 sm:space-y-6">
       {/* Back Button */}
-      {onBack && (
+      {/* {onBack && (
         <button
           onClick={onBack}
           className="mb-4 px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white flex items-center"
@@ -92,7 +83,7 @@ export default function AdminDialogueView({ dialogues: initialDialogues, project
           <ChevronRight className="w-4 h-4 mr-2 transform rotate-180" />
           Back to Episodes
         </button>
-      )}
+      )} */}
 
       {/* Video Player Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 overflow-hidden">

@@ -6,9 +6,10 @@ import { ChevronRight, Loader2, ArrowUpDown, Filter, Trash2, Play, Pause, Refres
 import type { LucideIcon } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import axios from 'axios'
-import { log } from 'console';
-import { toast } from 'react-hot-toast';
-import { ObjectId } from 'mongodb';
+import { logError, logRequest, logResponse } from '@/lib/logger'
+import { ObjectId } from 'mongodb'
+import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface AdminEpisodeViewProps {
   project?: Project;
@@ -126,11 +127,9 @@ interface Episode extends BaseEpisode {
 }
 
 interface StepStatus {
-  status: 'pending' | 'processing' | 'completed' | 'error';
-  error?: string;
-  startTime?: string;
-  endTime?: string;
-  updatedAt?: string;
+  isComplete: boolean;
+  isInProgress: boolean;
+  hasError: boolean;
 }
 
 interface Dialogue {
@@ -202,10 +201,9 @@ interface Translation {
 }
 
 interface EpisodeStats {
-  totalSteps: number;
-  completedSteps: number;
-  percentComplete: number;
-  status: string;
+  totalDialogues: number;
+  completedDialogues: number;
+  errorDialogues: number;
 }
 
 type StepKey = 'audioExtraction' | 'transcription' | 'videoClips' | 'translation' | 'voiceAssignment';
@@ -213,10 +211,10 @@ type StepKey = 'audioExtraction' | 'transcription' | 'videoClips' | 'translation
 type DialogueStatus = 'approved' | 'revision-requested' | 'voice-over-added' | 'pending';
 
 interface VideoClip {
-  _id: string;
+  id: string;
   startTime: number;
   endTime: number;
-  url: string;
+  text: string;
 }
 
 interface VoiceModel {
@@ -225,58 +223,58 @@ interface VoiceModel {
   language: string;
 }
 
+interface Step {
+  id: string;
+  name: string;
+  status: StepStatus;
+}
+
 // Type the step configuration
 const STEP_CONFIG: Record<StepKey, {
-  title: string;
-  description: string;
-  api: string;
+  id: string;
+  name: string;
 }> = {
   audioExtraction: {
-    title: "Step 1: Extract Audio and SFX",
-    description: "Separate speech and background audio from the video",
-    api: "/api/process/extract-audio"
+    id: 'audio-extraction',
+    name: 'Audio Extraction'
   },
   transcription: {
-    title: "Step 2: Transcription",
-    description: "Generate transcription from audio",
-    api: "/api/process/transcribe"
+    id: 'transcription',
+    name: 'Transcription'
   },
   videoClips: {
-    title: "Step 3: Video Clips",
-    description: "Create video clips",
-    api: "/api/process/clips"
+    id: 'video-clips',
+    name: 'Video Clips'
   },
   translation: {
-    title: "Step 4: Translation",
-    description: "Translate transcription",
-    api: "/api/process/translate"
+    id: 'translation',
+    name: 'Translation'
   },
   voiceAssignment: {
-    title: "Step 5: Voice Assignment",
-    description: "Assign voices to characters",
-    api: "/api/process/voices"
+    id: 'voice-assignment',
+    name: 'Voice Assignment'
   }
 } as const;
 
 // Add type guards
-const isAudioExtractionStep = (step: any): step is Episode['steps']['audioExtraction'] => {
-  return step && 'extracted_speechPath' in step;
+const isAudioExtractionStep = (step: Step): boolean => {
+  return step.id === 'audio-extraction';
 };
 
-const isTranscriptionStep = (step: any): step is Episode['steps']['transcription'] => {
-  return step && 'transcriptionData' in step;
+const isTranscriptionStep = (step: Step): boolean => {
+  return step.id === 'transcription';
 };
 
-const isVideoClipsStep = (step: any): step is Episode['steps']['videoClips'] => {
-  return step && 'clips' in step;
+const isVideoClipsStep = (step: Step): boolean => {
+  return step.id === 'video-clips';
 };
 
-const isTranslationStep = (step: any): step is Episode['steps']['translation'] => {
-  return step && 'translationData' in step;
+const isTranslationStep = (step: Step): boolean => {
+  return step.id === 'translation';
 };
 
-const isVoiceAssignmentStep = (step: any): step is Episode['steps']['voiceAssignment'] => {
-  return step && ('characterVoices' in step || 'voiceConversions' in step);
+const isVoiceAssignmentStep = (step: Step): boolean => {
+  return step.id === 'voice-assignment';
 };
 
 // Add dialogue status config
@@ -743,6 +741,7 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   const [episode, setEpisode] = useState<Episode | undefined>(transformToEpisode(episodeData));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setEpisode(transformToEpisode(episodeData));
@@ -763,7 +762,35 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold mb-4">Episode Details</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Episode Details</h1>
+          <button
+            onClick={() => {
+              if (project?._id && episode?.name) {
+                const transcribeUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/transcriber`;
+                router.push(transcribeUrl as any);
+              } else {
+                toast.error('Missing project or episode information');
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          >
+            Open Transcriber View
+          </button>
+          <button
+            onClick={() => {
+              if (project?._id && episode?.name) {
+                const translatorUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/translator`;
+                router.push(translatorUrl as any);
+              } else {
+                toast.error('Missing project or episode information');
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          >
+            Open Translator View
+          </button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Episode Info */}
           <div className="space-y-4">

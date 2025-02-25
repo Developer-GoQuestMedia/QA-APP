@@ -18,7 +18,7 @@ import type { UserRole, User } from '@/types/user';
 import { useRouter } from 'next/navigation';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import {
   Search,
   Plus,
@@ -257,6 +257,33 @@ const handleError = (error: Error): void => {
 // Main Component
 // ===============================
 
+// Add retry wrapper for axios requests
+const axiosWithRetry = async (config: AxiosRequestConfig, maxRetries = 3) => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await axios(config);
+      return response;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const isRetryable = (
+          error.message === 'Network Error' ||
+          error.code === 'ECONNABORTED' ||
+          (error.response?.status && error.response?.status >= 500)
+        );
+
+        if (isRetryable && attempt < maxRetries - 1) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`Request failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
   // Type guards for null checks - moved to top
   const isProjectSelected = (project: Project | null): project is Project => {
@@ -334,16 +361,216 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   // Helper functions moved inside component
   const handleCreateProject = async () => {
-    try {
-      const response = await axios.post('/api/admin/projects', newProject);
-      if (response.data.success) {
-        notify('Project created successfully');
+    const logContext = {
+      startTime: new Date().toISOString(),
+      requestId: `proj_${Date.now()}`
+    };
+
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000;
+
+    const attemptRequest = async (attempt: number = 0): Promise<any> => {
+      try {
+        // Reset any previous errors
+        setState((prevState: AdminViewState) => ({ 
+          ...prevState, 
+          error: '', 
+          success: '',
+          uploadProgress: {}
+        }));
+
+        // Validate form data
+        if (!newProject.title?.trim()) {
+          throw new Error('Project title is required');
+        }
+
+        if (!newProject.sourceLanguage?.trim() || !newProject.targetLanguage?.trim()) {
+          throw new Error('Source and target languages are required');
+        }
+
+        if (!newProject.videoFiles?.length) {
+          throw new Error('At least one video file is required');
+        }
+
+        // Set creating state
+        setState((prevState: AdminViewState) => ({ 
+          ...prevState, 
+          isCreating: true,
+          uploadProgress: {
+            'project-creation': {
+              phase: 'preparing' as UploadPhase,
+              loaded: 0,
+              total: 0,
+              message: 'Preparing files for upload...'
+            }
+          }
+        }));
+
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('title', newProject.title.trim());
+        formData.append('description', newProject.description?.trim() || '');
+        formData.append('sourceLanguage', newProject.sourceLanguage.trim());
+        formData.append('targetLanguage', newProject.targetLanguage.trim());
+
+        // Validate and append files
+        let totalSize = 0;
+        const validFiles: File[] = [];
+
+        for (const file of newProject.videoFiles) {
+          // Validate file type
+          if (!file.type.startsWith('video/')) {
+            throw new Error(`Invalid file type for ${file.name}. Only video files are allowed.`);
+          }
+
+          // Validate file size (900MB limit)
+          if (file.size > 900 * 1024 * 1024) {
+            throw new Error(`File ${file.name} is too large. Maximum size is 900MB.`);
+          }
+
+          totalSize += file.size;
+          validFiles.push(file);
+        }
+
+        // Validate total size (10GB limit)
+        if (totalSize > 10 * 1024 * 1024 * 1024) {
+          throw new Error('Total file size exceeds 10GB limit');
+        }
+
+        // Append validated files
+        validFiles.forEach(file => {
+          formData.append('videos', file);
+        });
+
+        // Update progress state
+        setState((prevState: AdminViewState) => ({
+          ...prevState,
+          uploadProgress: {
+            'project-creation': {
+              phase: 'uploading' as UploadPhase,
+              loaded: 0,
+              total: totalSize,
+              message: 'Starting upload...'
+            }
+          }
+        }));
+
+        // Make API request with retry logic
+        const response = await axios.post('/api/admin/projects', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 300000, // 5 minutes
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || totalSize;
+            const loaded = progressEvent.loaded;
+            const progress = Math.round((loaded * 100) / total);
+
+            setState((prevState: AdminViewState) => ({
+              ...prevState,
+              uploadProgress: {
+                'project-creation': {
+                  phase: 'uploading' as UploadPhase,
+                  loaded,
+                  total,
+                  message: `Uploading files: ${progress}%`
+                }
+              }
+            }));
+          }
+        });
+
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Failed to create project');
+        }
+
+        // Success handling
+        setState((prevState: AdminViewState) => ({
+          ...prevState,
+          isCreating: false,
+          success: 'Project created successfully',
+          error: '',
+          uploadProgress: {
+            'project-creation': {
+              phase: 'success' as UploadPhase,
+              loaded: totalSize,
+              total: totalSize,
+              message: 'Project created successfully'
+            }
+          }
+        }));
+
+        // Reset form
+        setNewProject({
+          title: '',
+          description: '',
+          sourceLanguage: '',
+          targetLanguage: '',
+          status: 'pending',
+          videoFiles: []
+        });
+
+        // Refresh projects list
         await refetchProjects();
-        setState(prev => ({ ...prev, isCreating: false }));
+
+        return response.data;
+
+      } catch (error: any) {
+        console.error('Project creation attempt failed:', {
+          attempt,
+          error: error.message,
+          type: error.name,
+          code: error.code,
+          ...logContext
+        });
+
+        // Check if error is retryable
+        const isRetryable = (
+          error.name === 'NetworkError' ||
+          error.message === 'Network Error' ||
+          error.code === 'ECONNABORTED' ||
+          (error.response?.status >= 500 && error.response?.status < 600)
+        );
+
+        if (isRetryable && attempt < MAX_RETRIES) {
+          console.log(`Retrying request (attempt ${attempt + 1}/${MAX_RETRIES})...`, logContext);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt)));
+          return attemptRequest(attempt + 1);
+        }
+
+        // If we've exhausted retries or error is not retryable, throw the error
+        throw error;
       }
-    } catch (error) {
-      notify('Failed to create project', 'error');
-      console.error('Error creating project:', error);
+    };
+
+    try {
+      await attemptRequest();
+    } catch (error: any) {
+      console.error('Project creation failed after retries:', error);
+
+      setState((prevState: AdminViewState) => ({
+        ...prevState,
+        isCreating: false,
+        error: error.response?.data?.error || error.message || 'Failed to create project',
+        uploadProgress: {
+          'project-creation': {
+            phase: 'error' as UploadPhase,
+            loaded: 0,
+            total: 0,
+            message: error.response?.data?.error || error.message || 'Upload failed'
+          }
+        }
+      }));
+
+      // Show error toast
+      toast.error(error.response?.data?.error || error.message || 'Failed to create project', {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
     }
   };
 
@@ -1549,263 +1776,185 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
               Create New Project
             </h2>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
-              // Convert ProjectState to Project type
-              const projectData: Project = {
-                _id: crypto.randomUUID(), // Use Web Crypto API
-                title: newProject.title,
-                description: newProject.description,
-                sourceLanguage: newProject.sourceLanguage,
-                targetLanguage: newProject.targetLanguage,
-                status: 'pending',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                assignedTo: [],
-                parentFolder: '',
-                databaseName: '',
-                collectionName: '',
-                episodes: [],
-                index: '0', // Convert to string
-                uploadStatus: {
-                  totalFiles: 0,
-                  completedFiles: 0,
-                  currentFile: 0,
-                  status: 'pending'
+              console.log('Form submission started', {
+                formData: {
+                  title: newProject.title,
+                  description: newProject.description,
+                  sourceLanguage: newProject.sourceLanguage,
+                  targetLanguage: newProject.targetLanguage,
+                  videoFiles: newProject.videoFiles?.map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    size: f.size
+                  }))
+                },
+                currentState: {
+                  isCreating: state.isCreating,
+                  error: state.error,
+                  uploadProgress: state.uploadProgress
                 }
-              };
-              
-              setState(prev => ({
-                ...prev,
-                selectedProject: projectData,
-                isCreating: true
-              }));
-              handleCreateProject();
-            }} className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={newProject.title}
-                    onChange={(e) =>
-                      setNewProject((prev) => ({ ...prev, title: e.target.value }))
-                    }
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                    Description
-                  </label>
-                  <textarea
-                    value={newProject.description}
-                    onChange={(e) =>
-                      setNewProject((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    rows={3}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                      Source Language
-                    </label>
-                    <input
-                      type="text"
-                      value={newProject.sourceLanguage}
-                      onChange={(e) =>
-                        setNewProject((prev) => ({ ...prev, sourceLanguage: e.target.value }))
-                      }
-                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                      Target Language
-                    </label>
-                    <input
-                      type="text"
-                      value={newProject.targetLanguage}
-                      onChange={(e) =>
-                        setNewProject((prev) => ({ ...prev, targetLanguage: e.target.value }))
-                      }
-                      className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-                {/* Video Upload */}
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                    Video Upload
-                  </label>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center w-full">
-                      <label className="w-full flex flex-col items-center px-4 py-4 sm:py-6 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
-                        <div className="flex flex-col items-center text-center">
-                          <svg
-                            className="w-8 h-8 text-gray-400 mb-2"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                            />
-                          </svg>
-                          <p className="text-sm">Click or drag to upload videos</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">
-                            Multiple files allowed • No size limit
-                          </p>
-                        </div>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="video/*"
-                          multiple
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files || []);
-                            setNewProject((prev) => ({
-                              ...prev,
-                              videoFiles: [...prev.videoFiles, ...files],
-                            }));
+              });
 
-                            // Initialize progress and status
-                            const newProgress: UploadState = {};
-                            files.forEach((file) => {
-                              newProgress[file.name] = {
-                                loaded: 0,
-                                total: file.size,
-                                phase: uploadStatus,
-                                message: `Preparing to upload ${file.name}`
-                              };
-                            });
-                            setState(prev => ({ ...prev, uploadProgress: newProgress }));
-                          }}
-                        />
-                      </label>
-                    </div>
-                    {/* List of selected files */}
-                    {newProject.videoFiles.length > 0 && (
-                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Selected Files:
-                        </h4>
-                        <div className="space-y-3 max-h-48 overflow-y-auto">
-                          {newProject.videoFiles.map((file, index) => (
-                            <div key={index} className="space-y-1">
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-600 dark:text-gray-300 truncate pr-2">
-                                  {file.name}
-                                  {state.uploadProgress[file.name] && (
-                                    <span
-                                      data-file-name={file.name}
-                                      className={`ml-2 text-xs ${state.uploadProgress[file.name].phase === 'success'
-                                        ? 'text-green-500'
-                                        : state.uploadProgress[file.name].phase === 'error'
-                                          ? 'text-red-500'
-                                          : state.uploadProgress[file.name].phase === 'creating-collection'
-                                            ? 'text-yellow-500'
-                                            : state.uploadProgress[file.name].phase === 'processing'
-                                              ? 'text-purple-500'
-                                              : state.uploadProgress[file.name].phase === 'uploading'
-                                                ? 'text-blue-500'
-                                                : 'text-gray-500'
-                                        }`}
-                                    >
-                                      {state.uploadProgress[file.name].phase === 'uploading' &&
-                                        ` (${formatBytes(state.uploadProgress[file.name].loaded)} / ${formatBytes(
-                                          state.uploadProgress[file.name].total
-                                        )})`}
-                                      {state.uploadProgress[file.name].phase !== 'uploading' &&
-                                        ` • ${state.uploadProgress[file.name].message}`}
-                                    </span>
-                                  )}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setNewProject((prev) => ({
-                                      ...prev,
-                                      videoFiles: prev.videoFiles.filter((_, i) => i !== index),
-                                    }));
-                                    const newProgress = { ...state.uploadProgress };
-                                    delete newProgress[file.name];
-                                    setState(prev => ({ ...prev, uploadProgress: newProgress }));
-                                  }}
-                                  className="text-red-500 hover:text-red-700 flex-shrink-0"
-                                  disabled={
-                                    state.uploadProgress[file.name]?.phase === 'uploading' ||
-                                    state.uploadProgress[file.name]?.phase === 'creating-collection' ||
-                                    state.uploadProgress[file.name]?.phase === 'processing'
-                                  }
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                              {state.uploadProgress[file.name] &&
-                                state.uploadProgress[file.name].phase !== 'error' && (
-                                  <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                                    <div
-                                      className={`h-2 rounded-full transition-all duration-300 ${state.uploadProgress[file.name].phase === 'success'
-                                        ? 'bg-green-600'
-                                        : state.uploadProgress[file.name].phase === 'creating-collection'
-                                          ? 'bg-yellow-600'
-                                          : state.uploadProgress[file.name].phase === 'processing'
-                                            ? 'bg-purple-600'
-                                            : state.uploadProgress[file.name].phase === 'uploading'
-                                              ? 'bg-blue-600'
-                                              : 'bg-gray-600'
-                                        }`}
-                                      style={{
-                                        width:
-                                          state.uploadProgress[file.name].phase === 'uploading'
-                                            ? `${(state.uploadProgress[file.name].loaded /
-                                              state.uploadProgress[file.name].total) *
-                                            100
-                                            }%`
-                                            : state.uploadProgress[file.name].phase === 'creating-collection'
-                                              ? '60%'
-                                              : state.uploadProgress[file.name].phase === 'processing'
-                                                ? '80%'
-                                                : state.uploadProgress[file.name].phase === 'success'
-                                                  ? '100%'
-                                                  : '0%',
-                                      }}
-                                    ></div>
-                                  </div>
-                                )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              try {
+                // Convert ProjectState to Project type
+                const projectData: Project = {
+                  _id: crypto.randomUUID(), // Use Web Crypto API
+                  title: newProject.title,
+                  description: newProject.description,
+                  sourceLanguage: newProject.sourceLanguage,
+                  targetLanguage: newProject.targetLanguage,
+                  status: 'pending',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  assignedTo: [],
+                  parentFolder: '',
+                  databaseName: '',
+                  collectionName: '',
+                  episodes: [],
+                  index: '0',
+                  uploadStatus: {
+                    totalFiles: newProject.videoFiles?.length || 0,
+                    completedFiles: 0,
+                    currentFile: 0,
+                    status: 'pending'
+                  }
+                };
+
+                console.log('Project data prepared', { projectData });
+                
+                setState(prev => ({
+                  ...prev,
+                  selectedProject: projectData,
+                  isCreating: true,
+                  error: ''
+                }));
+
+                console.log('State updated, calling handleCreateProject');
+                await handleCreateProject();
+              } catch (error) {
+                console.error('Form submission error:', error);
+                setState(prev => ({
+                  ...prev,
+                  error: error instanceof Error ? error.message : 'Form submission failed'
+                }));
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={newProject.title}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    console.log('Title changed:', { value });
+                    setNewProject((prev) => ({ ...prev, title: value }));
+                  }}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <textarea
+                  value={newProject.description}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    console.log('Description changed:', { value });
+                    setNewProject((prev) => ({ ...prev, description: value }));
+                  }}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Source Language
+                </label>
+                <input
+                  type="text"
+                  value={newProject.sourceLanguage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    console.log('Source language changed:', { value });
+                    setNewProject((prev) => ({ ...prev, sourceLanguage: value }));
+                  }}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Target Language
+                </label>
+                <input
+                  type="text"
+                  value={newProject.targetLanguage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    console.log('Target language changed:', { value });
+                    setNewProject((prev) => ({ ...prev, targetLanguage: value }));
+                  }}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Video Files
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept="video/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    console.log('Files selected:', {
+                      count: files.length,
+                      files: files.map(f => ({
+                        name: f.name,
+                        type: f.type,
+                        size: f.size
+                      }))
+                    });
+                    setNewProject((prev) => ({ ...prev, videoFiles: files }));
+                  }}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                  required
+                />
               </div>
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                 <button
                   type="button"
-                  onClick={() => setState(prev => ({ ...prev, isCreating: false }))}
+                  onClick={() => {
+                    console.log('Cancel clicked, resetting state');
+                    setState(prev => ({ ...prev, isCreating: false, error: '' }));
+                    setNewProject({
+                      title: '',
+                      description: '',
+                      sourceLanguage: '',
+                      targetLanguage: '',
+                      status: 'pending',
+                      videoFiles: []
+                    });
+                  }}
                   className="w-full sm:w-auto px-4 py-2 text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                  disabled={state.isCreating}
+                  className={`w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                    state.isCreating ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  Create Project
+                  {state.isCreating ? 'Creating...' : 'Create Project'}
                 </button>
               </div>
             </form>

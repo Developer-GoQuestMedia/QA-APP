@@ -37,8 +37,13 @@ export async function GET(req: NextRequest) {
     // Initialize Socket.IO if not already initialized
     if (!server.io) {
       console.log('Initializing Socket.IO server...');
-      io = initSocketServer(server);
-      server.io = io;
+      const socketServer = initSocketServer(server);
+      if (!socketServer) {
+        console.error('Failed to initialize Socket.IO server');
+        return NextResponse.json({ error: 'Failed to initialize socket server' }, { status: 500 });
+      }
+      io = socketServer;
+      server.io = socketServer;
     } else {
       io = server.io;
     }

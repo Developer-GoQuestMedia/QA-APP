@@ -702,17 +702,31 @@ export async function GET(): Promise<NextResponse> {
     if (!session || !session.user) {
       console.warn('Unauthorized access attempt', {
         ...logContext,
-        error: 'No session or user found'
+        error: 'No session or user found',
+        sessionExists: !!session,
+        userExists: !!session?.user,
+        timestamp: new Date().toISOString()
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Log session details
+    console.log('Session details:', {
+      ...logContext,
+      userId: session.user.id,
+      username: session.user.username,
+      role: session.user.role,
+      timestamp: new Date().toISOString()
+    });
 
     // Check if user has admin role
     if (session.user.role !== 'admin') {
       console.warn('Forbidden access attempt', {
         ...logContext,
         userId: session.user.id,
-        userRole: session.user.role
+        userRole: session.user.role,
+        requiredRole: 'admin',
+        timestamp: new Date().toISOString()
       });
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -721,24 +735,57 @@ export async function GET(): Promise<NextResponse> {
     if (!db || !client) {
       console.error('Database connection failed', {
         ...logContext,
-        error: 'Failed to connect to database'
+        error: 'Failed to connect to database',
+        dbExists: !!db,
+        clientExists: !!client,
+        timestamp: new Date().toISOString()
       });
       return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
     }
 
-    const projects = await db.collection<Project>('projects').find({}).toArray();
-
-    const endTime = new Date().toISOString();
-    console.log('Fetching projects - completed', {
+    // Log successful database connection
+    console.log('Database connection established', {
       ...logContext,
-      endTime,
-      projectCount: projects.length
+      timestamp: new Date().toISOString()
     });
 
-    return NextResponse.json({
-      success: true,
-      data: projects,
-    });
+    // Add error handling for the database query
+    try {
+      const projects = await db.collection<Project>('projects')
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      const endTime = new Date().toISOString();
+      console.log('Fetching projects - completed', {
+        ...logContext,
+        endTime,
+        projectCount: projects.length,
+        success: true
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: projects,
+        metadata: {
+          count: projects.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (dbError: any) {
+      console.error('Database query error:', {
+        ...logContext,
+        error: {
+          message: dbError.message,
+          code: dbError.code,
+          timestamp: new Date().toISOString()
+        }
+      });
+      return NextResponse.json({ 
+        error: 'Database query failed',
+        details: dbError.message
+      }, { status: 500 });
+    }
   } catch (error: any) {
     const endTime = new Date().toISOString();
     console.error('Error fetching projects:', {
@@ -747,12 +794,26 @@ export async function GET(): Promise<NextResponse> {
       error: {
         message: error.message,
         stack: error.stack,
-        code: error.code
+        code: error.code,
+        type: error.constructor.name
       }
     });
     return NextResponse.json({ 
       error: 'Failed to fetch projects',
       details: error.message
     }, { status: 500 });
+  } finally {
+    // Log memory usage
+    const used = process.memoryUsage();
+    console.log('Memory usage:', {
+      ...logContext,
+      memory: {
+        rss: `${Math.round(used.rss / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+        external: `${Math.round(used.external / 1024 / 1024)}MB`,
+      },
+      timestamp: new Date().toISOString()
+    });
   }
 } 

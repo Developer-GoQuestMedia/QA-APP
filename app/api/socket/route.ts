@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     }), {
       headers: {
         'Access-Control-Allow-Origin': process.env.NODE_ENV === 'production' 
-          ? 'https://qa-app-brown.vercel.app'
+          ? 'https://qa-app-inky.vercel.app'
           : '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -73,7 +73,7 @@ export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, {
     headers: {
       'Access-Control-Allow-Origin': process.env.NODE_ENV === 'production' 
-        ? 'https://qa-app-brown.vercel.app'
+        ? 'https://qa-app-inky.vercel.app'
         : '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',

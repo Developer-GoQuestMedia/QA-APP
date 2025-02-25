@@ -19,7 +19,7 @@ const SOCKET_CONFIG: Partial<ServerOptions> = {
   allowUpgrades: false,
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ['https://qa-app-brown.vercel.app']
+      ? ['https://qa-app-inky.vercel.app']
       : '*',
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
@@ -171,7 +171,7 @@ export function getSocketClient() {
   try {
     isInitializing = true;
     const baseUrl = process.env.NODE_ENV === 'production'
-      ? 'https://qa-app-brown.vercel.app'
+      ? 'https://qa-app-inky.vercel.app'
       : 'http://localhost:3000';
 
     console.log('Initializing socket client with URL:', baseUrl);

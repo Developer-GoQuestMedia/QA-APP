@@ -3,13 +3,13 @@ const nextConfig = {
   reactStrictMode: true,
   env: {
     NEXTAUTH_URL: process.env.NODE_ENV === 'production' 
-      ? 'https://qa-app-brown.vercel.app'
+      ? 'https://qa-app-inky.vercel.app'
       : process.env.NEXTAUTH_URL || 'http://localhost:3000',
     NEXT_PUBLIC_APP_URL: process.env.NODE_ENV === 'production'
-      ? 'https://qa-app-brown.vercel.app'
+      ? 'https://qa-app-inky.vercel.app'
       : 'http://localhost:3000',
     NEXT_PUBLIC_SOCKET_URL: process.env.NODE_ENV === 'production'
-      ? 'https://qa-app-brown.vercel.app'
+      ? 'https://qa-app-inky.vercel.app'
       : 'http://localhost:3000',
     // Redis configuration
     REDIS_URL: process.env.NODE_ENV === 'production'
@@ -39,6 +39,26 @@ const nextConfig = {
         source: '/:path*',
         headers: [
           {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://*.vercel.app",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://*.vercel.app wss://*.vercel.app ws://localhost:* http://localhost:* https://vercel.live",
+              "frame-src 'self' https://*.vercel.app",
+              "media-src 'self' blob:",
+              "worker-src 'self' blob:",
+              "manifest-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'self'",
+              "upgrade-insecure-requests"
+            ].join('; ')
+          },
+          {
             key: 'X-DNS-Prefetch-Control',
             value: 'on'
           },
@@ -61,6 +81,10 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin'
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()'
           }
         ]
       }

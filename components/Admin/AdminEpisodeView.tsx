@@ -7,9 +7,8 @@ import type { LucideIcon } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import axios from 'axios'
 import { logError, logRequest, logResponse } from '@/lib/logger'
-import { ObjectId } from 'mongodb'
-import toast from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 interface AdminEpisodeViewProps {
   project?: Project;
@@ -725,6 +724,7 @@ const transformToEpisode = (baseEpisode: BaseEpisode | undefined): Episode | und
 
   return {
     ...baseEpisode,
+    _id: String(baseEpisode._id),
     dialogues: typedDialogues,
     steps: baseEpisode.steps || {
       audioExtraction: { status: 'pending' },
@@ -737,7 +737,7 @@ const transformToEpisode = (baseEpisode: BaseEpisode | undefined): Episode | und
 };
 
 // Add the AdminEpisodeView component
-export default function AdminEpisodeView({ project, episodeData, onEpisodeClick }: AdminEpisodeViewProps) {
+const AdminEpisodeView = ({ project, episodeData, onEpisodeClick }: AdminEpisodeViewProps) => {
   const [episode, setEpisode] = useState<Episode | undefined>(transformToEpisode(episodeData));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -746,6 +746,58 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
   useEffect(() => {
     setEpisode(transformToEpisode(episodeData));
   }, [episodeData]);
+
+  // Add handlers for each step
+  const handleStepExecution = async (stepKey: StepKey) => {
+    if (!episode?._id || !project?._id) {
+      toast.error('Missing episode or project information');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Validate step requirements
+      switch (stepKey) {
+        case 'audioExtraction':
+          await validateAudioExtraction(episode, project);
+          break;
+        case 'transcription':
+          validateTranscription(episode);
+          break;
+        case 'videoClips':
+          validateVideoClips(episode);
+          break;
+        case 'translation':
+          validateTranslation(episode);
+          break;
+        case 'voiceAssignment':
+          validateVoiceAssignment(episode);
+          break;
+      }
+
+      // Make API call to execute step
+      const episodeId = String(episode._id);
+      const response = await axios.post(`/api/episodes/${episodeId}/process/${stepKey}`);
+      
+      if (response.data.success) {
+        toast.success(`${STEP_CONFIG[stepKey].name} process initiated`);
+        // Refresh episode data
+        if (onEpisodeClick && project) {
+          await onEpisodeClick(String(project._id), episode.name, episode._id, project, episode);
+        }
+      } else {
+        throw new Error(response.data.error || 'Failed to process step');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!episode || !project) {
     return (
@@ -764,32 +816,34 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Episode Details</h1>
-          <button
-            onClick={() => {
-              if (project?._id && episode?.name) {
-                const transcribeUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/transcriber`;
-                router.push(transcribeUrl as any);
-              } else {
-                toast.error('Missing project or episode information');
-              }
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            Open Transcriber View
-          </button>
-          <button
-            onClick={() => {
-              if (project?._id && episode?.name) {
-                const translatorUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/translator`;
-                router.push(translatorUrl as any);
-              } else {
-                toast.error('Missing project or episode information');
-              }
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            Open Translator View
-          </button>
+          <div className="space-x-4">
+            <button
+              onClick={() => {
+                if (project?._id && episode?.name) {
+                  const transcribeUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/transcriber`;
+                  router.push(transcribeUrl as any);
+                } else {
+                  toast.error('Missing project or episode information');
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Open Transcriber View
+            </button>
+            <button
+              onClick={() => {
+                if (project?._id && episode?.name) {
+                  const translatorUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/translator`;
+                  router.push(translatorUrl as any);
+                } else {
+                  toast.error('Missing project or episode information');
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Open Translator View
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Episode Info */}
@@ -807,13 +861,42 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
             <h2 className="text-xl font-semibold">Processing Steps</h2>
             <div className="space-y-2">
               {Object.entries(episode.steps).map(([key, step]) => (
-                <div key={key} className="flex items-center space-x-2">
-                  {step.status === 'completed' && <CheckCircle2 className="text-green-500" />}
-                  {step.status === 'processing' && <Loader2 className="animate-spin text-blue-500" />}
-                  {step.status === 'error' && <XCircle className="text-red-500" />}
-                  {step.status === 'pending' && <AlertCircle className="text-yellow-500" />}
-                  <span className="capitalize">{key}</span>
-                  <span className="text-gray-500">- {step.status}</span>
+                <div key={key} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    {step.status === 'completed' && <CheckCircle2 className="text-green-500" />}
+                    {step.status === 'processing' && <Loader2 className="animate-spin text-blue-500" />}
+                    {step.status === 'error' && <XCircle className="text-red-500" />}
+                    {step.status === 'pending' && <AlertCircle className="text-yellow-500" />}
+                    <span className="capitalize">{STEP_CONFIG[key as StepKey].name}</span>
+                    <span className="text-gray-500">- {step.status}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (key === 'voiceAssignment') {
+                        if (project?._id && episode?.name) {
+                          const voiceAssignmentUrl = `/admin/project/${project._id}/episodes/${encodeURIComponent(episode.name)}/voice-assignment` as const;
+                          router.push(voiceAssignmentUrl as any);
+                        } else {
+                          toast.error('Missing project or episode information');
+                        }
+                      } else {
+                        handleStepExecution(key as StepKey);
+                      }
+                    }}
+                    disabled={key === 'voiceAssignment' ? false : (isLoading || step.status === 'processing' || (key !== 'audioExtraction' && episode.steps[getPreviousStep(key as StepKey)]?.status !== 'completed'))}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      key === 'voiceAssignment' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
+                      (isLoading || step.status === 'processing' || (key !== 'audioExtraction' && episode.steps[getPreviousStep(key as StepKey)]?.status !== 'completed')
+                        ? 'bg-gray-300 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700')
+                    }`}
+                  >
+                    {step.status === 'processing' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      key === 'voiceAssignment' ? 'Open Voice Assignment' : (step.status === 'completed' ? 'Reprocess' : 'Execute')
+                    )}
+                  </button>
                 </div>
               ))}
             </div>
@@ -822,4 +905,13 @@ export default function AdminEpisodeView({ project, episodeData, onEpisodeClick 
       </div>
     </div>
   );
-}
+};
+
+// Helper function to get the previous step
+const getPreviousStep = (currentStep: StepKey): StepKey => {
+  const steps: StepKey[] = ['audioExtraction', 'transcription', 'videoClips', 'translation', 'voiceAssignment'];
+  const currentIndex = steps.indexOf(currentStep);
+  return currentIndex > 0 ? steps[currentIndex - 1] : 'audioExtraction';
+};
+
+export default AdminEpisodeView;

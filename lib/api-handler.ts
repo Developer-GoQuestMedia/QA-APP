@@ -1,7 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/app/api/auth/auth.config';
 import { rateLimit } from './rate-limit';
+import { Session } from 'next-auth';
 
 interface ApiError extends Error {
   statusCode?: number;
@@ -21,11 +22,12 @@ export const withErrorHandler = (handler: ApiHandler) => {
     try {
       const session = await getServerSession(authOptions);
       await handler(req, res, session);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('API Error:', error);
+      const err = error as Error;
       res.status(500).json({
         error: 'Internal Server Error',
-        message: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: process.env.NODE_ENV === 'development' ? err.message : undefined
       });
     }
   };
@@ -58,7 +60,6 @@ export const createApiHandler = (
         return res.status(429).json({ error: 'Too many requests' });
       }
 
-     
       // Authentication check
       if (options.requireAuth) {
         const session = await getServerSession(authOptions);
@@ -73,7 +74,7 @@ export const createApiHandler = (
       }
 
       await handler(req, res);
-    } catch (error) {
+    } catch (error: unknown) {
       const apiError = error as ApiError;
       console.error('API Error:', {
         path: req.url,

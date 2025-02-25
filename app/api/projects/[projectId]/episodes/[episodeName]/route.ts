@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { ObjectId } from 'mongodb';
 import { connectToDatabase } from '@/lib/mongodb';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/app/api/auth/auth.config';
 
 interface DebugLogData {
   error?: {
@@ -37,33 +37,19 @@ interface DebugLogData {
 }
 
 function debugLog(message: string, data?: DebugLogData) {
-  const timestamp = new Date().toISOString();
-  const prefix = '🔍 [EPISODE_DEBUG]';
-  if (data) {
-    console.log(`${prefix} [${timestamp}] ${message}:`, JSON.stringify(data, null, 2));
-  } else {
-    console.log(`${prefix} [${timestamp}] ${message}`);
-  }
+  console.debug(`[Episode API] ${message}`, {
+    ...data,
+    timestamp: new Date().toISOString()
+  });
 }
 
 // Helper function to verify database connection
 async function verifyDatabaseConnection() {
   try {
-    debugLog('Attempting database connection');
-    const { db, client } = await connectToDatabase();
-    const result = await client.db().command({ ping: 1 });
-    debugLog('Database ping result', result);
+    const { db } = await connectToDatabase();
     return { success: true, db };
   } catch (error) {
-    const err = error as Error;
-    debugLog('Database connection error', { 
-      error: {
-        message: err.message,
-        name: err.name,
-        stack: err.stack
-      }
-    });
-    return { success: false, error: err };
+    return { success: false, error };
   }
 }
 
@@ -106,6 +92,18 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Allow both admin and voice-over users
+    if (!['admin', 'voiceOver'].includes(session.user.role)) {
+      debugLog('Unauthorized role', { 
+        error: { 
+          message: 'Insufficient permissions', 
+          name: 'AuthError' 
+        },
+        role: session.user.role
+      });
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
     const { projectId, episodeName } = params;
     if (!projectId || !episodeName) {
       debugLog('Missing required parameters', { 
@@ -120,18 +118,7 @@ export async function GET(
       episodeName 
     });
 
-    // 1. Verify session
-    const sessionData = await getServerSession(authOptions);
-    if (!sessionData?.user?.username || !sessionData?.user?.role) {
-      debugLog('Unauthorized: Invalid session data');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    debugLog('Session verified', { 
-      username: sessionData.user.username, 
-      role: sessionData.user.role 
-    });
-
-    // 2. Validate parameters
+    // Validate parameters
     if (!ObjectId.isValid(projectId)) {
       debugLog('Invalid projectId format', { projectId });
       return NextResponse.json({ error: 'Invalid projectId' }, { status: 400 });
@@ -141,7 +128,7 @@ export async function GET(
       episodeName 
     });
 
-    // 3. Verify database connection
+    // Verify database connection
     debugLog('Verifying database connection...');
     const { success, db, error } = await verifyDatabaseConnection();
     if (!success || !db) {
@@ -150,7 +137,7 @@ export async function GET(
     }
     debugLog('Database connection verified');
 
-    // 4. Fetch project
+    // Fetch project
     const query = { _id: new ObjectId(projectId) };
     debugLog('Executing MongoDB query', { 
       collection: 'projects', 
@@ -171,13 +158,13 @@ export async function GET(
       projectData: JSON.stringify(project)
     });
 
-    // 5. Validate episodes array
+    // Validate episodes array
     if (!Array.isArray(project.episodes) || project.episodes.length === 0) {
       debugLog('No episodes in project', { projectId, title: project.title });
       return NextResponse.json({ error: 'Project has no episodes' }, { status: 404 });
     }
 
-    // 6. Find specific episode
+    // Find specific episode
     const decodedEpisodeName = decodeURIComponent(episodeName);
     debugLog('Episode search details', {
       rawEpisodeName: episodeName,
@@ -204,7 +191,7 @@ export async function GET(
       return NextResponse.json({ error: 'Episode not found' }, { status: 404 });
     }
 
-    // 7. Return episode data
+    // Return episode data
     debugLog('Episode found', { 
       name: episode.name, 
       status: episode.status,

@@ -70,25 +70,30 @@ async function retryOperation<T>(
 
 async function updateProgress(key: string, status: string, percent: number) {
   await executeRedisOperation(async () => {
-    await redis.set(key, JSON.stringify({
+    await redis?.set(key, JSON.stringify({
       status,
       percent,
       timestamp: new Date().toISOString()
     }));
 
     // Expire progress after 1 hour
-    await redis.expire(key, 60 * 60);
+    await redis?.expire(key, 60 * 60);
   }, undefined);
 }
 
 export async function POST(request: NextRequest) {
-  const progressKey = `progress:${request.ip || 'anonymous'}:${Date.now()}`;
+  const ip = request.headers.get('x-forwarded-for') || 'anonymous';
+  const progressKey = `progress:${ip}:${Date.now()}`;
   
   try {
     // Check rate limit
-    const rateLimitResult = await rateLimit(request, {
-      maxRequests: 50,
-      windowMs: 60 * 1000 // 1 minute
+    const rateLimitResult = await rateLimit({
+      headers: {
+        'x-forwarded-for': ip
+      }
+    } as any, {
+      limit: 50,
+      window: 60 * 1000 // 1 minute
     });
 
     if (rateLimitResult) {

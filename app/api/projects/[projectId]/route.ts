@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/app/api/auth/auth.config'
 import { connectToDatabase } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 
@@ -15,8 +15,16 @@ export async function GET(
   try {
     // Check authentication
     const session = await getServerSession(authOptions)
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Allow both admin and voice-over users
+    if (!['admin', 'voiceOver'].includes(session.user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      )
     }
 
     // Validate projectId
@@ -38,20 +46,6 @@ export async function GET(
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    }
-
-    // Check if user has access to this project
-    const hasAccess = project.assignedTo.some(
-      (assignment: { username: string; role: string }) =>
-        assignment.username === session.user?.username &&
-        ['transcriber', 'translator', 'director', 'voiceOver', 'srDirector'].includes(assignment.role)
-    )
-
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: 'You do not have access to this project' },
-        { status: 403 }
-      )
     }
 
     return NextResponse.json({

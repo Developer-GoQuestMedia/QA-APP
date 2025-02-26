@@ -144,20 +144,6 @@ interface EpisodeDocument {
   uploadedAt: Date;
 }
 
-interface MongoProjectDoc {
-  insertedId: ObjectId;
-  acknowledged: boolean;
-}
-
-interface ProjectUpdate {
-  episodes?: any[];
-  'uploadStatus.completedFiles'?: number;
-  'uploadStatus.currentFile'?: number;
-  'uploadStatus.status'?: string;
-  status?: string;
-  updatedAt?: Date;
-}
-
 // =========== Helpers ===========
 
 // Node.js memory usage logging
@@ -277,57 +263,18 @@ async function* streamFile(file: Blob, chunkSize = 5 * 1024 * 1024) {
 // =========== POST: Upload Route ===========
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const io = getSocketInstance();
   const startTime = Date.now();
-  const logContext = {
-    handler: 'POST /api/admin/projects',
-    requestId: `proj_${startTime}`,
-    startTime: new Date().toISOString()
-  };
-
-  let client = null;
-  let projectDoc: MongoProjectDoc | undefined;
-  let uploadResults: UploadResult[] = [];
 
   try {
-    console.log('Starting project creation process', {
-      ...logContext,
-      timestamp: new Date().toISOString()
-    });
-
     // 1. Authorization
     const session = await getServerSession(authOptions);
-    console.log('Auth check completed', {
-      ...logContext,
-      isAuthorized: !!session && session.user.role === 'admin',
-      timestamp: new Date().toISOString()
-    });
-
     if (!session || session.user.role !== 'admin') {
-      console.warn('Unauthorized project creation attempt', {
-        ...logContext,
-        userId: session?.user?.id,
-        userRole: session?.user?.role
-      });
-      return NextResponse.json({ 
-        success: false,
-        error: 'Unauthorized' 
-      }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // 2. Parse and validate form data
     const formData = await request.formData();
-    console.log('Form data received', {
-      ...logContext,
-      fields: {
-        hasTitle: !!formData.get('title'),
-        hasDescription: !!formData.get('description'),
-        hasSourceLang: !!formData.get('sourceLanguage'),
-        hasTargetLang: !!formData.get('targetLanguage'),
-        videoCount: formData.getAll('videos').length
-      },
-      timestamp: new Date().toISOString()
-    });
-
     const data: ProjectData = {
       title: formData.get('title') as string,
       description: formData.get('description') as string,
@@ -336,371 +283,175 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       videos: Array.from(formData.getAll('videos')).filter((file): file is File => file instanceof File)
     };
 
-    // Log parsed data
-    console.log('Data parsed', {
-      ...logContext,
-      projectData: {
-        title: data.title,
-        description: data.description?.substring(0, 50),
-        sourceLanguage: data.sourceLanguage,
-        targetLanguage: data.targetLanguage,
-        videoCount: data.videos.length
-      },
-      timestamp: new Date().toISOString()
-    });
-
-    // Validate required fields
-    if (!data.title?.trim() || !data.sourceLanguage?.trim() || !data.targetLanguage?.trim()) {
-      console.warn('Missing required fields', {
-        ...logContext,
-        fields: {
-          title: !!data.title?.trim(),
-          sourceLanguage: !!data.sourceLanguage?.trim(),
-          targetLanguage: !!data.targetLanguage?.trim()
-        }
-      });
-      return NextResponse.json({
-        success: false,
-        error: 'Missing required fields'
-      }, { status: 400 });
+    if (!data.title || !data.sourceLanguage || !data.targetLanguage) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
-
-    // Validate video files
-    if (!data.videos?.length) {
-      console.warn('No video files provided', logContext);
-      return NextResponse.json({
-        success: false,
-        error: 'At least one video file is required'
-      }, { status: 400 });
-    }
-
-    // Validate and log file details
-    let totalSize = 0;
-    const fileDetails = data.videos.map(file => ({
-      name: file.name,
-      size: file.size,
-      type: file.type
-    }));
-
-    console.log('Processing video files', {
-      ...logContext,
-      files: fileDetails,
-      timestamp: new Date().toISOString()
-    });
-
-    for (const file of data.videos) {
-      if (!file.type.startsWith('video/')) {
-        console.warn('Invalid file type', {
-          ...logContext,
-          fileName: file.name,
-          fileType: file.type
-        });
-        return NextResponse.json({
-          success: false,
-          error: `Invalid file type for ${file.name}. Only video files are allowed.`
-        }, { status: 400 });
-      }
-
-      if (file.size > 900 * 1024 * 1024) {
-        console.warn('File too large', {
-          ...logContext,
-          fileName: file.name,
-          fileSize: file.size
-        });
-        return NextResponse.json({
-          success: false,
-          error: `File ${file.name} is too large. Maximum size is 900MB.`
-        }, { status: 400 });
-      }
-
-      totalSize += file.size;
-    }
-
-    if (totalSize > 10 * 1024 * 1024 * 1024) {
-      console.warn('Total size too large', {
-        ...logContext,
-        totalSize
-      });
-      return NextResponse.json({
-        success: false,
-        error: 'Total file size exceeds 10GB limit'
-      }, { status: 400 });
-    }
-
-    console.log('File validation completed', {
-      ...logContext,
-      totalSize,
-      fileCount: data.videos.length,
-      timestamp: new Date().toISOString()
-    });
 
     // 3. Connect to database
-    console.log('Connecting to database', {
-      ...logContext,
-      timestamp: new Date().toISOString()
+    const { db, client } = await connectToDatabase();
+
+    // 4. Create project document
+    const sanitizedTitle = data.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const projectDoc = await db.collection('projects').insertOne({
+      title: data.title,
+      description: data.description || '',
+      sourceLanguage: data.sourceLanguage,
+      targetLanguage: data.targetLanguage,
+      status: 'initializing',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      assignedTo: [],
+      parentFolder: sanitizedTitle,
+      databaseName: `${sanitizedTitle}_db`,
+      episodes: [],
+      uploadStatus: {
+        totalFiles: data.videos.length,
+        completedFiles: 0,
+        currentFile: 0,
+        status: 'uploading'
+      }
     });
 
-    const { db, client: mongoClient } = await connectToDatabase();
-    client = mongoClient;
-
-    console.log('Database connected', {
-      ...logContext,
-      timestamp: new Date().toISOString()
-    });
-
-    // Start a MongoDB session for transaction
-    const mongoSession = client.startSession();
-    console.log('MongoDB session started', {
-      ...logContext,
-      timestamp: new Date().toISOString()
-    });
-
-    try {
-      const result = await mongoSession.withTransaction(async () => {
-        console.log('Starting transaction', {
-          ...logContext,
-          timestamp: new Date().toISOString()
-        });
-
-        // 4. Create project document
-        const sanitizedTitle = data.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        projectDoc = await db.collection('projects').insertOne({
-          title: data.title,
-          description: data.description || '',
-          sourceLanguage: data.sourceLanguage,
-          targetLanguage: data.targetLanguage,
-          status: 'initializing',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          assignedTo: [],
-          parentFolder: sanitizedTitle,
-          databaseName: `${sanitizedTitle}_db`,
-          episodes: [],
-          uploadStatus: {
-            totalFiles: data.videos.length,
-            completedFiles: 0,
-            currentFile: 0,
-            status: 'uploading'
-          }
-        }, { session: mongoSession });
-
-        console.log('Project document created', {
-          ...logContext,
-          projectId: projectDoc?.insertedId.toString(),
-          timestamp: new Date().toISOString()
-        });
-
-        // Track upload IDs for rollback if needed
-        const uploadIds: { fileKey: string; uploadId: string }[] = [];
-
+    // 5. Create project database and collections
+    const projectDb = client.db(`${sanitizedTitle}_db`);
+    
+    // 6. Process videos in parallel with controlled concurrency
+    const uploadResults: UploadResult[] = [];
+    for (let i = 0; i < data.videos.length; i += MAX_CONCURRENT_UPLOADS) {
+      const chunk = data.videos.slice(i, i + MAX_CONCURRENT_UPLOADS);
+      const chunkPromises = chunk.map(async (video, index) => {
+        const fileIndex = i + index;
+        const fileName = video.name;
+        const collectionName = path.basename(fileName, path.extname(fileName));
+        
+        // Create collection for this video
+        await projectDb.createCollection(collectionName);
+        
+        // Prepare upload path
+        const fileKey = `${sanitizedTitle}/${collectionName}/${fileName}`;
+        
         try {
-          // Process videos in parallel with controlled concurrency
-          console.log('Starting video processing', {
-            ...logContext,
-            totalFiles: data.videos.length,
-            maxConcurrent: MAX_CONCURRENT_UPLOADS,
-            timestamp: new Date().toISOString()
-          });
+          // Start multipart upload
+          const multipartUpload = await s3Client.send(new CreateMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: fileKey,
+            ContentType: video.type
+          }));
+          
+          const uploadId = multipartUpload.UploadId!;
+          const fileSize = video.size;
+          const numParts = Math.ceil(fileSize / CHUNK_SIZE);
+          const parts = [];
 
-          for (let i = 0; i < data.videos.length; i += MAX_CONCURRENT_UPLOADS) {
-            const chunk = data.videos.slice(i, i + MAX_CONCURRENT_UPLOADS);
-            console.log('Processing chunk of videos', {
-              ...logContext,
-              chunkIndex: Math.floor(i / MAX_CONCURRENT_UPLOADS),
-              chunkSize: chunk.length,
-              startIndex: i,
-              timestamp: new Date().toISOString()
+          // Upload chunks
+          for (let partNumber = 1; partNumber <= numParts; partNumber++) {
+            const start = (partNumber - 1) * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, fileSize);
+            const chunk = video.slice(start, end);
+            
+            const chunkBuffer = Buffer.from(await chunk.arrayBuffer());
+
+            const uploadPartCommand = new UploadPartCommand({
+              Bucket: process.env.R2_BUCKET_NAME,
+              Key: fileKey,
+              UploadId: uploadId,
+              PartNumber: partNumber,
+              Body: chunkBuffer
             });
 
-            const chunkPromises = chunk.map(async (video, index) => {
-              const fileIndex = i + index;
-              console.log('Processing video file', {
-                ...logContext,
-                fileName: video.name,
-                fileIndex,
-                fileSize: video.size,
-                timestamp: new Date().toISOString()
-              });
+            const { ETag } = await s3Client.send(uploadPartCommand);
+            parts.push({ PartNumber: partNumber, ETag });
 
-              const fileName = video.name;
-              const collectionName = path.basename(fileName, path.extname(fileName));
-              const fileKey = `${sanitizedTitle}/${collectionName}/${fileName}`;
-
-              try {
-                // Start multipart upload
-                const multipartUpload = await s3Client.send(new CreateMultipartUploadCommand({
-                  Bucket: BUCKET_NAME,
-                  Key: fileKey,
-                  ContentType: video.type
-                }));
-
-                const uploadId = multipartUpload.UploadId!;
-                uploadIds.push({ fileKey, uploadId });
-
-                const fileSize = video.size;
-                const numParts = Math.ceil(fileSize / CHUNK_SIZE);
-                const parts = [];
-
-                // Upload chunks with progress tracking
-                for (let partNumber = 1; partNumber <= numParts; partNumber++) {
-                  const start = (partNumber - 1) * CHUNK_SIZE;
-                  const end = Math.min(start + CHUNK_SIZE, fileSize);
-                  const chunk = video.slice(start, end);
-                  
-                  try {
-                    const chunkBuffer = Buffer.from(await chunk.arrayBuffer());
-                    const uploadPartCommand = new UploadPartCommand({
-                      Bucket: BUCKET_NAME,
-                      Key: fileKey,
-                      UploadId: uploadId,
-                      PartNumber: partNumber,
-                      Body: chunkBuffer
-                    });
-
-                    const { ETag } = await s3Client.send(uploadPartCommand);
-                    parts.push({ PartNumber: partNumber, ETag });
-
-                    // Update progress
-                    const progress: UploadProgress = {
-                      fileIndex,
-                      chunkIndex: partNumber,
-                      bytesUploaded: end,
-                      totalBytes: fileSize
-                    };
-                    
-                    // Emit progress through socket if available
-                    const io = getSocketInstance();
-                    io?.emit('uploadProgress', {
-                      projectId: projectDoc?.insertedId.toString(),
-                      ...progress
-                    });
-                  } catch (chunkError) {
-                    console.error(`Error uploading chunk ${partNumber} for ${fileName}:`, chunkError);
-                    // Abort the multipart upload
-                    await s3Client.send(new AbortMultipartUploadCommand({
-                      Bucket: BUCKET_NAME,
-                      Key: fileKey,
-                      UploadId: uploadId
-                    }));
-                    throw chunkError;
-                  }
-                }
-
-                // Complete multipart upload
-                await s3Client.send(new CompleteMultipartUploadCommand({
-                  Bucket: BUCKET_NAME,
-                  Key: fileKey,
-                  UploadId: uploadId,
-                  MultipartUpload: { Parts: parts }
-                }));
-
-                // Add episode to project using proper MongoDB update operator
-                const episodeDoc = {
-                  _id: new ObjectId(),
-                  name: fileName,
-                  collectionName,
-                  videoPath: fileKey,
-                  videoKey: fileKey,
-                  status: 'uploaded' as const,
-                  uploadedAt: new Date()
-                };
-
-                await db.collection('projects').updateOne(
-                  { _id: projectDoc?.insertedId },
-                  {
-                    $push: { episodes: episodeDoc },
-                    $inc: { 'uploadStatus.completedFiles': 1 },
-                    $set: {
-                      'uploadStatus.currentFile': fileIndex + 1,
-                      updatedAt: new Date()
-                    }
-                  } as any,
-                  { session: mongoSession }
-                );
-
-                uploadResults.push({ fileName, fileKey, collectionName });
-              } catch (fileError) {
-                console.error(`Error processing file ${fileName}:`, fileError);
-                throw fileError;
-              }
-            });
-
-            await Promise.all(chunkPromises);
-            console.log('Chunk processing completed', {
-              ...logContext,
-              chunkIndex: Math.floor(i / MAX_CONCURRENT_UPLOADS),
-              timestamp: new Date().toISOString()
+            // Update progress
+            const progress: UploadProgress = {
+              fileIndex,
+              chunkIndex: partNumber,
+              bytesUploaded: end,
+              totalBytes: fileSize
+            };
+            
+            io?.emit('uploadProgress', {
+              projectId: projectDoc.insertedId.toString(),
+              ...progress
             });
           }
 
-          console.log('All videos processed', {
-            ...logContext,
-            totalProcessed: uploadResults.length,
-            timestamp: new Date().toISOString()
-          });
+          // Complete multipart upload
+          await s3Client.send(new CompleteMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: fileKey,
+            UploadId: uploadId,
+            MultipartUpload: { Parts: parts }
+          }));
 
-          return { projectId: projectDoc.insertedId, uploadResults };
-        } catch (uploadError) {
-          console.error('Upload error occurred', {
-            ...logContext,
-            error: uploadError,
-            timestamp: new Date().toISOString()
+          // Add episode to project
+          await db.collection('projects').updateOne(
+            { _id: projectDoc.insertedId },
+            {
+              $push: {
+                episodes: {
+                  $each: [{
+                    _id: new ObjectId(),
+                    name: fileName,
+                    collectionName,
+                    videoPath: fileKey,
+                    videoKey: fileKey,
+                    status: 'uploaded',
+                    uploadedAt: new Date()
+                  }] as EpisodeDocument[]
+                }
+              } as any,
+              $inc: { 'uploadStatus.completedFiles': 1 },
+              $set: {
+                'uploadStatus.currentFile': fileIndex + 1,
+                updatedAt: new Date()
+              }
+            }
+          );
+
+          uploadResults.push({
+            fileName,
+            fileKey,
+            collectionName
           });
-          throw uploadError;
+        } catch (error) {
+          console.error(`Error uploading ${fileName}:`, error);
+          throw error;
         }
       });
 
-      console.log('Transaction completed', {
-        ...logContext,
-        timestamp: new Date().toISOString()
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          projectId: projectDoc!.insertedId.toString(),
-          uploadResults
-        }
-      });
-
-    } catch (error) {
-      console.error('Transaction failed', {
-        ...logContext,
-        error,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    } finally {
-      console.log('Cleaning up transaction', {
-        ...logContext,
-        timestamp: new Date().toISOString()
-      });
-      await mongoSession.endSession();
+      await Promise.all(chunkPromises);
     }
 
-  } catch (error: any) {
-    console.error('Error in project creation:', {
-      ...logContext,
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    });
+    // 7. Update project status to complete
+    await db.collection('projects').updateOne(
+      { _id: projectDoc.insertedId },
+      {
+        $set: {
+          status: 'pending',
+          'uploadStatus.status': 'completed',
+          updatedAt: new Date()
+        }
+      }
+    );
 
     return NextResponse.json({
-      success: false,
-      error: error.message || 'Failed to create project'
-    }, { status: 500 });
+      success: true,
+      data: {
+        projectId: projectDoc.insertedId.toString(),
+        uploadResults
+      }
+    });
 
-  } finally {
-    if (client) {
-      await client.close();
-      console.log('Database connection closed', {
-        ...logContext,
-        step: 'cleanup',
-        timestamp: new Date().toISOString(),
-        duration: `${Date.now() - startTime}ms`
-      });
-    }
+  } catch (error: any) {
+    console.error('Error in project creation:', error);
+    return NextResponse.json(
+      { error: 'Failed to create project', details: error.message },
+      { status: 500 }
+    );
   }
 }
 

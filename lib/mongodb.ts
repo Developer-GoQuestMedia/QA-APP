@@ -12,17 +12,7 @@ if (!process.env.MONGODB_DB) {
 
 const uri = process.env.MONGODB_URI
 const dbName = process.env.MONGODB_DB
-const options = {
-  maxPoolSize: 10,
-  minPoolSize: 5,
-  maxIdleTimeMS: 60000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
-  retryWrites: true,
-  retryReads: true,
-  serverSelectionTimeoutMS: 5000,
-  heartbeatFrequencyMS: 10000,
-}
+const options = {}
 
 let client: MongoClient | null = null;
 let clientPromise: Promise<MongoClient>
@@ -51,45 +41,21 @@ if (process.env.NODE_ENV === 'development') {
     client = new MongoClient(uri, options)
     global.mongo.conn = client
     global.mongo.promise = client.connect()
-      .catch(error => {
-        console.error('MongoDB connection error:', error)
-        throw error
-      })
   }
   clientPromise = global.mongo.promise!
 } else {
   // In production mode, it's best to not use a global variable.
   client = new MongoClient(uri, options)
   clientPromise = client.connect()
-    .catch(error => {
-      console.error('MongoDB connection error:', error)
-      throw error
-    })
 }
 
 export async function connectToDatabase() {
   try {
     const client = await clientPromise
     const db = client.db(dbName)
-
-    // Verify connection is alive
-    await db.command({ ping: 1 })
-    console.log('MongoDB connection verified successfully')
-
     return { client, db }
   } catch (error) {
     console.error('Failed to connect to MongoDB:', error)
-    // Attempt to reconnect
-    if (client) {
-      try {
-        await client.close()
-      } catch (closeError) {
-        console.error('Error closing MongoDB connection:', closeError)
-      }
-      client = new MongoClient(uri, options)
-      clientPromise = client.connect()
-      return connectToDatabase()
-    }
     throw error
   }
 }
@@ -101,24 +67,7 @@ export async function getMongoDb() {
   const clientResolved = await clientPromise;
   console.log('Debug - MongoDB Connection:', {
     dbName,
-    uri: uri.replace(/\/\/[^@]+@/, '//***:***@'),
-    timestamp: new Date().toISOString(),
-    connectionState: clientResolved.listenerCount('close') > 0 ? 'connected' : 'disconnected'
+    uri: uri.replace(/\/\/[^@]+@/, '//***:***@') // Log URI with hidden credentials
   });
   return clientResolved.db(dbName);
-}
-
-// Add connection event listeners
-if (client) {
-  client.on('serverHeartbeatFailed', (event) => {
-    console.error('MongoDB server heartbeat failed:', event)
-  })
-
-  client.on('topologyOpening', () => {
-    console.log('MongoDB topology opening')
-  })
-
-  client.on('topologyClosed', () => {
-    console.log('MongoDB topology closed')
-  })
 }

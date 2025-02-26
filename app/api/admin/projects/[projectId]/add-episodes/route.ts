@@ -15,8 +15,6 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { Worker } from 'worker_threads';
-import path from 'path';
 
 // Route Segment Config
 export const dynamic = 'force-dynamic';
@@ -51,7 +49,6 @@ interface Episode {
 
 interface Project {
   _id: ObjectId;
-  title: string;
   episodes: Episode[];
   updatedAt: Date;
 }
@@ -93,46 +90,6 @@ async function ensureCollection(db: any, collectionName: string) {
   }
 }
 
-async function uploadFileWithWorker(
-  file: Blob,
-  projectId: string,
-  projectTitle: string,
-  episodeName: string,
-  credentials: {
-    accessKeyId: string;
-    secretAccessKey: string;
-    endpoint: string;
-    bucketName: string;
-  }
-): Promise<{ success: boolean; fileKey?: string; error?: string }> {
-  return new Promise(async (resolve) => {
-    const worker = new Worker(path.resolve(process.cwd(), 'workers/uploadWorker.ts'));
-    
-    const arrayBuffer = await file.arrayBuffer();
-    const fileName = (file as any).name || `episode_${Date.now()}.mp4`;
-    
-    worker.postMessage({
-      file: arrayBuffer,
-      fileName,
-      projectId,
-      projectTitle,
-      episodeName,
-      contentType: file.type || 'video/mp4',
-      credentials
-    });
-
-    worker.on('message', (result) => {
-      worker.terminate();
-      resolve(result);
-    });
-
-    worker.on('error', (error) => {
-      worker.terminate();
-      resolve({ success: false, error: error.message });
-    });
-  });
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: { projectId: string } }
@@ -164,7 +121,7 @@ export async function POST(
 
     // 5. Parse FormData and validate files
     const formData = await request.formData();
-    const videos = formData.getAll('episodes');
+    const videos = formData.getAll('videos');
     if (!videos.length) {
       return NextResponse.json({ error: 'No video files found' }, { status: 400 });
     }
@@ -175,55 +132,103 @@ export async function POST(
 
     try {
       const newEpisodes: Episode[] = [];
-      const credentials = {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-        endpoint: process.env.R2_BUCKET_ENDPOINT || '',
-        bucketName: BUCKET_NAME
-      };
 
-      // Process all uploads in parallel using workers
-      const uploadPromises = videos.map(async (videoFile) => {
+      for (const videoFile of videos) {
         if (!(videoFile instanceof Blob)) {
-          return null;
+          continue;
         }
 
+        // Check file size
         if (videoFile.size > MAX_FILE_SIZE) {
-          throw new Error('File size exceeds maximum limit of 1GB');
+          return NextResponse.json(
+            { error: 'File size exceeds maximum limit of 1GB' },
+            { status: 400 }
+          );
         }
 
-        const episodeName = (videoFile as any).name?.split('.')[0] || `episode_${Date.now()}`;
-        const uploadResult = await uploadFileWithWorker(
-          videoFile,
-          projectId,
-          project.title,
-          episodeName,
-          credentials
-        );
-        
-        if (!uploadResult.success || !uploadResult.fileKey) {
-          throw new Error(uploadResult.error || 'Upload failed');
+        const fileName = (videoFile as any).name || `episode_${Date.now()}.mp4`;
+        const fileKey = `projects/${project._id}/${fileName}`;
+        const contentType = videoFile.type || 'video/mp4';
+
+        // Check if file already exists
+        const fileExists = await checkFileExistsInR2(fileKey);
+        if (fileExists) {
+          return NextResponse.json(
+            { error: `File ${fileName} already exists` },
+            { status: 400 }
+          );
         }
 
-        return {
+        // Create multipart upload
+        const createMultipartUploadCommand = new CreateMultipartUploadCommand({
+          Bucket: BUCKET_NAME,
+          Key: fileKey,
+          ContentType: contentType,
+        });
+
+        const multipartUpload = await s3Client.send(createMultipartUploadCommand);
+        const uploadId = multipartUpload.UploadId;
+
+        // Upload parts
+        const parts = [];
+        const buffer = await videoFile.arrayBuffer();
+        const totalChunks = Math.ceil(buffer.byteLength / CHUNK_SIZE);
+
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, buffer.byteLength);
+          const chunk = buffer.slice(start, end);
+
+          const uploadPartCommand = new UploadPartCommand({
+            Bucket: BUCKET_NAME,
+            Key: fileKey,
+            UploadId: uploadId,
+            PartNumber: i + 1,
+            Body: Buffer.from(chunk),
+          });
+
+          const { ETag } = await s3Client.send(uploadPartCommand);
+          parts.push({
+            PartNumber: i + 1,
+            ETag: ETag,
+          });
+        }
+
+        // Complete multipart upload
+        const completeMultipartUploadCommand = new CompleteMultipartUploadCommand({
+          Bucket: BUCKET_NAME,
+          Key: fileKey,
+          UploadId: uploadId,
+          MultipartUpload: { Parts: parts },
+        });
+
+        await s3Client.send(completeMultipartUploadCommand);
+
+        // Create episode document
+        const episode: Episode = {
           _id: new ObjectId(),
-          name: episodeName,
+          name: fileName,
           status: 'uploaded',
-          fileKey: uploadResult.fileKey,
+          fileKey,
           fileSize: videoFile.size,
-          contentType: videoFile.type || 'video/mp4',
+          contentType,
           uploadedAt: new Date(),
           collectionName: project.episodes[0]?.collectionName || `project_${project._id}_dialogues`,
         };
-      });
 
-      const results = await Promise.all(uploadPromises);
-      newEpisodes.push(...results.filter((episode): episode is Episode => episode !== null));
+        newEpisodes.push(episode);
+      }
 
       // Update project with new episodes
       const updateOperation: UpdateFilter<Project> = {
-        $push: { episodes: { $each: newEpisodes } },
-        $set: { updatedAt: new Date() }
+        $push: {
+          episodes: {
+            $each: newEpisodes
+          }
+        },
+        $set: {
+          updatedAt: new Date()
+        }
       };
 
       await db.collection<Project>('projects').updateOne(
@@ -234,6 +239,7 @@ export async function POST(
 
       await mongoSession.commitTransaction();
 
+      // 8. Return success response
       return NextResponse.json({
         success: true,
         data: newEpisodes,
@@ -248,7 +254,10 @@ export async function POST(
   } catch (error: any) {
     console.error('Error adding episodes:', error);
     return NextResponse.json(
-      { error: 'Failed to add episodes', details: error.message },
+      {
+        error: 'Failed to add episodes',
+        details: error.message
+      },
       { status: 500 }
     );
   }

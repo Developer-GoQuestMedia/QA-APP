@@ -121,7 +121,7 @@ export const initialState: AdminViewState = {
   },
   uploadValidation: {
     maxFileSize: 1024 * 1024 * 1024, // 1GB
-    allowedTypes: ['video/mp4'],
+    allowedTypes: ['video/mp4', 'video/webm', 'video/quicktime'],
     maxTotalSize: 10 * 1024 * 1024 * 1024 // 10GB
   }
 };

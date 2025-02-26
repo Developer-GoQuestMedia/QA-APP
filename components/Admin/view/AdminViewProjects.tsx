@@ -20,8 +20,8 @@ const ensureStringId = (id: string | ObjectId | undefined): string => {
 };
 
 // Helper function to convert BaseProject to Project
-const convertToProject = (baseProject: BaseProject): Project => {
-  const convertedProject = {
+const convertToProject = (baseProject: BaseProject): import('../state/projectState').Project => {
+  return {
     ...baseProject,
     _id: ensureStringId(baseProject._id),
     assignedTo: baseProject.assignedTo.map(user => ({
@@ -34,17 +34,15 @@ const convertToProject = (baseProject: BaseProject): Project => {
       ...episode,
       _id: ensureStringId(episode._id)
     }))
-  } as Project;
-  return convertedProject;
+  };
 };
 
 // Helper function to convert BaseEpisode to Episode
-const convertToEpisode = (baseEpisode: BaseEpisode): Episode => {
-  const convertedEpisode = {
+const convertToEpisode = (baseEpisode: BaseEpisode): import('../state/projectState').Episode => {
+  return {
     ...baseEpisode,
     _id: ensureStringId(baseEpisode._id)
-  } as Episode;
-  return convertedEpisode;
+  };
 };
 
 interface AdminViewProjectsProps {
@@ -343,7 +341,7 @@ export default function AdminViewProjects({
       >
         {projects.map((project: BaseProject) => (
           <div
-            key={project._id}
+            key={ensureStringId(project._id)}
             className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden ${
               viewMode === 'list' ? 'flex items-center justify-between p-4' : ''
             }`}
@@ -394,7 +392,7 @@ export default function AdminViewProjects({
                     Assign Users
                   </button>
                   <button
-                    onClick={() => onDeleteProject(project._id)}
+                    onClick={() => onDeleteProject(ensureStringId(project._id))}
                     className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -418,7 +416,7 @@ export default function AdminViewProjects({
                           {user.username} ({user.role})
                         </span>
                         <button
-                          onClick={() => onRemoveUser(project._id, user.username)}
+                          onClick={() => onRemoveUser(ensureStringId(project._id), user.username)}
                           className="text-red-500 hover:text-red-700"
                         >
                           <Trash2 className="w-4 h-4" />

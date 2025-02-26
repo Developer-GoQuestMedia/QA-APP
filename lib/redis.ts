@@ -1,5 +1,6 @@
 import { Redis as UpstashRedis } from '@upstash/redis';
-import IORedis from 'ioredis';
+import { Redis as IORedis } from 'ioredis';
+import logger from './logger';
 
 let redisClient: UpstashRedis | IORedis | null = null;
 
@@ -17,9 +18,9 @@ export function getRedisClient() {
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
 
-      console.log('Initialized Upstash Redis client');
+      logger.info('Initialized Upstash Redis client');
     } catch (error) {
-      console.error('Failed to initialize Upstash Redis client:', error);
+      logger.error('Failed to initialize Upstash Redis client:', { error });
       redisClient = null;
     }
   } else if (process.env.NODE_ENV !== 'production') {
@@ -31,7 +32,7 @@ export function getRedisClient() {
         maxRetriesPerRequest: null,
         retryStrategy: (times: number) => {
           if (times > 3) {
-            console.error('Redis connection failed after 3 retries');
+            logger.error('Redis connection failed after 3 retries');
             return null;
           }
           const delay = Math.min(times * 200, 1000);
@@ -47,21 +48,21 @@ export function getRedisClient() {
       // For local Redis only, try to set eviction policy
       if (redisClient instanceof IORedis) {
         redisClient.config('SET', 'maxmemory', '2gb').catch(() => {
-          console.warn('Failed to set Redis maxmemory configuration');
+          logger.warn('Failed to set Redis maxmemory configuration');
         });
         
         redisClient.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
-          console.warn('Failed to set Redis eviction policy');
+          logger.warn('Failed to set Redis eviction policy');
         });
       }
 
-      console.log('Initialized local Redis client for development');
+      logger.info('Initialized local Redis client for development');
     } catch (error) {
-      console.error('Failed to initialize local Redis client:', error);
+      logger.error('Failed to initialize local Redis client:', { error });
       redisClient = null;
     }
   } else {
-    console.warn('Redis configuration missing. Some features may be unavailable.');
+    logger.warn('Redis configuration missing. Some features may be unavailable.');
     redisClient = null;
   }
 
@@ -84,7 +85,7 @@ export async function isRedisConnected(): Promise<boolean> {
       return true;
     }
   } catch (error) {
-    console.error('Redis connection check failed:', error);
+    logger.error('Redis connection check failed:', { error });
     return false;
   }
 }
@@ -97,12 +98,12 @@ export async function executeRedisOperation<T>(
   try {
     const client = getRedisClient();
     if (!client) {
-      console.warn('Redis client not available, using fallback value');
+      logger.warn('Redis client not available, using fallback value');
       return fallbackValue;
     }
     return await operation();
   } catch (error) {
-    console.error('Redis operation failed:', error);
+    logger.error('Redis operation failed:', { error });
     return fallbackValue;
   }
 } 

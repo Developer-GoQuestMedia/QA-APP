@@ -1,5 +1,6 @@
-import { Project as BaseProject, Episode } from '@/types/project';
+import { Project as BaseProject, ProjectStatus, Episode } from '@/types/project';
 import { User } from '@/types/user';
+import { UploadProgressData } from '../types';
 
 export interface Project extends BaseProject {
   videoFiles?: File[];
@@ -13,13 +14,6 @@ export type UploadPhase =
   | 'processing'
   | 'success'
   | 'error';
-
-export interface UploadProgressData {
-  phase: UploadPhase;
-  loaded: number;
-  total: number;
-  message?: string;
-}
 
 export interface UploadSpeedStats {
   bytesPerSecond: number;
@@ -57,7 +51,7 @@ export interface AdminViewState {
   activeTab: 'projects' | 'users';
   viewMode: 'grid' | 'list';
   sortBy: 'title' | 'date' | 'status';
-  filterStatus: string | 'all';
+  filterStatus: ProjectStatus | 'all';
   selectedProjectForTeam: Project | null;
   selectedProjectForEpisodes: Project | null;
   selectedEpisode: Episode | null;
@@ -133,21 +127,64 @@ export const initialState: AdminViewState = {
 };
 
 export const stateActions = {
+  setActiveTab: (state: AdminViewState, tab: 'projects' | 'users'): AdminViewState => ({
+    ...state,
+    activeTab: tab
+  }),
+
+  setViewMode: (state: AdminViewState, mode: 'grid' | 'list'): AdminViewState => ({
+    ...state,
+    viewMode: mode
+  }),
+
+  setFilterStatus: (state: AdminViewState, status: ProjectStatus | 'all'): AdminViewState => ({
+    ...state,
+    filterStatus: status
+  }),
+
+  setSortBy: (state: AdminViewState, sort: 'title' | 'date' | 'status'): AdminViewState => ({
+    ...state,
+    sortBy: sort
+  }),
+
+  setSelectedProject: (state: AdminViewState, project: Project | null): AdminViewState => ({
+    ...state,
+    selectedProject: project,
+    isEditing: false,
+    showDeleteConfirm: false
+  }),
+
+  setSelectedUser: (state: AdminViewState, user: User | null): AdminViewState => ({
+    ...state,
+    selectedUser: user,
+    isEditing: false,
+    showUserDeleteConfirm: false
+  }),
+
   updateUploadProgress: (
     state: AdminViewState,
-    progress: UploadProgressData
+    progress: UploadProgressData & { phase: string }
   ): AdminViewState => ({
     ...state,
     uploadProgress: {
       ...state.uploadProgress,
-      [progress.phase]: {
-        phase: progress.phase,
-        loaded: progress.loaded,
-        total: progress.total,
-        message: progress.message
-      }
+      [progress.phase]: progress
     }
   }),
+
+  setError: (state: AdminViewState, error: string): AdminViewState => ({
+    ...state,
+    error,
+    success: ''
+  }),
+
+  setSuccess: (state: AdminViewState, success: string): AdminViewState => ({
+    ...state,
+    success,
+    error: ''
+  }),
+
+  resetState: (): AdminViewState => initialState,
 
   setAssignUserSearchTerm: (
     state: AdminViewState,
@@ -170,24 +207,6 @@ export const stateActions = {
       : [...state.selectedUsernames, username]
   }),
 
-  setViewMode: (
-    state: AdminViewState,
-    mode: 'grid' | 'list'
-  ): AdminViewState => ({
-    ...state,
-    viewMode: mode
-  }),
-
-  updateSelectedProject: (
-    state: AdminViewState,
-    updates: Partial<Project>
-  ): AdminViewState => ({
-    ...state,
-    selectedProject: state.selectedProject
-      ? { ...state.selectedProject, ...updates }
-      : null
-  }),
-
   updateSelectedEpisode: (
     state: AdminViewState,
     updates: Partial<Episode>
@@ -198,16 +217,6 @@ export const stateActions = {
       : null
   }),
 
-  setSelectedProject: (
-    state: AdminViewState,
-    project: Project | null
-  ): AdminViewState => ({
-    ...state,
-    selectedProject: project,
-    isEditing: false,
-    showDeleteConfirm: false
-  }),
-
   setSelectedEpisode: (
     state: AdminViewState,
     episode: Episode | null
@@ -215,24 +224,6 @@ export const stateActions = {
     ...state,
     selectedEpisode: episode,
     isEpisodeDetailsOpen: !!episode
-  }),
-
-  setError: (
-    state: AdminViewState,
-    error: string
-  ): AdminViewState => ({
-    ...state,
-    error,
-    success: ''
-  }),
-
-  setSuccess: (
-    state: AdminViewState,
-    success: string
-  ): AdminViewState => ({
-    ...state,
-    success,
-    error: ''
   }),
 
   updateFileProgress: (

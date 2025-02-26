@@ -36,6 +36,9 @@ import { io } from 'socket.io-client';
 
 // Add socket imports
 import { getSocketClient, authenticateSocket, joinProjectRoom, leaveProjectRoom } from '@/lib/socket';
+import { ensureDate } from '../utils/adminTypes';
+import AdminViewProjects from './AdminViewProjects';
+import AdminViewUsers from './AdminViewUsers';
 
 // Extend the base Project type with additional fields
 interface Project extends BaseProject {
@@ -230,13 +233,11 @@ const getTimeStamp = () => {
   return new Date().toISOString();
 };
 
-
-
 /**
  * Custom hook for handling admin notifications
  */
 function useNotifyAdmin() {
-  return useCallback((message: string, type: 'success' | 'error' = 'success') => {
+  return useCallback((message: string, type: string = 'success') => {
     if (type === 'error') {
       toast.error(message);
     } else {
@@ -282,6 +283,10 @@ const axiosWithRetry = async (config: AxiosRequestConfig, maxRetries = 3) => {
     }
   }
   throw new Error('Max retries exceeded');
+};
+
+const isValidUploadPhase = (phase: string): phase is UploadPhase => {
+  return ['initializing', 'pending', 'uploading', 'creating-collection', 'processing', 'success', 'error'].includes(phase);
 };
 
 export default function AdminView({ projects, refetchProjects }: AdminViewProps) {
@@ -359,218 +364,165 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
   // Upload progress state with proper typing
   const [uploadStatus, setUploadStatus] = useState<UploadPhase>('pending');
 
-  // Helper functions moved inside component
+  // Helper function moved inside component
   const handleCreateProject = async () => {
     const logContext = {
       startTime: new Date().toISOString(),
-      requestId: `proj_${Date.now()}`
+      requestId: `proj_${Date.now()}`,
+      component: 'AdminView',
+      action: 'handleCreateProject'
     };
 
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000;
-
-    const attemptRequest = async (attempt: number = 0): Promise<any> => {
-      try {
-        // Reset any previous errors
-        setState((prevState: AdminViewState) => ({ 
-          ...prevState, 
-          error: '', 
-          success: '',
-          uploadProgress: {}
-        }));
-
-        // Validate form data
-        if (!newProject.title?.trim()) {
-          throw new Error('Project title is required');
-        }
-
-        if (!newProject.sourceLanguage?.trim() || !newProject.targetLanguage?.trim()) {
-          throw new Error('Source and target languages are required');
-        }
-
-        if (!newProject.videoFiles?.length) {
-          throw new Error('At least one video file is required');
-        }
-
-        // Set creating state
-        setState((prevState: AdminViewState) => ({ 
-          ...prevState, 
-          isCreating: true,
-          uploadProgress: {
-            'project-creation': {
-              phase: 'preparing' as UploadPhase,
-              loaded: 0,
-              total: 0,
-              message: 'Preparing files for upload...'
-            }
-          }
-        }));
-
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('title', newProject.title.trim());
-        formData.append('description', newProject.description?.trim() || '');
-        formData.append('sourceLanguage', newProject.sourceLanguage.trim());
-        formData.append('targetLanguage', newProject.targetLanguage.trim());
-
-        // Validate and append files
-        let totalSize = 0;
-        const validFiles: File[] = [];
-
-        for (const file of newProject.videoFiles) {
-          // Validate file type
-          if (!file.type.startsWith('video/')) {
-            throw new Error(`Invalid file type for ${file.name}. Only video files are allowed.`);
-          }
-
-          // Validate file size (900MB limit)
-          if (file.size > 900 * 1024 * 1024) {
-            throw new Error(`File ${file.name} is too large. Maximum size is 900MB.`);
-          }
-
-          totalSize += file.size;
-          validFiles.push(file);
-        }
-
-        // Validate total size (10GB limit)
-        if (totalSize > 10 * 1024 * 1024 * 1024) {
-          throw new Error('Total file size exceeds 10GB limit');
-        }
-
-        // Append validated files
-        validFiles.forEach(file => {
-          formData.append('videos', file);
-        });
-
-        // Update progress state
-        setState((prevState: AdminViewState) => ({
-          ...prevState,
-          uploadProgress: {
-            'project-creation': {
-              phase: 'uploading' as UploadPhase,
-              loaded: 0,
-              total: totalSize,
-              message: 'Starting upload...'
-            }
-          }
-        }));
-
-        // Make API request with retry logic
-        const response = await axios.post('/api/admin/projects', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 300000, // 5 minutes
-          onUploadProgress: (progressEvent) => {
-            const total = progressEvent.total || totalSize;
-            const loaded = progressEvent.loaded;
-            const progress = Math.round((loaded * 100) / total);
-
-            setState((prevState: AdminViewState) => ({
-              ...prevState,
-              uploadProgress: {
-                'project-creation': {
-                  phase: 'uploading' as UploadPhase,
-                  loaded,
-                  total,
-                  message: `Uploading files: ${progress}%`
-                }
-              }
-            }));
-          }
-        });
-
-        if (!response.data.success) {
-          throw new Error(response.data.error || 'Failed to create project');
-        }
-
-        // Success handling
-        setState((prevState: AdminViewState) => ({
-          ...prevState,
-          isCreating: false,
-          success: 'Project created successfully',
-          error: '',
-          uploadProgress: {
-            'project-creation': {
-              phase: 'success' as UploadPhase,
-              loaded: totalSize,
-              total: totalSize,
-              message: 'Project created successfully'
-            }
-          }
-        }));
-
-        // Reset form
-        setNewProject({
-          title: '',
-          description: '',
-          sourceLanguage: '',
-          targetLanguage: '',
-          status: 'pending',
-          videoFiles: []
-        });
-
-        // Refresh projects list
-        await refetchProjects();
-
-        return response.data;
-
-      } catch (error: any) {
-        console.error('Project creation attempt failed:', {
-          attempt,
-          error: error.message,
-          type: error.name,
-          code: error.code,
-          ...logContext
-        });
-
-        // Check if error is retryable
-        const isRetryable = (
-          error.name === 'NetworkError' ||
-          error.message === 'Network Error' ||
-          error.code === 'ECONNABORTED' ||
-          (error.response?.status >= 500 && error.response?.status < 600)
-        );
-
-        if (isRetryable && attempt < MAX_RETRIES) {
-          console.log(`Retrying request (attempt ${attempt + 1}/${MAX_RETRIES})...`, logContext);
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt)));
-          return attemptRequest(attempt + 1);
-        }
-
-        // If we've exhausted retries or error is not retryable, throw the error
-        throw error;
+    console.log('Project creation initiated', {
+      ...logContext,
+      newProject: {
+        title: newProject.title,
+        description: newProject.description?.substring(0, 50),
+        sourceLanguage: newProject.sourceLanguage,
+        targetLanguage: newProject.targetLanguage,
+        videoFilesCount: newProject.videoFiles?.length
       }
-    };
+    });
 
     try {
-      await attemptRequest();
-    } catch (error: any) {
-      console.error('Project creation failed after retries:', error);
+      // Reset any previous errors and set creating state
+      setState(prev => ({
+        ...prev,
+        error: '',
+        success: '',
+        isCreating: true,
+        uploadProgress: {}
+      }));
 
-      setState((prevState: AdminViewState) => ({
-        ...prevState,
+      // Validate form data
+      if (!newProject.title?.trim()) {
+        throw new Error('Project title is required');
+      }
+
+      if (!newProject.sourceLanguage?.trim() || !newProject.targetLanguage?.trim()) {
+        throw new Error('Source and target languages are required');
+      }
+
+      if (!newProject.videoFiles?.length) {
+        throw new Error('At least one video file is required');
+      }
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('title', newProject.title.trim());
+      formData.append('description', newProject.description?.trim() || '');
+      formData.append('sourceLanguage', newProject.sourceLanguage.trim());
+      formData.append('targetLanguage', newProject.targetLanguage.trim());
+
+      // Validate and append files
+      let totalSize = 0;
+      for (const file of newProject.videoFiles) {
+        if (!file.type.startsWith('video/')) {
+          throw new Error(`Invalid file type for ${file.name}. Only video files are allowed.`);
+        }
+
+        if (file.size > 900 * 1024 * 1024) {
+          throw new Error(`File ${file.name} is too large. Maximum size is 900MB.`);
+        }
+
+        totalSize += file.size;
+        formData.append('videos', file);
+      }
+
+      if (totalSize > 10 * 1024 * 1024 * 1024) {
+        throw new Error('Total file size exceeds 10GB limit');
+      }
+
+      // Make API request
+      console.log('Creating project with data:', {
+        title: newProject.title,
+        description: newProject.description,
+        fileCount: newProject.videoFiles.length,
+        totalSize: formatBytes(totalSize)
+      });
+
+      const response = await axios.post('/api/projects', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 300000, // 5 minutes
+        onUploadProgress: (progressEvent) => {
+          const total = progressEvent.total || totalSize;
+          const loaded = progressEvent.loaded;
+          const progress = Math.round((loaded * 100) / total);
+
+          console.log('Upload progress:', {
+            loaded: formatBytes(loaded),
+            total: formatBytes(total),
+            progress: `${progress}%`
+          });
+
+          setState(prev => ({
+            ...prev,
+            uploadProgress: {
+              'project-creation': {
+                phase: 'uploading',
+                loaded,
+                total,
+                message: `Uploading files: ${progress}%`
+              }
+            }
+          }));
+        }
+      });
+
+      console.log('Project creation response:', response.data);
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to create project');
+      }
+
+      // Success handling
+      setState(prev => ({
+        ...prev,
         isCreating: false,
-        error: error.response?.data?.error || error.message || 'Failed to create project',
+        success: 'Project created successfully',
+        error: '',
         uploadProgress: {
           'project-creation': {
-            phase: 'error' as UploadPhase,
-            loaded: 0,
-            total: 0,
-            message: error.response?.data?.error || error.message || 'Upload failed'
+            phase: 'success',
+            loaded: totalSize,
+            total: totalSize,
+            message: 'Project created successfully'
           }
         }
       }));
 
-      // Show error toast
-      toast.error(error.response?.data?.error || error.message || 'Failed to create project', {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
+      // Reset form
+      setNewProject({
+        title: '',
+        description: '',
+        sourceLanguage: '',
+        targetLanguage: '',
+        status: 'pending',
+        videoFiles: []
       });
+
+      // Refresh projects list
+      await refetchProjects();
+
+      return response.data;
+    } catch (error) {
+      console.error('Project creation failed:', error);
+      setState(prev => ({
+        ...prev,
+        isCreating: false,
+        error: error instanceof Error ? error.message : 'Failed to create project',
+        uploadProgress: {
+          'project-creation': {
+            phase: 'error',
+            loaded: 0,
+            total: 0,
+            message: error instanceof Error ? error.message : 'Upload failed'
+          }
+        }
+      }));
+      throw error;
     }
   };
 
@@ -881,23 +833,60 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
         let endpoint = '';
         switch (state.activeTab) {
           case 'projects':
-            endpoint = '/api/admin/projects';
+            endpoint = '/api/projects';
             break;
           case 'users':
-            endpoint = '/api/admin/users';
+            endpoint = '/api/users';
             break;
           default:
-            endpoint = '/api/admin/projects';
+            endpoint = '/api/projects';
         }
-        const response = await axios.get(endpoint);
-        return response.data;
+
+        console.log('Fetching data from endpoint:', endpoint);
+        const response = await axiosWithRetry({
+          url: endpoint,
+          method: 'GET',
+          timeout: 10000
+        });
+        
+        // Check if response has the expected structure
+        if (!response.data) {
+          console.error('Empty response received');
+          throw new Error('No data received from server');
+        }
+
+        if (response.data.error) {
+          console.error('Server returned error:', response.data.error);
+          throw new Error(response.data.error);
+        }
+
+        // Handle the new response structure
+        const responseData = response.data.success ? response.data.data : response.data;
+        
+        if (!Array.isArray(responseData)) {
+          console.error('Invalid response structure:', responseData);
+          throw new Error('Invalid response structure');
+        }
+
+        return responseData;
       } catch (error) {
-        console.error('Error fetching admin data:', error);
-        notify('Failed to fetch data', 'error');
-        return null;
+        console.error('Error fetching admin data:', {
+          error,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch data';
+        notify(errorMessage, 'error');
+        throw error;
       }
     },
-    enabled: !!session?.data?.user // Only run query when user is authenticated
+    enabled: !!session?.data?.user, // Only run query when user is authenticated
+    retry: 3, // Retry failed requests 3 times
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    onError: (error: unknown) => {
+      console.error('Query error:', error);
+      notify('Failed to fetch data. Please try again later.', 'error');
+    }
   });
 
   // Move useCallback outside conditionals
@@ -920,40 +909,66 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
 
   // Socket connection effect with proper typing
   useEffect(() => {
-    if (!session?.data?.user) return;
-
     const initializeSocket = async () => {
+      if (!session.data?.user) return;
+
       try {
-        const socket = await getSocketClient();
-        if (!socket) throw new Error('Failed to initialize socket');
-
+        const socket = getSocketClient();
         socketRef.current = socket;
-        await authenticateSocket('admin'); // Pass user role as ID for now
 
-        // Join rooms for all projects
-        projects.forEach((project: Project) => {
-          joinProjectRoom(project._id.toString());
-        });
+        if (socket) {
+          socket.on('connect', () => {
+            console.log('Socket connected');
+          });
 
-        hasInitializedRef.current = true;
+          socket.on('projectUpdate', (updatedProject: Project) => {
+            refetchProjects();
+          });
+
+          socket.on('uploadProgress', (data: { 
+            phase: string;
+            loaded: number;
+            total: number;
+            message?: string;
+          }) => {
+            if (!isValidUploadPhase(data.phase)) {
+              console.error('Invalid upload phase:', data.phase);
+              return;
+            }
+
+            const progressData: UploadProgressData = {
+              phase: data.phase,
+              loaded: data.loaded,
+              total: data.total,
+              message: data.message
+            };
+
+            setState(prev => ({
+              ...prev,
+              uploadProgress: {
+                ...prev.uploadProgress,
+                [data.phase]: progressData
+              }
+            }));
+          });
+        }
+
+        return () => {
+          if (socket) {
+            socket.off('connect');
+            socket.off('projectUpdate');
+            socket.off('uploadProgress');
+            socket.disconnect();
+          }
+        };
       } catch (error) {
         console.error('Socket initialization error:', error);
-        notify('Failed to establish real-time connection', 'error');
+        notify('Failed to initialize socket connection', 'error');
       }
     };
 
-    void initializeSocket();
-
-    return () => {
-      if (socketRef.current) {
-        projects.forEach((project: Project) => {
-          leaveProjectRoom(project._id.toString());
-        });
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, [session?.data?.user, projects, notify]);
+    initializeSocket();
+  }, [session.data?.user, refetchProjects, notify]);
 
   // Fix fetchProjectsWithLoading declaration
   const fetchProjectsWithLoading = useCallback(async () => {
@@ -1146,8 +1161,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     }
   }, [setState]);
 
-
-
   // Fix project selection with proper type checking
   const handleProjectSelection = (project: Project) => {
     setState(prev => ({
@@ -1158,7 +1171,6 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
       } as Project
     }));
   };
-
 
   // User selection handler with support for both username and user object
   const handleUserSelection = useCallback((userOrUsername: string | User) => {
@@ -1289,1317 +1301,104 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     };
   }, [state.selectedProjectForEpisodes, state.selectedEpisode]);
 
+  // Helper function moved inside component
+  const ensureDate = (date: string | Date | undefined): string | Date => {
+    if (!date) return new Date().toISOString();
+    return typeof date === 'string' ? date : date.toISOString();
+  };
+
   // ----------------------------------------
   // RENDER
   // ----------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Top Bar */}
       <div className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => handleTabChange('projects')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${state.activeTab === 'projects'
-                    ? 'bg-blue-500 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                >
-                  Projects
-                </button>
-                <button
-                  onClick={() => handleTabChange('users')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${state.activeTab === 'users'
-                    ? 'bg-blue-500 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                >
-                  Users
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              {state.activeTab === 'projects' && (
-                <>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, viewMode: prev.viewMode === 'grid' ? 'list' : 'grid' }))}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-                  >
-                    {state.viewMode === 'grid' ? 'List View' : 'Grid View'}
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, isCreating: true }))}
-                    className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Project
-                  </button>
-                </>
-              )}
-              {state.activeTab === 'users' && (
-                <button
-                  onClick={() => setState(prev => ({ ...prev, isCreatingUser: true }))}
-                  className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Create User
-                </button>
-              )}
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setState(prev => ({ ...prev, activeTab: 'projects' }))}
+                className={`px-4 py-2 rounded-lg ${state.activeTab === 'projects' ? 'bg-blue-500 text-white' : 'text-gray-600'}`}
+              >
+                Projects
+              </button>
+              <button
+                onClick={() => setState(prev => ({ ...prev, activeTab: 'users' }))}
+                className={`px-4 py-2 rounded-lg ${state.activeTab === 'users' ? 'bg-blue-500 text-white' : 'text-gray-600'}`}
+              >
+                Users
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <div className="flex-1 w-full sm:w-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-              <input
-                type="text"
-                placeholder={`Search ${state.activeTab}...`}
-                value={state.searchTerm}
-                onChange={(e) => {
-                  console.log('Search term changed:', e.target.value); // Debug log
-                  handleSearch(e.target.value);
-                }}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {state.activeTab === 'projects' && (
-            <div className="flex items-center space-x-4 w-full sm:w-auto">
-              <select
-                value={state.filterStatus}
-                onChange={(e) => {
-                  console.log('Status filter changed:', e.target.value); // Debug log
-                  handleFilter(e.target.value as ProjectStatus | 'all');
-                }}
-                className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="on-hold">On Hold</option>
-              </select>
-              <select
-                value={state.sortBy}
-                onChange={(e) => {
-                  console.log('Sort changed:', e.target.value); // Debug log
-                  handleSortChange(e.target.value as 'title' | 'date' | 'status');
-                }}
-                className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-              >
-                <option value="date">Sort by Date</option>
-                <option value="title">Sort by Title</option>
-                <option value="status">Sort by Status</option>
-              </select>
-            </div>
-          )}
-
-
-        </div>
-      </div>
-
-      {/* Notifications */}
-      {state.error && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg max-w-lg">
-            {state.error}
-          </div>
-        </div>
-      )}
-      {state.success && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg max-w-lg">
-            {state.success}
-          </div>
-        </div>
-      )}
-
-      {/* CONTENT */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {state.activeTab === 'projects' ? (
-          // Projects (Grid or List)
-          <div
-            className={
-              state.viewMode === 'grid'
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-                : 'space-y-4'
-            }
-          >
-            {memoizedData.filteredProjects.map((project: Project) => (
-              <div
-                key={project._id.toString()}
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow duration-200 ${state.viewMode === 'list' ? 'p-4' : 'p-6'
-                  }`}
-              >
-                <div
-                  className={`${state.viewMode === 'list' ? 'flex items-center justify-between' : 'space-y-4'
-                    }`}
-                >
-                  <div className={state.viewMode === 'list' ? 'flex-1' : ''}>
-                    <div className="flex justify-between items-start">
-                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                        {project.title}
-                      </h2>
-                      <div className="flex items-center space-x-2">
-                        <div className="dropdown-container relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleProjectSelect(project);
-                            }}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
-                          >
-                            <MoreVertical className="w-5 h-5" />
-                          </button>
-                          {state.selectedProject?._id === project._id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => handleProjectSelect(null)}
-                              />
-                              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700">
-                                <div className="py-1">
-                                  <button
-                                    onClick={() => router.push(`/admin/project/${project._id}` as any)}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  >
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    Manage
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      router.push(`/admin/project/${project._id}/progress`)
-                                    }
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  >
-                                    <ChartBar className="w-4 h-4 mr-2" />
-                                    Progress
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setState(prev => ({ ...prev, isEditing: true }));
-                                      handleProjectSelect(project);
-                                    }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  >
-                                    <Edit3 className="w-4 h-4 mr-2" />
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setState(prev => ({ ...prev, isAssigning: true }));
-                                      handleProjectSelect(project);
-                                    }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  >
-                                    <Users className="w-4 h-4 mr-2" />
-                                    Assign Users
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (!state.selectedProject) {
-                                        notify('No project selected');
-                                        return;
-                                      }
-                                      handleDeleteProject(state.selectedProject._id.toString());
-                                    }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Delete
-                                  </button>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {state.viewMode === 'grid' && (
-                      <>
-                        <p className="text-gray-600 dark:text-gray-300 mt-2">
-                          {project.description}
-                        </p>
-                        <div className="flex flex-col gap-2 mt-4">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Language: {project.sourceLanguage} → {project.targetLanguage}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Folder Path: {project.parentFolder}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Last Updated: {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'Never'}
-                          </div>
-
-                          {/* Project Status Control */}
-                          <div className="mt-2">
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                              Status
-                            </label>
-                            <select
-                              value={project.status}
-                              onChange={(e) => handleUpdateStatus(project._id.toString(), e.target.value as ProjectStatus)}
-                              className={`text-sm rounded-full px-3 py-1 font-medium border-0 ${STATUS_COLORS[project.status as keyof typeof STATUS_COLORS]
-                                }`}
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="in-progress">In Progress</option>
-                              <option value="completed">Completed</option>
-                              <option value="on-hold">On Hold</option>
-                            </select>
-                          </div>
-
-                          {/* Assigned Users List */}
-                          <div className="dropdown-container relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleProjectSelect(project);
-                              }}
-                              className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              <span>Assigned Team ({project.assignedTo?.length || 0})</span>
-                              <svg
-                                className={`w-5 h-5 transition-transform duration-200 ${state.selectedProjectForTeam?._id === project._id ? 'transform rotate-180' : ''
-                                  }`}
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-
-                            {state.selectedProjectForTeam?._id === project._id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={() => handleProjectSelect(null)}
-                                />
-                                <div className="absolute left-0 mt-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 border dark:border-gray-700 max-h-60 overflow-y-auto">
-                                  <div className="p-2 space-y-1">
-                                    {(project.assignedTo?.length || 0) > 0 ? (
-                                      project.assignedTo?.map((assignedUser: AssignedUser) => (
-                                        <div
-                                          key={assignedUser.username}
-                                          className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                                        >
-                                          <div className="flex items-center space-x-2">
-                                            <span
-                                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${assignedUser.role === 'transcriber'
-                                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                                                : assignedUser.role === 'translator'
-                                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                                                  : assignedUser.role === 'voiceOver'
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                }`}
-                                            >
-                                              {assignedUser.role}
-                                            </span>
-                                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                              {assignedUser.username}
-                                            </span>
-                                          </div>
-                                          <button
-                                            onClick={() => {
-                                              if (!state.selectedProject) {
-                                                notify('No project selected');
-                                                return;
-                                              }
-                                              handleRemoveUser(state.selectedProject._id.toString(), assignedUser.username);
-                                            }}
-                                            className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                            title="Remove user"
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </button>
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-                                        No users assigned
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="border-t border-gray-200 dark:border-gray-700 p-2">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setState(prev => ({ ...prev, isAssigning: true }));
-                                        handleProjectSelect(project);
-                                      }}
-                                      className="flex items-center justify-center w-full px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                                    >
-                                      <Users className="w-4 h-4 mr-2" />
-                                      Assign Users
-                                    </button>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Episodes Button */}
-                        <div className="mt-6">
-                          <button
-                            onClick={() => {
-                              setState(prev => ({
-                                ...prev,
-                                selectedProjectForEpisodes: project,
-                                isEpisodesModalOpen: true
-                              }));
-                            }}
-                            className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                          >
-                            View Episodes ({project.episodes?.length || 0})
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <AdminViewProjects
+            projects={projects}
+            viewMode={state.viewMode}
+            filterStatus={state.filterStatus}
+            sortBy={state.sortBy}
+            selectedProject={state.selectedProject}
+            selectedProjectForTeam={state.selectedProjectForTeam}
+            selectedProjectForEpisodes={state.selectedProjectForEpisodes}
+            isAssigning={state.isAssigning}
+            onViewModeChange={(mode) => setState(prev => ({ ...prev, viewMode: mode }))}
+            onFilterChange={(status) => setState(prev => ({ ...prev, filterStatus: status }))}
+            onSortChange={(sort) => setState(prev => ({ ...prev, sortBy: sort }))}
+            onCreateProject={() => setState(prev => ({ ...prev, isCreating: true }))}
+            onProjectSelect={(project) => setState(prev => ({ 
+              ...prev, 
+              selectedProject: project ? {
+                ...project,
+                _id: project._id.toString(),
+                title: project.title || '',
+                description: project.description || '',
+                sourceLanguage: project.sourceLanguage || '',
+                targetLanguage: project.targetLanguage || '',
+                status: project.status || 'pending',
+                assignedTo: project.assignedTo || [],
+                episodes: project.episodes || []
+              } : null
+            }))}
+            onDeleteProject={(projectId) => setState(prev => ({ ...prev, showDeleteConfirm: true }))}
+            onRemoveUser={async (projectId, username) => {
+              // Implement user removal logic
+            }}
+            onAssignUsers={() => setState(prev => ({ ...prev, isAssigning: true }))}
+            onEpisodesView={(project) => setState(prev => ({ 
+              ...prev, 
+              selectedProjectForEpisodes: {
+                ...project,
+                _id: project._id.toString(),
+                title: project.title || '',
+                description: project.description || '',
+                sourceLanguage: project.sourceLanguage || '',
+                targetLanguage: project.targetLanguage || '',
+                status: project.status || 'pending',
+                assignedTo: project.assignedTo || [],
+                episodes: project.episodes || []
+              },
+              isEpisodesModalOpen: true 
+            }))}
+            notify={notify as (message: string, type?: string) => void}
+            refetchProjects={refetchProjects}
+          />
         ) : (
-          // Users Table
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Projects
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {memoizedUsers.map((user: User) => (
-                  <tr key={user._id.toString()}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {user.username}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {user.email}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'transcriber'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                          : user.role === 'translator'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                            : user.role === 'voiceOver'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleToggleUserActive(user._id, !user.isActive)}
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isActive
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                          : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                          }`}
-                      >
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {user.assignedProjects?.length || 0} projects
-                      <div className="text-xs text-gray-400 dark:text-gray-500">
-                        Last login:{' '}
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => {
-                          if (!state.selectedUser) {
-                            notify('No user selected');
-                            return;
-                          }
-                          setState(prev => ({
-                            ...prev,
-                            showUserDeleteConfirm: true,
-                            selectedUser: state.selectedUser,
-                          }));
-                        }}
-                        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <AdminViewUsers
+            users={state.filteredUsers}
+            selectedUser={state.selectedUser}
+            onCreateUser={() => setState(prev => ({ ...prev, isCreatingUser: true }))}
+            onDeleteUser={(userId) => setState(prev => ({ ...prev, showUserDeleteConfirm: true }))}
+            onToggleUserActive={async (userId, isActive) => {
+              // Implement user activation toggle logic
+            }}
+            notify={notify}
+          />
         )}
       </div>
 
-      {/* CREATE PROJECT MODAL */}
-      {state.isCreating && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-lg mx-auto my-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Create New Project
-            </h2>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              console.log('Form submission started', {
-                formData: {
-                  title: newProject.title,
-                  description: newProject.description,
-                  sourceLanguage: newProject.sourceLanguage,
-                  targetLanguage: newProject.targetLanguage,
-                  videoFiles: newProject.videoFiles?.map(f => ({
-                    name: f.name,
-                    type: f.type,
-                    size: f.size
-                  }))
-                },
-                currentState: {
-                  isCreating: state.isCreating,
-                  error: state.error,
-                  uploadProgress: state.uploadProgress
-                }
-              });
-
-              try {
-                // Convert ProjectState to Project type
-                const projectData: Project = {
-                  _id: crypto.randomUUID(), // Use Web Crypto API
-                  title: newProject.title,
-                  description: newProject.description,
-                  sourceLanguage: newProject.sourceLanguage,
-                  targetLanguage: newProject.targetLanguage,
-                  status: 'pending',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  assignedTo: [],
-                  parentFolder: '',
-                  databaseName: '',
-                  collectionName: '',
-                  episodes: [],
-                  index: '0',
-                  uploadStatus: {
-                    totalFiles: newProject.videoFiles?.length || 0,
-                    completedFiles: 0,
-                    currentFile: 0,
-                    status: 'pending'
-                  }
-                };
-
-                console.log('Project data prepared', { projectData });
-                
-                setState(prev => ({
-                  ...prev,
-                  selectedProject: projectData,
-                  isCreating: true,
-                  error: ''
-                }));
-
-                console.log('State updated, calling handleCreateProject');
-                await handleCreateProject();
-              } catch (error) {
-                console.error('Form submission error:', error);
-                setState(prev => ({
-                  ...prev,
-                  error: error instanceof Error ? error.message : 'Form submission failed'
-                }));
-              }
-            }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={newProject.title}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    console.log('Title changed:', { value });
-                    setNewProject((prev) => ({ ...prev, title: value }));
-                  }}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Description
-                </label>
-                <textarea
-                  value={newProject.description}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    console.log('Description changed:', { value });
-                    setNewProject((prev) => ({ ...prev, description: value }));
-                  }}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Source Language
-                </label>
-                <input
-                  type="text"
-                  value={newProject.sourceLanguage}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    console.log('Source language changed:', { value });
-                    setNewProject((prev) => ({ ...prev, sourceLanguage: value }));
-                  }}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Target Language
-                </label>
-                <input
-                  type="text"
-                  value={newProject.targetLanguage}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    console.log('Target language changed:', { value });
-                    setNewProject((prev) => ({ ...prev, targetLanguage: value }));
-                  }}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Video Files
-                </label>
-                <input
-                  type="file"
-                  multiple
-                  accept="video/*"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    console.log('Files selected:', {
-                      count: files.length,
-                      files: files.map(f => ({
-                        name: f.name,
-                        type: f.type,
-                        size: f.size
-                      }))
-                    });
-                    setNewProject((prev) => ({ ...prev, videoFiles: files }));
-                  }}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    console.log('Cancel clicked, resetting state');
-                    setState(prev => ({ ...prev, isCreating: false, error: '' }));
-                    setNewProject({
-                      title: '',
-                      description: '',
-                      sourceLanguage: '',
-                      targetLanguage: '',
-                      status: 'pending',
-                      videoFiles: []
-                    });
-                  }}
-                  className="w-full sm:w-auto px-4 py-2 text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={state.isCreating}
-                  className={`w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-                    state.isCreating ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {state.isCreating ? 'Creating...' : 'Create Project'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE USER MODAL */}
-      {state.isCreatingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Create New User
-            </h2>
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={newUser.username}
-                  onChange={(e) =>
-                    setNewUser((prev) => ({ ...prev, username: e.target.value }))
-                  }
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) =>
-                    setNewUser((prev) => ({ ...prev, password: e.target.value }))
-                  }
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Role
-                </label>
-                <select
-                  value={newUser.role === 'admin' ? 'director' : newUser.role}
-                  onChange={(e) =>
-                    setNewUser((prev) => ({ ...prev, role: e.target.value as UserRole }))
-                  }
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                >
-                  <option value="transcriber">Transcriber</option>
-                  <option value="translator">Translator</option>
-                  <option value="voiceOver">Voice Over</option>
-                  <option value="director">Director</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setState(prev => ({ ...prev, isCreatingUser: false }))}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                >
-                  Create User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE USER CONFIRMATION MODAL */}
-      {state.showUserDeleteConfirm && state.selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Delete User
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete &quot;{state.selectedUser.username}&quot;? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setState(prev => ({
-                    ...prev,
-                    showUserDeleteConfirm: false,
-                    selectedUser: null
-                  }));
-                }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (!state.selectedUser) {
-                    notify('No user selected');
-                    return;
-                  }
-                  handleDeleteUser(state.selectedUser._id);
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-              >
-                Delete User
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ASSIGN USERS MODAL */}
-      {state.isAssigning && state.selectedProject && (
-        <div data-modal="assign-users" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Assign Users to {state.selectedProject.title}
-            </h2>
-
-            {/* Currently Assigned Users Section */}
-            <div className="mb-6">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Currently Assigned Users
-              </h3>
-              <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-                {(state.selectedProject.assignedTo?.length || 0) > 0 ? (
-                  state.selectedProject.assignedTo?.map((assignedUser: AssignedUser) => (
-                    <div
-                      key={assignedUser.username}
-                      className={`flex items-center gap-2 px-3 py-1 rounded-full ${assignedUser.role === 'transcriber'
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                        : assignedUser.role === 'translator'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                          : assignedUser.role === 'voiceOver'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}
-                    >
-                      <span className="text-sm">
-                        {assignedUser.username} ({assignedUser.role})
-                      </span>
-                      <button
-                        onClick={() => {
-                          if (!state.selectedProject) {
-                            notify('No project selected');
-                            return;
-                          }
-                          handleRemoveUser(state.selectedProject._id.toString(), assignedUser.username);
-                        }}
-                        className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    No users currently assigned
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Available Users Section */}
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Available Users
-                </h3>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {state.selectedUsernames.length} selected
-                </span>
-              </div>
-
-              {/* Replace the search input in assign users modal */}
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={state.assignUserSearchTerm}
-                  onChange={(e) => setAssignUserSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              </div>
-
-              <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
-                {memoizedUsers.length > 0 ? (
-                  memoizedUsers.map((user: User) => {
-                    const isSelected = state.selectedUsernames.includes(user.username);
-                    return (
-                      <div
-                        key={user._id.toString()}
-                        className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${isSelected
-                          ? 'bg-blue-50 dark:bg-blue-900/20'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }`}
-                        onClick={() => handleUserSelection(user.username)}
-                      >
-                        <div className="flex items-center flex-1">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleUserSelection(user.username)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
-                          />
-                          <div className="ml-3 flex-1">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {user.username}
-                                </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  {user.email}
-                                </div>
-                              </div>
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'transcriber'
-                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                                  : user.role === 'translator'
-                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                                    : user.role === 'voiceOver'
-                                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                  }`}
-                              >
-                                {user.role}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                    {state.assignUserSearchTerm ? 'No users match your search' : 'No users available'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setState(prev => ({
-                    ...prev,
-                    isAssigning: false,
-                    selectedProject: null,
-                    selectedUsernames: []
-                  }));
-                  setAssignUserSearchTerm('');
-                }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignUsers}
-                disabled={state.selectedUsernames.length === 0}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Assign Selected Users ({state.selectedUsernames.length})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT PROJECT MODAL */}
-      {state.isEditing && state.selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Edit Project
-            </h2>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!state.selectedProject) {
-                  notify('No project selected');
-                  return;
-                }
-                try {
-                  await axios.patch(`/api/admin/projects/${state.selectedProject._id}`, {
-                    title: state.selectedProject.title,
-                    description: state.selectedProject.description,
-                    sourceLanguage: state.selectedProject.sourceLanguage,
-                    targetLanguage: state.selectedProject.targetLanguage,
-                    dialogue_collection: state.selectedProject.episodes[0].collectionName,
-                    status: state.selectedProject.status,
-                  });
-                  await refetchProjects();
-                  setState(prev => ({ ...prev, isEditing: false, selectedProject: null }));
-                  notify('Project updated successfully');
-                  setTimeout(() => setState(prev => ({ ...prev, success: '' })), 3000);
-                } catch (err) {
-                  setState(prev => ({ ...prev, error: 'Failed to update project' }));
-                  setTimeout(() => setState(prev => ({ ...prev, error: '' })), 3000);
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={state.selectedProject.title}
-                  onChange={(e) => updateProjectState({
-                    title: e.target.value,
-                    updatedAt: new Date().toISOString()
-                  })}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Description
-                </label>
-                <textarea
-                  value={state.selectedProject.description}
-                  onChange={(e) => updateProjectState({
-                    description: e.target.value,
-                    updatedAt: new Date().toISOString()
-                  })}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                    Source Language
-                  </label>
-                  <input
-                    type="text"
-                    value={state.selectedProject.sourceLanguage}
-                    onChange={(e) => updateProjectState({
-                      sourceLanguage: e.target.value,
-                      updatedAt: new Date().toISOString()
-                    })}
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                    Target Language
-                  </label>
-                  <input
-                    type="text"
-                    value={state.selectedProject.targetLanguage}
-                    onChange={(e) => updateProjectState({
-                      targetLanguage: e.target.value,
-                      updatedAt: new Date().toISOString()
-                    })}
-                    className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                  Collection Name
-                </label>
-                <input
-                  type="text"
-                  value={state.selectedProject.episodes[0].collectionName}
-                  onChange={(e) => updateProjectState({
-                    collectionName: e.target.value,
-                    updatedAt: new Date().toISOString()
-                  })}
-                  className="w-full p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setState(prev => ({
-                      ...prev,
-                      isEditing: false,
-                      selectedProject: null
-                    }));
-                  }}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE PROJECT CONFIRMATION MODAL */}
-      {state.showDeleteConfirm && state.selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Delete Project
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete &quot;{state.selectedProject.title}&quot;? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setState(prev => ({ ...prev, showDeleteConfirm: false, selectedProject: null }));
-                }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (!state.selectedProject) {
-                    notify('No project selected');
-                    return;
-                  }
-                  handleDeleteProject(state.selectedProject._id.toString());
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --------------------------------------------- */}
-      {/* MODAL: EPISODES LIST FOR THE SELECTED PROJECT */}
-      {/* --------------------------------------------- */}
-      {state.isEpisodesModalOpen && state.selectedProjectForEpisodes && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[999]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full relative">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Episodes for: <span className="italic">{state.selectedProjectForEpisodes.title}</span>
-            </h2>
-
-            <button
-              onClick={() => {
-                setState(prev => ({
-                  ...prev,
-                  isEpisodesModalOpen: false,
-                  selectedEpisode: null
-                }));
-              }}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <span className="text-lg">×</span>
-            </button>
-
-            {/* Add Upload Button */}
-            <div className="mb-4">
-              <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
-                <div className="flex items-center">
-                  <Plus className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
-                  <span className="text-sm">Add New Episodes</span>
-                </div>
-                <input
-                  type="file"
-                  multiple
-                  accept="video/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      handleAddEpisodes(e.target.files);
-                    }
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {state.selectedProjectForEpisodes.episodes && state.selectedProjectForEpisodes.episodes.length > 0 ? (
-                state.selectedProjectForEpisodes.episodes.map((episode: Episode) => (
-                  <div
-                    key={typeof episode._id === 'object' ? String(episode._id) : episode._id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${episode.status === 'uploaded'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                          : episode.status === 'processing'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300'
-                          }`}
-                      >
-                        {episode.status}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {episode.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => {
-                          if (!state.selectedProjectForEpisodes || !episode) return;
-                          try {
-                            const projectId = state.selectedProjectForEpisodes._id.toString();
-                            const episodeId = episode._id.toString();
-                            const episodeName = encodeURIComponent(episode.name);
-
-                            router.push(
-                              `/admin/project/${projectId}/episodes/${episodeName}?projectId=${projectId}&episodeId=${episodeId}&projectTitle=${encodeURIComponent(state.selectedProjectForEpisodes.title)}&episodeName=${episodeName}`
-                            );
-                          } catch (error) {
-                            console.error('Navigation error:', error);
-                            notify('Error navigating to episode view', 'error');
-                          }
-                        }}
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                      >
-                        Open
-                        <svg
-                          className="ml-1.5 -mr-0.5 w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!state.selectedProjectForEpisodes || !episode) return;
-                          setState(prev => ({
-                            ...prev,
-                            selectedEpisode: episode,
-                            showDeleteConfirm: true
-                          }));
-                        }}
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                      >
-                        Delete
-                        <Trash2 className="ml-1.5 w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  No episodes available
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add this new modal for episode deletion confirmation */}
-      {state.showDeleteConfirm && state.selectedEpisode && state.selectedProjectForEpisodes && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[1000]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Delete Episode
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete &quot;{state.selectedEpisode.name}&quot;? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setState(prev => ({ ...prev, showDeleteConfirm: false, selectedEpisode: null }));
-                }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    if (!state.selectedProjectForEpisodes || !state.selectedEpisode) {
-                      notify('No project or episode selected');
-                      return;
-                    }
-                    const response = await fetch(
-                      `/api/admin/projects/${state.selectedProjectForEpisodes._id}/add-episodes?episodeId=${state.selectedEpisode._id}`,
-                      {
-                        method: 'DELETE',
-                      }
-                    );
-
-                    const data = await response.json();
-                    if (data.success) {
-                      notify('Episode deleted successfully');
-                      await refetchProjects();
-                      setState(prev => ({ ...prev, showDeleteConfirm: false, selectedEpisode: null }));
-                    } else {
-                      notify('Failed to delete episode: ' + data.error, 'error');
-                    }
-                  } catch (error) {
-                    console.error('Error deleting episode:', error);
-                    notify('Failed to delete episode', 'error');
-                  }
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Container for notifications */}
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -2615,9 +1414,3 @@ export default function AdminView({ projects, refetchProjects }: AdminViewProps)
     </div>
   );
 }
-
-// Helper function to ensure dates are properly converted
-const ensureDate = (date: string | Date | undefined): string | Date => {
-  if (!date) return new Date().toISOString();
-  return typeof date === 'string' ? date : date.toISOString();
-};

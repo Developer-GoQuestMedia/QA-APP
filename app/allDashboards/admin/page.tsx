@@ -5,9 +5,16 @@ import { useSession } from 'next-auth/react'
 import AdminView from '@/components/Admin/view/AdminView'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useRouter } from 'next/navigation'
-import { Project } from '@/types/project'
+import type { Project as BaseProject } from '@/types/project'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
-export default function AdminDashboard() {
+// Extend the base Project type to ensure _id is always a string
+interface Project extends Omit<BaseProject, '_id'> {
+  _id: string;
+}
+
+// Remove export from base component
+function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { data: session, status } = useSession()
@@ -30,23 +37,39 @@ export default function AdminDashboard() {
     })
 
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch('/api/admin/projects')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
       const data = await response.json()
+
+      if (!data.success || !data.data) {
+        throw new Error('Invalid response format from server')
+      }
+
+      // Ensure _id is always a string
+      const projects = data.data.map((p: BaseProject) => ({
+        ...p,
+        _id: p._id.toString()
+      }))
 
       console.log('Admin dashboard: Projects fetched successfully:', {
         timestamp: new Date().toISOString(),
-        projectCount: data.length,
-        projectIds: data.map((p: Project) => p._id),
+        projectCount: projects.length,
+        projectIds: projects.map((p: Project) => p._id),
         userRole: userInfo.role
       })
 
-      setProjects(data)
+      setProjects(projects)
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       console.error('Admin dashboard: Error fetching projects:', {
         timestamp: new Date().toISOString(),
-        error,
+        error: errorMessage,
         userRole: userInfo.role
       })
+      throw error // Re-throw to be handled by error boundary
     } finally {
       setIsLoading(false)
     }
@@ -104,4 +127,13 @@ export default function AdminDashboard() {
       />
     </div>
   )
+}
+
+// Export only the wrapped version
+export default function AdminDashboardPage() {
+  return (
+    <ErrorBoundary>
+      <AdminDashboard />
+    </ErrorBoundary>
+  );
 }

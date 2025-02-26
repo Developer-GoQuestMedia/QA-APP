@@ -80,6 +80,8 @@ export interface Project {
               original: string;
               translated: string;
             };
+            processed_audio_url?: string;
+            ai_audio_url?: string;
             startTime: number;
             endTime: number;
             videoClipUrl?: string;

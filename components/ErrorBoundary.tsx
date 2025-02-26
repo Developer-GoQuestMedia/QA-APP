@@ -1,49 +1,59 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { toast } from 'react-hot-toast';
+'use client';
+
+import React from 'react';
 
 interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
+  children: React.ReactNode;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', {
+      error,
+      errorInfo,
+      timestamp: new Date().toISOString()
+    });
   }
 
-  private handleReset = (): void => {
-    this.setState({ hasError: false, error: undefined });
-    toast.success('Application state has been reset');
-  };
-
-  render(): ReactNode {
+  render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="error-boundary">
-          <h2>Something went wrong.</h2>
-          {process.env.NODE_ENV === 'development' && (
-            <pre>{this.state.error?.message}</pre>
-          )}
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-lg w-full">
+            <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
+              Something went wrong
+            </h2>
+            <div className="text-gray-600 dark:text-gray-300 mb-4">
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </div>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              Try again
+            </button>
+          </div>
         </div>
       );
     }
 
     return this.props.children;
   }
-}
-
-export default ErrorBoundary; 
+} 

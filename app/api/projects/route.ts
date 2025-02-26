@@ -82,7 +82,7 @@ interface Project {
 export async function GET(request: Request) {
   console.log('=== GET /api/projects - Start ===')
   try {
-    // Enhanced session check
+    // Enhanced session check with detailed logging
     const session = await getServerSession(authOptions)
     console.log('Session check:', {
       exists: !!session,
@@ -91,17 +91,27 @@ export async function GET(request: Request) {
     })
 
     if (!session?.user?.username || !session?.user?.role) {
-      console.log('Unauthorized: Invalid session data')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      console.log('Unauthorized: Invalid session data', { session })
+      return NextResponse.json({ error: 'Unauthorized', details: 'Invalid session data' }, { status: 401 })
     }
 
     // Parse query string for `projectId`
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
 
-    // Connect to the database
-    const { db } = await connectToDatabase()
-    console.log('Connected to database')
+    // Connect to the database with error handling
+    let db;
+    try {
+      const { db: database } = await connectToDatabase()
+      db = database
+      console.log('Connected to database successfully')
+    } catch (dbError) {
+      console.error('Database connection error:', dbError)
+      return NextResponse.json({ 
+        error: 'Database connection failed',
+        details: dbError instanceof Error ? dbError.message : 'Unknown error'
+      }, { status: 500 })
+    }
 
     // If NO `projectId`, return ALL projects for admin or assigned projects for other roles
     if (!projectId) {
@@ -123,20 +133,51 @@ export async function GET(request: Request) {
             }
           }
 
-      const projects = await db.collection('projects').find(query).toArray() as Project[]
+      try {
+        const projects = await db.collection('projects').find(query).toArray()
+        
+        if (!Array.isArray(projects)) {
+          console.error('Invalid projects data structure:', projects)
+          return NextResponse.json({ 
+            error: 'Invalid data structure',
+            details: 'Projects query did not return an array'
+          }, { status: 500 })
+        }
 
-      // Serialize each project's _id and each episode's _id
-      const serializedProjects = projects.map((proj: Project) => ({
-        ...proj,
-        _id: proj._id.toString(),
-        episodes: proj.episodes?.map((ep) => ({
-          ...ep,
-          _id: ep._id?.toString() || ep._id
-        })) || [],
-      }))
+        // Safely serialize each project's _id and each episode's _id
+        const serializedProjects = projects.map(proj => {
+          try {
+            return {
+              ...proj,
+              _id: proj._id?.toString() || '',
+              episodes: (proj.episodes || []).map((ep: { _id?: any; projectId?: any }) => ({
+                ...ep,
+                _id: ep._id?.toString() || '',
+                projectId: ep.projectId?.toString() || ''
+              })),
+              assignedTo: (proj.assignedTo || []).map((user: { userId?: any }) => ({
+                ...user,
+                userId: user.userId?.toString() || ''
+              }))
+            }
+          } catch (serializeError) {
+            console.error('Project serialization error:', {
+              projectId: proj._id,
+              error: serializeError
+            })
+            return null
+          }
+        }).filter(Boolean) // Remove any null values from failed serialization
 
-      console.log(`Found ${serializedProjects.length} projects for user`)
-      return NextResponse.json(serializedProjects)
+        console.log(`Successfully found and serialized ${serializedProjects.length} projects for ${session.user.role}`)
+        return NextResponse.json({ success: true, data: serializedProjects })
+      } catch (queryError) {
+        console.error('Project query error:', queryError)
+        return NextResponse.json({ 
+          error: 'Failed to fetch projects',
+          details: queryError instanceof Error ? queryError.message : 'Unknown error'
+        }, { status: 500 })
+      }
     }
 
     // If `projectId` is provided, validate & fetch a SINGLE project

@@ -1,7 +1,8 @@
 // lib/queue.ts
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { Redis as IORedis } from 'ioredis';
 import type { Redis } from 'ioredis';
+import logger from './logger';
 
 /**
  * Redis connection configuration
@@ -66,7 +67,7 @@ function getRedisConfig() {
   }
 }
 
-let connection: Redis | null = null;
+let connection: IORedis | null = null;
 
 /**
  * Get or create Redis connection
@@ -76,7 +77,7 @@ export const getRedisConnection = () => {
     try {
       const config = getRedisConfig();
       if (!config) {
-        console.warn('Redis configuration not available');
+        logger.warn('Redis configuration not available');
         return null;
       }
 
@@ -84,38 +85,38 @@ export const getRedisConnection = () => {
 
       // Only set up event listeners if we don't have a connection
       connection.on('error', (error: Error) => {
-        console.error('Redis connection error:', error);
+        logger.error('Redis connection error:', { error });
         // Reset connection on error so we can retry
         connection = null;
       });
 
       connection.on('connect', () => {
-        console.log('Redis connected successfully');
+        logger.info('Redis connected successfully');
       });
 
       connection.on('ready', () => {
-        console.log('Redis client ready');
+        logger.info('Redis client ready');
         // For local Redis only, try to set eviction policy
         if (process.env.NODE_ENV !== 'production' && connection) {
           connection.config('SET', 'maxmemory', '2gb').catch(() => {
-            console.warn('Failed to set Redis maxmemory configuration');
+            logger.warn('Failed to set Redis maxmemory configuration');
           });
           
           connection.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
-            console.warn('Failed to set Redis eviction policy');
+            logger.warn('Failed to set Redis eviction policy');
           });
         }
       });
 
       // Test the connection only once
       connection.ping().then(() => {
-        console.log('Redis connection test successful');
+        logger.info('Redis connection test successful');
       }).catch((error) => {
-        console.error('Redis connection test failed:', error);
+        logger.error('Redis connection test failed:', { error });
         connection = null;
       });
     } catch (error) {
-      console.error('Failed to create Redis connection:', error);
+      logger.error('Failed to create Redis connection:', { error });
       connection = null;
     }
   }

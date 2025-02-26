@@ -2,7 +2,8 @@ import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
 import { initSocketServer } from './lib/socket';
-import { Server as SocketIOServer } from 'socket.io';
+import { Server } from 'socket.io';
+import logger from './lib/logger';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -12,7 +13,7 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-let io: SocketIOServer | null = null;
+let io: Server | null = null;
 
 app.prepare().then(() => {
   // Create HTTP server
@@ -41,7 +42,7 @@ app.prepare().then(() => {
       // Handle Next.js requests
       await handle(req, res, parsedUrl);
     } catch (err) {
-      console.error('Error occurred handling request:', err);
+      logger.error('Error handling request:', { error: err });
       res.statusCode = 500;
       res.end('Internal Server Error');
     }
@@ -51,7 +52,7 @@ app.prepare().then(() => {
   try {
     if (!io) {
       io = initSocketServer(server);
-      console.log('Socket.IO server initialized successfully');
+      logger.info('Socket.IO server initialized successfully');
 
       // Handle WebSocket upgrade
       const upgradeHandler = (request: any, socket: any, head: any) => {
@@ -61,16 +62,16 @@ app.prepare().then(() => {
           if (io?.engine) {
             try {
               io.engine.handleUpgrade(request, socket, head);
-              console.log('WebSocket upgrade successful:', {
+              logger.info('WebSocket upgrade successful:', {
                 path: pathname,
                 timestamp: new Date().toISOString()
               });
             } catch (error) {
-              console.error('Error handling socket upgrade:', error);
+              logger.error('Error handling socket upgrade:', { error });
               socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
             }
           } else {
-            console.error('Socket.IO engine not available');
+            logger.error('Socket.IO engine not available');
             socket.end('HTTP/1.1 503 Service Unavailable\r\n\r\n');
           }
         }
@@ -84,7 +85,7 @@ app.prepare().then(() => {
 
       // Log transport changes
       io.on('connection', (socket) => {
-        console.log('New connection:', {
+        logger.info('New connection:', {
           socketId: socket.id,
           transport: socket.conn.transport.name,
           remoteAddress: socket.handshake.address,
@@ -92,7 +93,7 @@ app.prepare().then(() => {
         });
         
         socket.conn.on('upgrade', (transport) => {
-          console.log('Connection upgraded:', {
+          logger.info('Connection upgraded:', {
             socketId: socket.id,
             transport: transport.name,
             timestamp: new Date().toISOString()
@@ -100,7 +101,7 @@ app.prepare().then(() => {
         });
 
         socket.on('error', (error) => {
-          console.error('Socket error:', {
+          logger.error('Socket error:', {
             socketId: socket.id,
             error: error instanceof Error ? error.message : String(error),
             timestamp: new Date().toISOString()
@@ -109,14 +110,14 @@ app.prepare().then(() => {
       });
     }
   } catch (error) {
-    console.error('Failed to initialize Socket.IO server:', error);
+    logger.error('Failed to initialize Socket.IO server:', { error });
   }
 
   // Start listening with error handling
   server.listen(port, () => {
-    console.log(`> Server listening at http://${hostname}:${port} as ${dev ? 'development' : 'production'}`);
+    logger.info(`Server listening at http://${hostname}:${port} as ${dev ? 'development' : 'production'}`);
   }).on('error', (err) => {
-    console.error('Failed to start server:', err);
+    logger.error('Failed to start server:', { error: err });
     process.exit(1);
   });
 
@@ -124,20 +125,20 @@ app.prepare().then(() => {
   const signals = ['SIGTERM', 'SIGINT'] as const;
   signals.forEach((signal) => {
     process.on(signal, () => {
-      console.log(`> ${signal} signal received. Closing HTTP server...`);
+      logger.info(`${signal} signal received. Closing HTTP server...`);
       
       // Clean up Socket.IO connections
       if (io) {
         io.close(() => {
-          console.log('> Socket.IO server closed');
+          logger.info('Socket.IO server closed');
           server.close(() => {
-            console.log('> HTTP server closed');
+            logger.info('HTTP server closed');
             process.exit(0);
           });
         });
       } else {
         server.close(() => {
-          console.log('> HTTP server closed');
+          logger.info('HTTP server closed');
           process.exit(0);
         });
       }

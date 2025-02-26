@@ -4,7 +4,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import AdminEpisodeView from '@/components/Admin/AdminEpisodeView';
+import AdminEpisodeView from '@/components/Admin/view/AdminEpisodeView';
 import { Episode, Project } from '@/types/project';
 import { toast } from 'react-toastify';
 

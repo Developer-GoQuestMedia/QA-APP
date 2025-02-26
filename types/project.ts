@@ -4,12 +4,14 @@ import { User } from './user'
 export type ProjectStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
 
 export interface AssignedUser {
-  username: string
-  role: string
+  _id: string | ObjectId;
+  username: string;
+  role: string;
+  email?: string;
 }
 
 export interface Episode {
-  _id: string;
+  _id: string | ObjectId;
   name: string;
   collectionName: string;
   videoPath?: string;
@@ -80,109 +82,96 @@ export interface Episode {
     lastModified?: string | Date;
   }>;
   steps: {
-    audioExtraction: {
-      status: 'pending' | 'processing' | 'completed' | 'error';
-      extracted_speechPath?: string;
-      extracted_speechKey?: string;
-      extracted_musicPath?: string;
-      extracted_musicKey?: string;
-      updatedAt?: string | Date;
+    audioExtraction?: {
+      status: string;
+      completedAt?: string;
       error?: string;
     };
-    transcription: {
-      status: 'pending' | 'processing' | 'completed' | 'error';
+    transcription?: {
+      status: string;
+      completedAt?: string;
+      error?: string;
       transcriptionData?: {
         dialogues: Array<{
-          id: string;
-          text: string;
+          subtitleIndex: number;
+          dialogNumber: string;
           characterName: string;
+          dialogue: {
+            original: string;
+          };
           startTime: number;
           endTime: number;
           videoClipUrl?: string;
         }>;
       };
-      updatedAt?: string | Date;
-      error?: string;
     };
-    videoClips: {
-      status: 'pending' | 'processing' | 'completed' | 'error';
-      clips?: Array<{
-        id: string;
-        path: string;
-        key: string;
-        startTime: number;
-        endTime: number;
-        dialogueId?: string;
-      }>;
-      updatedAt?: string | Date;
+    translation?: {
+      status: string;
+      completedAt?: string;
       error?: string;
-    };
-    translation: {
-      status: 'pending' | 'processing' | 'completed' | 'error';
       translationData?: {
         dialogues: Array<{
-          id: string;
-          originalText: string;
-          translatedText: string;
-          adaptedText?: string;
+          subtitleIndex: number;
+          dialogNumber: string;
           characterName: string;
+          dialogue: {
+            original: string;
+            translated: string;
+          };
           startTime: number;
           endTime: number;
           videoClipUrl?: string;
         }>;
       };
-      updatedAt?: string | Date;
-      error?: string;
     };
-    voiceAssignment: {
-      status: 'pending' | 'processing' | 'completed' | 'error';
-      characterVoices?: Array<{
-        characterName: string;
-        voiceId: string;
-        voiceProvider: string;
-        settings?: {
-          stability?: number;
-          similarity_boost?: number;
-          style?: number;
-          use_speaker_boost?: boolean;
-        };
-      }>;
-      voiceConversions?: Array<{
-        dialogueId: string;
-        audioPath?: string;
-        audioKey?: string;
-        status: 'pending' | 'processing' | 'completed' | 'error';
-        error?: string;
-      }>;
-      updatedAt?: string | Date;
+    voiceAssignment?: {
+      status: string;
+      completedAt?: string;
       error?: string;
+      voiceData?: {
+        dialogues: Array<{
+          subtitleIndex: number;
+          dialogNumber: string;
+          characterName: string;
+          dialogue: {
+            original: string;
+            translated: string;
+          };
+          startTime: number;
+          endTime: number;
+          videoClipUrl?: string;
+          voiceModel?: string;
+          voiceActor?: string;
+        }>;
+      };
     };
   };
-  updatedAt?: string | Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   lastModified?: string | Date;
 }
 
 export interface Project {
-  _id: ObjectId | string
-  title: string
-  description: string
-  sourceLanguage: string
-  targetLanguage: string
-  status: string
-  createdAt: string | Date
-  updatedAt: string | Date
-  assignedTo: AssignedUser[]
-  parentFolder: string
-  databaseName: string
-  collectionName: string
-  episodes: Episode[]
+  _id: string | ObjectId;
+  title: string;
+  description: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  status: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  assignedTo: AssignedUser[];
+  parentFolder: string;
+  databaseName: string;
+  collectionName: string;
+  episodes: Episode[];
   uploadStatus: {
-    totalFiles: number
-    completedFiles: number
-    currentFile: number
-    status: string
-  }
-  index: string
+    totalFiles: number;
+    completedFiles: number;
+    currentFile: number;
+    status: string;
+  };
+  index: string;
 }
 
 // Re-export the UserRole type from 'types/user'

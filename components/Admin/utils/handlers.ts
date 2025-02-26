@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import axios from 'axios';
-import { AdminViewState, UploadProgressData, stateActions } from './adminViewState';
+import { AdminViewState, UploadProgressData, stateActions } from './state/adminViewState';
 import logger from '@/lib/logger';
 import { io } from 'socket.io-client';
 import { formatBytes, validateFile } from '@/lib/utils';

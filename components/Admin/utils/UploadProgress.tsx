@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileUploadState, UploadQueueState } from './adminViewState';
+import { FileUploadState, UploadQueueState } from './state/adminViewState';
 import { formatBytes, formatTime } from '@/lib/utils';
 
 interface UploadProgressProps {

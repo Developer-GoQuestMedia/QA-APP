@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import AdminTranslatorView from '@/components/Admin/AdminTranslatorView';
+import AdminTranslatorView from '@/components/Admin/view/AdminTranslatorView';
 import { Project, Episode } from '@/types/project';
 import { toast } from 'react-toastify';
 

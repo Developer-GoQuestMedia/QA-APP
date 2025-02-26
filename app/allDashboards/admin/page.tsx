@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import AdminView from '@/components/Admin/AdminView'
+import AdminView from '@/components/Admin/view/AdminView'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useRouter } from 'next/navigation'
 import { Project } from '@/types/project'

@@ -2,7 +2,7 @@
 
 import { getProject } from '@/lib/projects';
 import { getEpisode } from '@/lib/episodes';
-import AdminVoiceAssignmentView from '@/components/Admin/AdminVoiceAssignmentView';
+import AdminVoiceAssignmentView from '@/components/Admin/view/AdminVoiceAssignmentView';
 import { notFound } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { getServerSession } from 'next-auth/next';
